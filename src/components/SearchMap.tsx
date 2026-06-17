@@ -56,8 +56,11 @@ const CENTER_MARKER_CONTENT = `
 
 export default function SearchMap() {
   const [keyword, setKeyword] = useState('')
-  const [radius, setRadius] = useState<Radius>(5)
+  const [radius, setRadius] = useState<Radius>(1)
   const [locMode, setLocMode] = useState<'gps' | 'addr'>('gps')
+  const [panelOpen, setPanelOpen] = useState(true)
+  const [listOpen, setListOpen] = useState(true)
+  const [panelOpacity, setPanelOpacity] = useState(0.95)
   const [addressInput, setAddressInput] = useState('')
   const [addressLoading, setAddressLoading] = useState(false)
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null)
@@ -237,7 +240,44 @@ export default function SearchMap() {
       <div ref={mapRef} className="flex-1 h-full" />
 
       {/* Search panel — left overlay */}
-      <div className="absolute top-3 left-3 z-10 w-72 bg-white rounded-xl shadow-lg overflow-hidden">
+      {!panelOpen && (
+        <button
+          onClick={() => setPanelOpen(true)}
+          className="absolute top-3 left-3 z-10 bg-white shadow-lg rounded-full px-4 py-2 text-sm font-medium flex items-center gap-1.5 hover:bg-gray-50 transition"
+        >
+          🔍 검색창 열기
+        </button>
+      )}
+
+      <div
+        className={`absolute top-3 left-3 z-10 w-72 rounded-xl shadow-lg overflow-hidden ${panelOpen ? '' : 'hidden'}`}
+        style={{ backgroundColor: `rgba(255,255,255,${panelOpacity})` }}
+      >
+        {/* Panel header — collapse + opacity control */}
+        <div className="flex items-center justify-between px-3 py-2 border-b">
+          <span className="text-xs font-bold text-gray-700">AI맵튜브 검색</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">투명도</span>
+            <input
+              type="range"
+              min={0.3}
+              max={1}
+              step={0.05}
+              value={panelOpacity}
+              onChange={(e) => setPanelOpacity(parseFloat(e.target.value))}
+              className="w-14 accent-blue-600"
+              title="검색창 투명도"
+            />
+            <button
+              onClick={() => setPanelOpen(false)}
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500 text-xs shrink-0"
+              title="검색창 닫기"
+            >
+              ▲
+            </button>
+          </div>
+        </div>
+
         {/* Location section */}
         <div className="px-3 pt-3 pb-2 border-b">
           <div className="flex gap-1 mb-2">
@@ -338,12 +378,18 @@ export default function SearchMap() {
         {/* Error */}
         {error && <div className="px-3 pb-3 text-xs text-red-500">{error}</div>}
 
-        {/* Results list — compact, sortedy by view count */}
+        {/* Results list — compact, sorted by view count, collapsible */}
         {allResults.length > 0 && (
-          <div className="border-t max-h-56 overflow-y-auto">
-            <p className="sticky top-0 bg-white px-3 py-2 text-xs text-gray-400 font-medium border-b">
-              {allResults.length}개 · 조회수순
-            </p>
+          <div className="border-t">
+            <button
+              onClick={() => setListOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-400 font-medium border-b hover:bg-gray-50/50 transition"
+            >
+              <span>{allResults.length}개 · 조회수순</span>
+              <span>{listOpen ? '리스트 닫기 ▲' : '리스트 열기 ▼'}</span>
+            </button>
+            {listOpen && (
+            <div className="max-h-56 overflow-y-auto">
             {allResults.map((v) => (
               <div
                 key={v.videoId}
@@ -379,6 +425,8 @@ export default function SearchMap() {
                 </div>
               </div>
             ))}
+            </div>
+            )}
           </div>
         )}
       </div>
