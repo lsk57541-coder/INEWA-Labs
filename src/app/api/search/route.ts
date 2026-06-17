@@ -93,8 +93,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'q, lat, lng are required' }, { status: 400 })
   }
 
-  // 3 parallel searches: geo-based + broad KR + travel variant
-  const [geoItems, broadItems, travelItems] = await Promise.all([
+  // 2 parallel searches: geo-based + broad KR. "여행" variant is only
+  // fetched as a fallback when these two don't return enough candidates,
+  // to keep quota usage down without hurting coverage for popular keywords.
+  const MIN_CANDIDATES_BEFORE_FALLBACK = 15
+
+  const [geoItems, broadItems] = await Promise.all([
     ytSearch(q, {
       location: `${lat},${lng}`,
       locationRadius: `${radius}km`,
@@ -104,20 +108,26 @@ export async function GET(req: NextRequest) {
       regionCode: 'KR',
       order: 'viewCount',
     }),
-    ytSearch(`${q} 여행`, {
+  ])
+
+  const seen = new Set<string>()
+  const dedupe = (items: YTSearchItem[]) =>
+    items.filter((item) => {
+      if (seen.has(item.id.videoId)) return false
+      seen.add(item.id.videoId)
+      return true
+    })
+
+  let unique = dedupe([...geoItems, ...broadItems])
+
+  if (unique.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
+    const travelItems = await ytSearch(`${q} 여행`, {
       relevanceLanguage: 'ko',
       regionCode: 'KR',
       order: 'viewCount',
-    }, 30),
-  ])
-
-  // Deduplicate by videoId
-  const seen = new Set<string>()
-  const unique = [...geoItems, ...broadItems, ...travelItems].filter((item) => {
-    if (seen.has(item.id.videoId)) return false
-    seen.add(item.id.videoId)
-    return true
-  })
+    }, 30)
+    unique = [...unique, ...dedupe(travelItems)]
+  }
 
   const details = await fetchVideoDetails(unique.map((i) => i.id.videoId))
 
