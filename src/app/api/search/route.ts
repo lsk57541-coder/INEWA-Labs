@@ -1,7 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { haversineKm } from '@/lib/haversine'
 import { geocodeKorean, reverseGeocode } from '@/lib/geocode'
 import { extractLocations } from '@/lib/extractLocation'
+
+const REPORT_THRESHOLD = 3
+
+async function getBlockedVideoIds(): Promise<Set<string>> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) return new Set()
+
+  const supabase = createClient(url, key)
+  const { data } = await supabase.from('location_reports').select('video_id')
+  if (!data) return new Set()
+
+  const counts = new Map<string, number>()
+  for (const row of data) {
+    counts.set(row.video_id, (counts.get(row.video_id) ?? 0) + 1)
+  }
+  return new Set([...counts.entries()].filter(([, count]) => count >= REPORT_THRESHOLD).map(([id]) => id))
+}
 
 export interface VideoResult {
   videoId: string
@@ -195,7 +214,9 @@ export async function GET(req: NextRequest) {
     finalSeen.add(r.videoId)
     return true
   })
-  deduped.sort((a, b) => b.viewCount - a.viewCount)
+  const blocked = await getBlockedVideoIds()
+  const filtered = deduped.filter((r) => !blocked.has(r.videoId))
+  filtered.sort((a, b) => b.viewCount - a.viewCount)
 
-  return NextResponse.json({ results: deduped })
+  return NextResponse.json({ results: filtered })
 }

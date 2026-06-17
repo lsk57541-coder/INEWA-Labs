@@ -34,6 +34,25 @@ declare namespace kakao {
     interface MarkerOptions {
       position: LatLng
       map?: Map
+      image?: MarkerImage
+    }
+
+    interface MarkerImageOptions {
+      offset?: Point
+    }
+
+    class MarkerImage {
+      constructor(src: string, size: Size, options?: MarkerImageOptions)
+    }
+
+    class Point {
+      constructor(x: number, y: number)
+      getX(): number
+      getY(): number
+    }
+
+    class Size {
+      constructor(width: number, height: number)
     }
 
     interface InfoWindowOptions {
@@ -83,5 +102,32 @@ declare namespace kakao {
     }
 
     function load(callback: () => void): void
+  }
+}
+
+interface KakaoShareLinkOptions {
+  mobileWebUrl: string
+  webUrl: string
+}
+
+interface KakaoShareFeedOptions {
+  objectType: 'feed'
+  content: {
+    title: string
+    description?: string
+    imageUrl: string
+    link: KakaoShareLinkOptions
+  }
+  buttons?: {
+    title: string
+    link: KakaoShareLinkOptions
+  }[]
+}
+
+declare const Kakao: {
+  init(jsKey: string): void
+  isInitialized(): boolean
+  Share: {
+    sendDefault(options: KakaoShareFeedOptions): void
   }
 }

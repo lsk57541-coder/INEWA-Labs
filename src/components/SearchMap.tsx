@@ -4,6 +4,8 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import Script from 'next/script'
 import type { VideoResult } from '@/app/api/search/route'
 import { haversineKm } from '@/lib/haversine'
+import { toggleFavorite, getFavorites, reportWrongLocation, type FavoriteVideo } from '@/app/actions'
+import MenuDrawer, { type MenuUser } from '@/components/MenuDrawer'
 
 interface MarkerGroup {
   lat: number
@@ -54,7 +56,66 @@ const CENTER_MARKER_CONTENT = `
   <div style="margin-top:3px;font-size:10px;font-weight:700;color:#fff;background:#ef4444;padding:1px 6px;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.3);white-space:nowrap">내 위치</div>
 </div>`
 
-export default function SearchMap() {
+const FAVORITE_MARKER_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36" viewBox="0 0 32 36">' +
+  '<path d="M16 0C7 0 0 7 0 16c0 12 16 20 16 20s16-8 16-20C32 7 25 0 16 0z" fill="#f59e0b" stroke="#fff" stroke-width="2"/>' +
+  '<text x="16" y="21" font-size="14" text-anchor="middle" fill="#fff">♥</text>' +
+  '</svg>'
+
+function favoriteMarkerImage(): kakao.maps.MarkerImage {
+  return new kakao.maps.MarkerImage(
+    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(FAVORITE_MARKER_SVG)}`,
+    new kakao.maps.Size(32, 36),
+    { offset: new kakao.maps.Point(16, 36) }
+  )
+}
+
+function toFavoritePayload(v: VideoResult): FavoriteVideo {
+  return {
+    video_id: v.videoId,
+    title: v.title,
+    thumbnail: v.thumbnail,
+    channel: v.channel,
+    lat: v.lat,
+    lng: v.lng,
+    place_name: v.placeName,
+  }
+}
+
+interface VideoActionRowProps {
+  favorited: boolean
+  reported: boolean
+  onToggleFavorite: () => void
+  onShare: () => void
+  onReport: () => void
+}
+
+function VideoActionRow({ favorited, reported, onToggleFavorite, onShare, onReport }: VideoActionRowProps) {
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <button
+        onClick={onToggleFavorite}
+        title="찜하기"
+        className={`text-sm transition ${favorited ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
+      >
+        {favorited ? '♥' : '♡'}
+      </button>
+      <button onClick={onShare} title="카카오톡 공유" className="text-xs text-gray-400 hover:text-yellow-500 transition">
+        🔗
+      </button>
+      <button
+        onClick={onReport}
+        disabled={reported}
+        title="위치 오류 신고"
+        className={`text-xs transition ${reported ? 'text-gray-300' : 'text-gray-400 hover:text-red-400'}`}
+      >
+        {reported ? '신고됨' : '⚠'}
+      </button>
+    </div>
+  )
+}
+
+export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [keyword, setKeyword] = useState('')
   const [radius, setRadius] = useState<Radius>(1)
   const [locMode, setLocMode] = useState<'gps' | 'addr'>('gps')
@@ -71,6 +132,10 @@ export default function SearchMap() {
   const [selectedGroup, setSelectedGroup] = useState<MarkerGroup | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<VideoResult | null>(null)
   const [mapReady, setMapReady] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'search' | 'favorites'>('search')
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
 
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<kakao.maps.Map | null>(null)
@@ -78,6 +143,8 @@ export default function SearchMap() {
   const overlaysRef = useRef<kakao.maps.CustomOverlay[]>([])
   const circleRef = useRef<kakao.maps.Circle | null>(null)
   const centerOverlayRef = useRef<kakao.maps.CustomOverlay | null>(null)
+  const lastCenterRef = useRef<{ lat: number; lng: number } | null>(null)
+  const searchSnapshotRef = useRef<{ results: VideoResult[]; center: { lat: number; lng: number } } | null>(null)
 
   const initMap = useCallback(() => {
     if (!mapRef.current || !window.kakao) return
@@ -103,6 +170,11 @@ export default function SearchMap() {
     })
     centerOverlayRef.current.setMap(mapInstanceRef.current)
   }, [mapReady, userPos])
+
+  useEffect(() => {
+    const ids = user ? getFavorites().then((favs) => favs.map((f) => f.video_id)) : Promise.resolve([])
+    ids.then((list) => setFavoriteIds(new Set(list))).catch(() => {})
+  }, [user])
 
   const panTo = useCallback(
     (lat: number, lng: number) => {
@@ -150,8 +222,9 @@ export default function SearchMap() {
   }
 
   const renderMarkers = useCallback(
-    (groups: MarkerGroup[], center: { lat: number; lng: number }) => {
+    (groups: MarkerGroup[], center: { lat: number; lng: number }, favIds: Set<string>) => {
       if (!mapInstanceRef.current) return
+      lastCenterRef.current = center
 
       markersRef.current.forEach((m) => m.setMap(null))
       markersRef.current = []
@@ -172,7 +245,12 @@ export default function SearchMap() {
 
       groups.forEach((group) => {
         const pos = new kakao.maps.LatLng(group.lat, group.lng)
-        const marker = new kakao.maps.Marker({ position: pos, map: mapInstanceRef.current! })
+        const isFavorite = group.videos.some((v) => favIds.has(v.videoId))
+        const marker = new kakao.maps.Marker({
+          position: pos,
+          map: mapInstanceRef.current!,
+          image: isFavorite ? favoriteMarkerImage() : undefined,
+        })
         kakao.maps.event.addListener(marker, 'click', () => setSelectedGroup(group))
         markersRef.current.push(marker)
 
@@ -218,8 +296,10 @@ export default function SearchMap() {
       if (!res.ok) throw new Error(json.error ?? '검색 실패')
 
       const videos = json.results ?? []
+      setViewMode('search')
       setAllResults(videos)
-      renderMarkers(groupByLocation(videos), userPos)
+      searchSnapshotRef.current = { results: videos, center: userPos }
+      renderMarkers(groupByLocation(videos), userPos, favoriteIds)
 
       if (videos.length === 0) setError('해당 반경 내에 검색 결과가 없습니다.')
     } catch (e) {
@@ -229,28 +309,149 @@ export default function SearchMap() {
     }
   }
 
+  const handleToggleFavorite = async (v: VideoResult) => {
+    if (!user) { setError('로그인이 필요합니다.'); return }
+    const wasFavorited = favoriteIds.has(v.videoId)
+    const next = new Set(favoriteIds)
+    if (wasFavorited) next.delete(v.videoId)
+    else next.add(v.videoId)
+    setFavoriteIds(next)
+    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, next)
+
+    try {
+      await toggleFavorite(toFavoritePayload(v))
+      if (viewMode === 'favorites' && wasFavorited) {
+        setAllResults((prev) => prev.filter((r) => r.videoId !== v.videoId))
+      }
+    } catch (e) {
+      setFavoriteIds(favoriteIds)
+      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds)
+      setError(e instanceof Error ? e.message : '찜하기 실패')
+    }
+  }
+
+  const handleShare = (v: VideoResult) => {
+    if (typeof Kakao === 'undefined') {
+      setError('카카오톡 공유를 사용할 수 없습니다.')
+      return
+    }
+    if (!Kakao.isInitialized()) Kakao.init(process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY!)
+    const youtubeUrl = `https://youtu.be/${v.videoId}`
+    Kakao.Share.sendDefault({
+      objectType: 'feed',
+      content: {
+        title: v.title,
+        description: v.channel,
+        imageUrl: v.thumbnail,
+        link: { mobileWebUrl: youtubeUrl, webUrl: youtubeUrl },
+      },
+      buttons: [{ title: '영상 보기', link: { mobileWebUrl: youtubeUrl, webUrl: youtubeUrl } }],
+    })
+  }
+
+  const handleReport = async (v: VideoResult) => {
+    if (reportedIds.has(v.videoId)) return
+    setReportedIds((prev) => new Set(prev).add(v.videoId))
+    try {
+      await reportWrongLocation(v.videoId, v.lat, v.lng)
+    } catch {
+      setReportedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(v.videoId)
+        return next
+      })
+    }
+  }
+
+  const handleShowFavorites = async () => {
+    if (!user) { setError('로그인이 필요합니다.'); return }
+    setLoading(true)
+    setError(null)
+    try {
+      const favs = await getFavorites()
+      if (favs.length === 0) {
+        setError('찜한 영상이 없습니다.')
+        return
+      }
+      const mapped: VideoResult[] = favs.map((f) => ({
+        videoId: f.video_id,
+        title: f.title,
+        thumbnail: f.thumbnail,
+        channel: f.channel,
+        lat: f.lat,
+        lng: f.lng,
+        distanceKm: userPos ? Math.round(haversineKm(userPos.lat, userPos.lng, f.lat, f.lng) * 10) / 10 : 0,
+        source: 'geotag',
+        viewCount: 0,
+        placeName: f.place_name,
+      }))
+      setViewMode('favorites')
+      setAllResults(mapped)
+      setSelectedGroup(null)
+      setSelectedVideo(null)
+      const center = userPos ?? { lat: mapped[0].lat, lng: mapped[0].lng }
+      renderMarkers(groupByLocation(mapped), center, favoriteIds)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '찜 목록을 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBackToSearch = () => {
+    setViewMode('search')
+    setError(null)
+    const snapshot = searchSnapshotRef.current
+    if (snapshot) {
+      setAllResults(snapshot.results)
+      renderMarkers(groupByLocation(snapshot.results), snapshot.center, favoriteIds)
+    } else {
+      setAllResults([])
+      markersRef.current.forEach((m) => m.setMap(null))
+      markersRef.current = []
+      overlaysRef.current.forEach((o) => o.setMap(null))
+      overlaysRef.current = []
+      if (circleRef.current) circleRef.current.setMap(null)
+    }
+  }
+
   return (
     <div className="flex flex-1 overflow-hidden relative">
       <Script
         src={`//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY}&autoload=false&libraries=drawing`}
         onLoad={initMap}
       />
+      <Script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" />
 
       {/* Map */}
       <div ref={mapRef} className="flex-1 h-full" />
+
+      {/* Hamburger menu */}
+      <button
+        onClick={() => setMenuOpen(true)}
+        className="absolute top-3 left-3 z-20 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-lg hover:bg-gray-50 transition"
+      >
+        ☰
+      </button>
+      <MenuDrawer
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onShowFavorites={handleShowFavorites}
+      />
 
       {/* Search panel — left overlay */}
       {!panelOpen && (
         <button
           onClick={() => setPanelOpen(true)}
-          className="absolute top-3 left-3 z-10 bg-white shadow-lg rounded-full px-4 py-2 text-sm font-medium flex items-center gap-1.5 hover:bg-gray-50 transition"
+          className="absolute top-16 left-3 z-10 bg-white shadow-lg rounded-full px-4 py-2 text-sm font-medium flex items-center gap-1.5 hover:bg-gray-50 transition"
         >
           🔍 검색창 열기
         </button>
       )}
 
       <div
-        className={`absolute top-3 left-3 z-10 w-72 rounded-xl shadow-lg overflow-hidden ${panelOpen ? '' : 'hidden'}`}
+        className={`absolute top-16 left-3 z-10 w-72 rounded-xl shadow-lg overflow-hidden ${panelOpen ? '' : 'hidden'}`}
         style={{ backgroundColor: `rgba(255,255,255,${panelOpacity})` }}
       >
         {/* Panel header — collapse + opacity control */}
@@ -385,9 +586,17 @@ export default function SearchMap() {
               onClick={() => setListOpen((o) => !o)}
               className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-400 font-medium border-b hover:bg-gray-50/50 transition"
             >
-              <span>{allResults.length}개 · 조회수순</span>
+              <span>{viewMode === 'favorites' ? `❤️ 찜 목록 ${allResults.length}개` : `${allResults.length}개 · 조회수순`}</span>
               <span>{listOpen ? '리스트 닫기 ▲' : '리스트 열기 ▼'}</span>
             </button>
+            {viewMode === 'favorites' && (
+              <button
+                onClick={handleBackToSearch}
+                className="w-full text-left text-xs text-blue-600 hover:text-blue-700 px-3 py-1.5 border-b"
+              >
+                ← 검색으로 돌아가기
+              </button>
+            )}
             {listOpen && (
             <div className="max-h-56 overflow-y-auto">
             {allResults.map((v) => (
@@ -421,6 +630,13 @@ export default function SearchMap() {
                     >
                       길 찾기
                     </a>
+                    <VideoActionRow
+                      favorited={favoriteIds.has(v.videoId)}
+                      reported={reportedIds.has(v.videoId)}
+                      onToggleFavorite={() => handleToggleFavorite(v)}
+                      onShare={() => handleShare(v)}
+                      onReport={() => handleReport(v)}
+                    />
                   </div>
                 </div>
               </div>
@@ -478,14 +694,23 @@ export default function SearchMap() {
                     {formatViews(v.viewCount)} · {v.distanceKm}km
                     {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
                   </p>
-                  <a
-                    href={navUrl(v, userPos ? { ...userPos, label: locMode === 'gps' ? '현재 위치' : posLabel } : null)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 mt-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-2 py-0.5 font-medium transition"
-                  >
-                    🗺 길 찾기
-                  </a>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <a
+                      href={navUrl(v, userPos ? { ...userPos, label: locMode === 'gps' ? '현재 위치' : posLabel } : null)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-2 py-0.5 font-medium transition"
+                    >
+                      🗺 길 찾기
+                    </a>
+                    <VideoActionRow
+                      favorited={favoriteIds.has(v.videoId)}
+                      reported={reportedIds.has(v.videoId)}
+                      onToggleFavorite={() => handleToggleFavorite(v)}
+                      onShare={() => handleShare(v)}
+                      onReport={() => handleReport(v)}
+                    />
+                  </div>
                 </div>
               </div>
             ))}
@@ -518,14 +743,23 @@ export default function SearchMap() {
                   {selectedVideo.channel} · {formatViews(selectedVideo.viewCount)} · {selectedVideo.distanceKm}km 이내
                 </p>
               </div>
-              <a
-                href={navUrl(selectedVideo, userPos ? { ...userPos, label: posLabel } : null)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-3 py-1.5 font-medium transition"
-              >
-                🗺 길 찾기
-              </a>
+              <div className="shrink-0 flex items-center gap-3">
+                <a
+                  href={navUrl(selectedVideo, userPos ? { ...userPos, label: posLabel } : null)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-3 py-1.5 font-medium transition"
+                >
+                  🗺 길 찾기
+                </a>
+                <VideoActionRow
+                  favorited={favoriteIds.has(selectedVideo.videoId)}
+                  reported={reportedIds.has(selectedVideo.videoId)}
+                  onToggleFavorite={() => handleToggleFavorite(selectedVideo)}
+                  onShare={() => handleShare(selectedVideo)}
+                  onReport={() => handleReport(selectedVideo)}
+                />
+              </div>
             </div>
             <button
               onClick={() => setSelectedVideo(null)}
