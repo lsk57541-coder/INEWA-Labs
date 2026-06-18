@@ -14,6 +14,40 @@ async function requireAdmin() {
   return supabase
 }
 
+export interface AccuracyStat {
+  source: string
+  total: number
+  reported: number
+}
+
+// Measures placeName accuracy by source: total videos resolved via each
+// method, and how many of those were reported as "주소가 정확하지 않아요".
+// A high reported/total ratio for a given source is the clearest signal of
+// where to invest in better matching.
+export async function getAccuracyStats(): Promise<AccuracyStat[]> {
+  const supabase = await requireAdmin()
+
+  const { data: resolutions } = await supabase.from('placename_resolutions').select('video_id, source')
+  const { data: reports } = await supabase
+    .from('location_reports')
+    .select('video_id')
+    .eq('reason', 'wrong_address')
+
+  const reportedIds = new Set((reports ?? []).map((r) => r.video_id))
+  const bySource = new Map<string, { total: number; reported: number }>()
+
+  for (const row of resolutions ?? []) {
+    const entry = bySource.get(row.source) ?? { total: 0, reported: 0 }
+    entry.total += 1
+    if (reportedIds.has(row.video_id)) entry.reported += 1
+    bySource.set(row.source, entry)
+  }
+
+  return [...bySource.entries()]
+    .map(([source, { total, reported }]) => ({ source, total, reported }))
+    .sort((a, b) => b.total - a.total)
+}
+
 export async function addLocation(formData: FormData) {
   const supabase = await requireAdmin()
   const { error } = await supabase.from('locations').insert({

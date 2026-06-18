@@ -44,6 +44,11 @@ async function getLocationCorrections(): Promise<Map<string, LocationCorrection>
 
 export type SubscriberTier = 'silver' | 'gold' | 'diamond' | 'red_diamond'
 
+// How confident we are in placeName, from most to least reliable. Logged per
+// video so accuracy can be measured later (e.g. cross-referenced against
+// "주소가 정확하지 않아요" reports) instead of just guessing where to improve.
+export type PlaceNameSource = 'explicit_description' | 'title_match' | 'address_match' | 'address_fallback' | 'correction'
+
 export interface VideoResult {
   videoId: string
   title: string
@@ -55,10 +60,25 @@ export interface VideoResult {
   source: 'geotag' | 'ai'
   viewCount: number
   placeName?: string
+  placeNameSource: PlaceNameSource
   duration: string
   isShort: boolean
   subscriberTier: SubscriberTier | null
   subscriberCount: number
+}
+
+// Fire-and-forget log of how each video's place name was resolved. Upserts by
+// video_id so repeated searches just refresh the latest resolution.
+async function logPlaceNameResolution(videoId: string, source: PlaceNameSource, placeName: string | undefined) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) return
+
+  const supabase = createClient(url, key)
+  await supabase
+    .from('placename_resolutions')
+    .upsert({ video_id: videoId, source, place_name: placeName ?? null, updated_at: new Date().toISOString() })
+    .then(() => {}, () => {})
 }
 
 // YouTube's "duration" format is ISO 8601, e.g. "PT1M30S" or "PT45S"
@@ -273,10 +293,13 @@ export async function GET(req: NextRequest) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
           const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
           let placeName: string | undefined
+          let placeNameSource: PlaceNameSource
           if (correction) {
             placeName = correction.address
+            placeNameSource = 'correction'
           } else if (explicitName) {
             placeName = explicitName
+            placeNameSource = 'explicit_description'
           } else {
             const [address, titleMatch] = await Promise.all([
               reverseGeocode(pointLat, pointLng),
@@ -289,7 +312,9 @@ export async function GET(req: NextRequest) {
               ? await searchPlaceInfo(address, pointLat, pointLng)
               : null
             placeName = titleMatch?.name || addressMatch?.name || address || undefined
+            placeNameSource = titleMatch?.name ? 'title_match' : addressMatch?.name ? 'address_match' : 'address_fallback'
           }
+          logPlaceNameResolution(v.id, placeNameSource, placeName)
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
             videoId: v.id,
@@ -302,6 +327,7 @@ export async function GET(req: NextRequest) {
             source: 'geotag',
             viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
             placeName,
+            placeNameSource,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
             subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
@@ -329,6 +355,7 @@ export async function GET(req: NextRequest) {
             source: 'ai',
             viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
             placeName: correction.address,
+            placeNameSource: 'correction',
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
             subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
@@ -347,15 +374,19 @@ export async function GET(req: NextRequest) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
           const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
           let resolvedName: string
+          let placeNameSource: PlaceNameSource
           if (explicitName) {
             resolvedName = explicitName
+            placeNameSource = 'explicit_description'
           } else {
             const titleMatch = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
             const addressMatch = !titleMatch?.name
               ? await searchPlaceInfo(geo2.address, geo2.lat, geo2.lng)
               : null
             resolvedName = titleMatch?.name || addressMatch?.name || geo2.address
+            placeNameSource = titleMatch?.name ? 'title_match' : addressMatch?.name ? 'address_match' : 'address_fallback'
           }
+          logPlaceNameResolution(v.id, placeNameSource, resolvedName)
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
             videoId: v.id,
@@ -368,6 +399,7 @@ export async function GET(req: NextRequest) {
             source: 'ai',
             viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
             placeName: resolvedName,
+            placeNameSource,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
             subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),

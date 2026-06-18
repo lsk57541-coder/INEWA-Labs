@@ -1,8 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { deleteLocation } from '@/app/actions'
+import { deleteLocation, getAccuracyStats } from '@/app/actions'
 import DeleteButton from '@/components/admin/DeleteButton'
 import Link from 'next/link'
+
+const SOURCE_LABEL: Record<string, string> = {
+  explicit_description: '설명란 명시 (상호명: ○○)',
+  title_match: '제목 기반 카카오 매칭',
+  address_match: '주소 기반 카카오 매칭',
+  address_fallback: '매칭 실패 → 주소 그대로',
+  correction: '사용자 신고로 보정됨',
+}
 
 export default async function AdminPage() {
   const supabase = await createClient()
@@ -18,6 +26,8 @@ export default async function AdminPage() {
     .select('*, videos(count)')
     .order('created_at', { ascending: false })
 
+  const accuracyStats = await getAccuracyStats()
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -32,6 +42,34 @@ export default async function AdminPage() {
           + 장소 추가
         </Link>
       </div>
+
+      {accuracyStats.length > 0 && (
+        <div className="mb-8 border rounded-lg overflow-hidden">
+          <p className="text-sm font-bold px-4 py-2 bg-gray-50 border-b">장소명 정확도 (방식별 신고율)</p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-gray-400 text-left">
+                <th className="px-4 py-2">해석 방식</th>
+                <th className="px-4 py-2 text-right">건수</th>
+                <th className="px-4 py-2 text-right">신고됨</th>
+                <th className="px-4 py-2 text-right">신고율</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accuracyStats.map((s) => (
+                <tr key={s.source} className="border-t">
+                  <td className="px-4 py-2">{SOURCE_LABEL[s.source] ?? s.source}</td>
+                  <td className="px-4 py-2 text-right">{s.total}</td>
+                  <td className="px-4 py-2 text-right">{s.reported}</td>
+                  <td className="px-4 py-2 text-right font-medium">
+                    {s.total > 0 ? `${((s.reported / s.total) * 100).toFixed(1)}%` : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {!locations || locations.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
