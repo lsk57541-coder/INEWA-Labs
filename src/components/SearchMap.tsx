@@ -542,6 +542,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       setVideoFilter('all')
       renderMarkers(groupByLocation(videos), userPos, favoriteIds, visitedIds)
 
+      // Markers on the map take priority, then the results sheet — keep the
+      // search panel out of the way and the results collapsed to a peek.
+      setPanelOpen(false)
+      setListOpen(false)
+
       if (videos.length === 0) setError('해당 반경 내에 검색 결과가 없습니다.')
     } catch (e) {
       setError(e instanceof Error ? e.message : '검색 중 오류가 발생했습니다.')
@@ -975,12 +980,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       </div>
 
       {/* Results list — independent bottom sheet, slides up from the bottom */}
-      {allResults.length > 0 && (
+      {allResults.length > 0 && !selectedGroup && (
         <div
           className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col ${
-            listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-44px)]'
+            listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-56px)]'
           }`}
-          style={{ maxHeight: listOpen ? '85vh' : '60vh' }}
+          style={{ maxHeight: '50vh' }}
         >
           <div
             onPointerDown={(e) => {
@@ -996,8 +1001,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               onClick={() => setListOpen((o) => !o)}
               className="w-full flex items-center justify-between px-4 pb-3 text-xs text-gray-500 font-medium border-b"
             >
-              <span>{`${filteredResults.length}개`}</span>
-              <span>{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
+              <span className="truncate">
+                {searchMode === 'channel' && selectedChannel ? `🎙 ${selectedChannel.title}` : `"${keyword}"`} 검색결과 {filteredResults.length}개
+              </span>
+              <span className="shrink-0 ml-2">{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
             </button>
           </div>
           <div className="flex gap-1.5 px-3 py-2 border-b shrink-0">
@@ -1087,10 +1094,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       )}
 
-      {/* Video list panel — right overlay, shown when a map marker is clicked */}
+      {/* Video list — bottom sheet capped under half the screen, shown when a map marker is clicked */}
       {selectedGroup && (
-        <div className="absolute top-0 right-0 h-full w-72 bg-white shadow-2xl z-10 flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50 shrink-0">
+        <div
+          className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl flex flex-col"
+          style={{ maxHeight: '45vh' }}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50 shrink-0 rounded-t-2xl">
             <div>
               <p className="text-sm font-bold">이 위치의 영상</p>
               <p className="text-xs text-gray-400 mt-0.5">{selectedGroup.videos.length}개 · 조회수순</p>
