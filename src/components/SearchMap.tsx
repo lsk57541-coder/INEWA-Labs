@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import Script from 'next/script'
-import type { VideoResult } from '@/app/api/search/route'
+import type { VideoResult, SubscriberTier } from '@/app/api/search/route'
+import type { ChannelSuggestion } from '@/app/api/channel-search/route'
 import { haversineKm } from '@/lib/haversine'
 import {
   toggleFavorite,
@@ -95,6 +96,46 @@ function favoriteMarkerImage(): kakao.maps.MarkerImage {
   )
 }
 
+const TIER_ICON: Record<SubscriberTier, string> = {
+  gold: '🥇',
+  silver: '🥈',
+  bronze: '🥉',
+}
+
+const TIER_COLORS: Record<SubscriberTier, string> = {
+  gold: '#facc15',
+  silver: '#94a3b8',
+  bronze: '#b45309',
+}
+const TIER_ORDER: SubscriberTier[] = ['gold', 'silver', 'bronze']
+
+function pinMarkerImage(fill: string, glyph: string): kakao.maps.MarkerImage {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36" viewBox="0 0 32 36">' +
+    `<path d="M16 0C7 0 0 7 0 16c0 12 16 20 16 20s16-8 16-20C32 7 25 0 16 0z" fill="${fill}" stroke="#fff" stroke-width="2"/>` +
+    `<text x="16" y="22" font-size="13" text-anchor="middle" fill="#fff">${glyph}</text>` +
+    '</svg>'
+  return new kakao.maps.MarkerImage(
+    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    new kakao.maps.Size(32, 36),
+    { offset: new kakao.maps.Point(16, 36) }
+  )
+}
+
+// Picks the marker look for a group of videos at one location: favorited
+// places keep the existing gold-heart marker; otherwise the pin color shows
+// the best subscriber tier among that group's channels, and the glyph shows
+// whether the videos there are Shorts, long-form, or a mix of both.
+function groupMarkerImage(videos: VideoResult[], isFavorite: boolean): kakao.maps.MarkerImage {
+  if (isFavorite) return favoriteMarkerImage()
+
+  const bestTier = TIER_ORDER.find((t) => videos.some((v) => v.subscriberTier === t)) ?? 'bronze'
+  const allShort = videos.every((v) => v.isShort)
+  const allLong = videos.every((v) => !v.isShort)
+  const glyph = allShort ? '📱' : allLong ? '🎬' : '✦'
+  return pinMarkerImage(TIER_COLORS[bestTier], glyph)
+}
+
 function toFavoritePayload(v: VideoResult): FavoriteVideo {
   return {
     video_id: v.videoId,
@@ -110,9 +151,14 @@ function toFavoritePayload(v: VideoResult): FavoriteVideo {
 function DurationBadge({ duration, isShort, className }: { duration: string; isShort: boolean; className: string }) {
   return (
     <div className={`absolute flex items-center gap-1 ${className}`}>
-      {isShort && (
-        <span className="bg-pink-600 text-white text-[9px] font-bold px-1 py-0.5 rounded leading-none">Shorts</span>
-      )}
+      <span
+        className={`flex items-center justify-center w-4 h-4 rounded text-[9px] leading-none ${
+          isShort ? 'bg-pink-600' : 'bg-blue-600'
+        } text-white`}
+        title={isShort ? '쇼츠' : '롱폼'}
+      >
+        {isShort ? '📱' : '🎬'}
+      </span>
       {duration && (
         <span className="bg-black/75 text-white text-[10px] font-medium px-1 py-0.5 rounded leading-none">
           {duration}
@@ -184,6 +230,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [posLabel, setPosLabel] = useState<string>('위치 미설정')
   const [allResults, setAllResults] = useState<VideoResult[]>([])
   const [videoFilter, setVideoFilter] = useState<'all' | 'short' | 'long'>('all')
+  const [channelQuery, setChannelQuery] = useState('')
+  const [channelSuggestions, setChannelSuggestions] = useState<ChannelSuggestion[]>([])
+  const [channelSearching, setChannelSearching] = useState(false)
+  const [selectedChannel, setSelectedChannel] = useState<ChannelSuggestion | null>(null)
+  const channelSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedGroup, setSelectedGroup] = useState<MarkerGroup | null>(null)
@@ -325,7 +376,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         const marker = new kakao.maps.Marker({
           position: pos,
           map: mapInstanceRef.current!,
-          image: isFavorite ? favoriteMarkerImage() : undefined,
+          image: groupMarkerImage(group.videos, isFavorite),
         })
         kakao.maps.event.addListener(marker, 'click', () => setSelectedGroup(group))
         markersRef.current.push(marker)
@@ -350,7 +401,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   )
 
   const handleSearch = async () => {
-    if (!keyword.trim()) { setError('검색어를 입력해주세요.'); return }
+    if (!keyword.trim() && !selectedChannel) { setError('검색어를 입력해주세요.'); return }
     if (!userPos) { setError('위치를 먼저 설정해주세요.'); return }
 
     setLoading(true)
@@ -361,11 +412,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
     try {
       const params = new URLSearchParams({
-        q: keyword,
         lat: String(userPos.lat),
         lng: String(userPos.lng),
         radius: String(radius),
       })
+      if (keyword.trim()) params.set('q', keyword)
+      if (selectedChannel) params.set('channelId', selectedChannel.channelId)
       const res = await fetch(`/api/search?${params}`)
       const json = await res.json() as { results?: VideoResult[]; error?: string }
 
@@ -478,6 +530,24 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         setAddressSuggestions([])
       } finally {
         setAddressSearching(false)
+      }
+    }, 350)
+  }
+
+  const handleChannelQueryChange = (value: string) => {
+    setChannelQuery(value)
+    if (channelSearchTimer.current) clearTimeout(channelSearchTimer.current)
+    if (!value.trim()) { setChannelSuggestions([]); return }
+    channelSearchTimer.current = setTimeout(async () => {
+      setChannelSearching(true)
+      try {
+        const res = await fetch(`/api/channel-search?q=${encodeURIComponent(value.trim())}`)
+        const json = await res.json() as { results?: ChannelSuggestion[] }
+        setChannelSuggestions(json.results ?? [])
+      } catch {
+        setChannelSuggestions([])
+      } finally {
+        setChannelSearching(false)
       }
     }, 350)
   }
@@ -680,6 +750,52 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           />
         </div>
 
+        {/* Channel filter */}
+        <div className="px-3 pt-1 pb-1">
+          {selectedChannel ? (
+            <div className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-lg px-3 py-2 text-xs font-medium">
+              <span className="flex-1 truncate">🎙 {selectedChannel.title} 채널만 검색 중</span>
+              <button
+                onClick={() => { setSelectedChannel(null); setChannelQuery('') }}
+                className="shrink-0 text-blue-400 hover:text-blue-600"
+                title="필터 해제"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <input
+                type="text"
+                value={channelQuery}
+                onChange={(e) => handleChannelQueryChange(e.target.value)}
+                placeholder="유튜버 채널명으로 필터 (선택)"
+                className="w-full text-xs border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+              />
+              {channelSearching && <p className="text-xs text-gray-400 mt-1">검색 중…</p>}
+              {channelSuggestions.length > 0 && (
+                <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {channelSuggestions.map((c) => (
+                    <button
+                      key={c.channelId}
+                      onClick={() => {
+                        setSelectedChannel(c)
+                        setChannelQuery('')
+                        setChannelSuggestions([])
+                      }}
+                      className="w-full flex items-center gap-2 text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={c.thumbnail} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                      <p className="text-sm font-medium truncate">{c.title}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Radius */}
         <div className="px-3 pb-2 flex gap-1.5">
           {RADIUS_OPTIONS.map((r) => (
@@ -765,7 +881,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-xs text-gray-400 truncate flex-1">
-                      {formatViews(v.viewCount)}
+                      {TIER_ICON[v.subscriberTier]} {formatViews(v.viewCount)}
                       {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
                     </p>
                     <a
@@ -847,7 +963,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       {v.distanceKm}km
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">{v.channel}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">{TIER_ICON[v.subscriberTier]} {v.channel}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {formatViews(v.viewCount)}
                     {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
@@ -908,9 +1024,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {selectedVideo.channel} · {formatViews(selectedVideo.viewCount)}
+                  {TIER_ICON[selectedVideo.subscriberTier]} {selectedVideo.channel} · {formatViews(selectedVideo.viewCount)}
                   {selectedVideo.duration && <> · {selectedVideo.duration}</>}
-                  {selectedVideo.isShort && <span className="ml-1 text-pink-500 font-semibold">Shorts</span>}
+                  <span className="ml-1">{selectedVideo.isShort ? '📱' : '🎬'}</span>
                 </p>
               </div>
               <div className="shrink-0 flex items-center gap-3">

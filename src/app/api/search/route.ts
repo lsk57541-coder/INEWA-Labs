@@ -42,6 +42,8 @@ async function getLocationCorrections(): Promise<Map<string, LocationCorrection>
   return new Map(data.map((row) => [row.video_id, { lat: row.lat, lng: row.lng, address: row.address }]))
 }
 
+export type SubscriberTier = 'bronze' | 'silver' | 'gold'
+
 export interface VideoResult {
   videoId: string
   title: string
@@ -55,6 +57,7 @@ export interface VideoResult {
   placeName?: string
   duration: string
   isShort: boolean
+  subscriberTier: SubscriberTier
 }
 
 // YouTube's "duration" format is ISO 8601, e.g. "PT1M30S" or "PT45S"
@@ -83,6 +86,7 @@ interface YTSearchItem {
   snippet: {
     title: string
     channelTitle: string
+    channelId: string
     thumbnails: { medium: { url: string } }
   }
 }
@@ -93,11 +97,46 @@ interface YTVideoItem {
     description: string
     title: string
     channelTitle: string
+    channelId: string
     thumbnails: { medium: { url: string } }
   }
   recordingDetails?: { location?: { latitude: number; longitude: number } }
   statistics?: { viewCount?: string }
   contentDetails?: { duration: string }
+}
+
+// Subscriber-count tiers used to surface well-known creators vs. small channels.
+const TIER_THRESHOLDS: { min: number; tier: SubscriberTier }[] = [
+  { min: 100_000, tier: 'gold' },
+  { min: 10_000, tier: 'silver' },
+  { min: 0, tier: 'bronze' },
+]
+
+function tierForSubscriberCount(count: number): SubscriberTier {
+  return TIER_THRESHOLDS.find((t) => count >= t.min)?.tier ?? 'bronze'
+}
+
+async function getChannelTiers(channelIds: string[]): Promise<Map<string, SubscriberTier>> {
+  const key = process.env.YOUTUBE_API_KEY
+  const uniqueIds = [...new Set(channelIds)]
+  if (!key || uniqueIds.length === 0) return new Map()
+
+  const chunks: string[][] = []
+  for (let i = 0; i < uniqueIds.length; i += 50) chunks.push(uniqueIds.slice(i, i + 50))
+
+  const tiers = new Map<string, SubscriberTier>()
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const params = new URLSearchParams({ part: 'statistics', id: chunk.join(','), key })
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?${params}`)
+      if (!res.ok) return
+      const json = await res.json() as { items?: { id: string; statistics?: { subscriberCount?: string } }[] }
+      for (const item of json.items ?? []) {
+        tiers.set(item.id, tierForSubscriberCount(parseInt(item.statistics?.subscriberCount ?? '0', 10)))
+      }
+    })
+  )
+  return tiers
 }
 
 async function ytSearch(
@@ -109,7 +148,7 @@ async function ytSearch(
   if (!key) return []
   const params = new URLSearchParams({
     part: 'snippet',
-    q,
+    ...(q ? { q } : {}),
     type: 'video',
     maxResults: String(maxResults),
     key,
@@ -148,30 +187,19 @@ async function fetchVideoDetails(ids: string[]): Promise<YTVideoItem[]> {
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const q = searchParams.get('q')?.trim()
+  const channelId = searchParams.get('channelId')?.trim() || undefined
   const lat = parseFloat(searchParams.get('lat') ?? '')
   const lng = parseFloat(searchParams.get('lng') ?? '')
   const radius = parseFloat(searchParams.get('radius') ?? '5')
 
-  if (!q || isNaN(lat) || isNaN(lng)) {
-    return NextResponse.json({ error: 'q, lat, lng are required' }, { status: 400 })
+  if ((!q && !channelId) || isNaN(lat) || isNaN(lng)) {
+    return NextResponse.json({ error: 'q (or channelId), lat, lng are required' }, { status: 400 })
   }
 
   // 2 parallel searches: geo-based + broad KR. "여행" variant is only
   // fetched as a fallback when these two don't return enough candidates,
   // to keep quota usage down without hurting coverage for popular keywords.
   const MIN_CANDIDATES_BEFORE_FALLBACK = 15
-
-  const [geoItems, broadItems] = await Promise.all([
-    ytSearch(q, {
-      location: `${lat},${lng}`,
-      locationRadius: `${radius}km`,
-    }),
-    ytSearch(q, {
-      relevanceLanguage: 'ko',
-      regionCode: 'KR',
-      order: 'viewCount',
-    }),
-  ])
 
   const seen = new Set<string>()
   const dedupe = (items: YTSearchItem[]) =>
@@ -181,20 +209,46 @@ export async function GET(req: NextRequest) {
       return true
     })
 
-  let unique = dedupe([...geoItems, ...broadItems])
+  let unique: YTSearchItem[]
 
-  if (unique.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
-    const travelItems = await ytSearch(`${q} 여행`, {
-      relevanceLanguage: 'ko',
-      regionCode: 'KR',
-      order: 'viewCount',
-    }, 30)
-    unique = [...unique, ...dedupe(travelItems)]
+  if (channelId) {
+    // Filtered to one creator: a single near-me search restricted to their channel is enough.
+    const channelItems = await ytSearch(q ?? '', {
+      channelId,
+      location: `${lat},${lng}`,
+      locationRadius: `${radius}km`,
+      order: 'date',
+    })
+    unique = dedupe(channelItems)
+  } else {
+    const [geoItems, broadItems] = await Promise.all([
+      ytSearch(q!, {
+        location: `${lat},${lng}`,
+        locationRadius: `${radius}km`,
+      }),
+      ytSearch(q!, {
+        relevanceLanguage: 'ko',
+        regionCode: 'KR',
+        order: 'viewCount',
+      }),
+    ])
+
+    unique = dedupe([...geoItems, ...broadItems])
+
+    if (unique.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
+      const travelItems = await ytSearch(`${q} 여행`, {
+        relevanceLanguage: 'ko',
+        regionCode: 'KR',
+        order: 'viewCount',
+      }, 30)
+      unique = [...unique, ...dedupe(travelItems)]
+    }
   }
 
-  const [details, corrections] = await Promise.all([
+  const [details, corrections, channelTiers] = await Promise.all([
     fetchVideoDetails(unique.map((i) => i.id.videoId)),
     getLocationCorrections(),
+    getChannelTiers(unique.map((i) => i.snippet.channelId)),
   ])
 
   const results: VideoResult[] = []
@@ -238,6 +292,7 @@ export async function GET(req: NextRequest) {
             placeName,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+            subscriberTier: channelTiers.get(v.snippet.channelId) ?? 'bronze',
           })
         }
       }),
@@ -263,6 +318,7 @@ export async function GET(req: NextRequest) {
             placeName: correction.address,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+            subscriberTier: channelTiers.get(v.snippet.channelId) ?? 'bronze',
           })
         }
         return
@@ -290,6 +346,7 @@ export async function GET(req: NextRequest) {
             placeName: placeInfo?.name || geo2.address,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+            subscriberTier: channelTiers.get(v.snippet.channelId) ?? 'bronze',
           })
           break
         }
