@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { haversineKm } from '@/lib/haversine'
 import { geocodeKorean, reverseGeocode, searchPlaceInfo } from '@/lib/geocode'
-import { extractLocations } from '@/lib/extractLocation'
+import { extractLocations, extractExplicitBusinessName } from '@/lib/extractLocation'
 
 const REPORT_THRESHOLD = 3
 
@@ -271,9 +271,12 @@ export async function GET(req: NextRequest) {
         const dist = haversineKm(lat, lng, pointLat, pointLng)
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
+          const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
           let placeName: string | undefined
           if (correction) {
             placeName = correction.address
+          } else if (explicitName) {
+            placeName = explicitName
           } else {
             const [address, titleMatch] = await Promise.all([
               reverseGeocode(pointLat, pointLng),
@@ -342,10 +345,17 @@ export async function GET(req: NextRequest) {
         const dist = haversineKm(lat, lng, geo2.lat, geo2.lng)
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
-          const titleMatch = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
-          const addressMatch = !titleMatch?.name
-            ? await searchPlaceInfo(geo2.address, geo2.lat, geo2.lng)
-            : null
+          const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
+          let resolvedName: string
+          if (explicitName) {
+            resolvedName = explicitName
+          } else {
+            const titleMatch = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
+            const addressMatch = !titleMatch?.name
+              ? await searchPlaceInfo(geo2.address, geo2.lat, geo2.lng)
+              : null
+            resolvedName = titleMatch?.name || addressMatch?.name || geo2.address
+          }
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
             videoId: v.id,
@@ -357,7 +367,7 @@ export async function GET(req: NextRequest) {
             distanceKm: Math.round(dist * 10) / 10,
             source: 'ai',
             viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
-            placeName: titleMatch?.name || addressMatch?.name || geo2.address,
+            placeName: resolvedName,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
             subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),

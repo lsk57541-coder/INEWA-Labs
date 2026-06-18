@@ -3,6 +3,18 @@ import Anthropic from '@anthropic-ai/sdk'
 const KOREAN_PLACE_RE =
   /([가-힣]+(?:시|군|구|동|읍|면|리|로|길|대로|가|역|공원|산|강|호수|바다|해변|항|포구|섬|도|반도|해|만|평야|분지|계곡|폭포|사찰|절|궁|궁궐|탑|성|고궁|박물관|미술관|시장|마을|마을|타운|센터|광장|플라자|몰|백화점|역사|유적|유원지|관광지|명소|스팟))/g
 
+// Creators often label the business name explicitly in the description
+// (e.g. "상호명 : 벅벅"). When present, this is far more reliable than
+// guessing from the title or matching against Kakao, so check for it first.
+const BUSINESS_NAME_RE = /(?:상호명?|가게명|매장명|업체명|상점명)\s*[:：]\s*([^\n#]+)/
+
+export function extractExplicitBusinessName(description: string): string | null {
+  const match = description.match(BUSINESS_NAME_RE)
+  if (!match) return null
+  const name = match[1].trim().split(/\s{2,}|[|/]/)[0].trim()
+  return name || null
+}
+
 export async function extractLocations(title: string, description: string): Promise<string[]> {
   const text = `${title} ${description}`.slice(0, 800)
 
