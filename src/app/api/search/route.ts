@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { haversineKm } from '@/lib/haversine'
-import { geocodeKorean, reverseGeocode } from '@/lib/geocode'
+import { geocodeKorean, reverseGeocode, searchPlaceInfo } from '@/lib/geocode'
 import { extractLocations } from '@/lib/extractLocation'
 
 const REPORT_THRESHOLD = 3
@@ -164,7 +164,11 @@ export async function GET(req: NextRequest) {
         const dist = haversineKm(lat, lng, geo.latitude, geo.longitude)
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
-          const placeName = await reverseGeocode(geo.latitude, geo.longitude) ?? undefined
+          const [address, place] = await Promise.all([
+            reverseGeocode(geo.latitude, geo.longitude),
+            searchPlaceInfo(snippet.title, geo.latitude, geo.longitude),
+          ])
+          const placeName = place?.name || address || undefined
           results.push({
             videoId: v.id,
             title: snippet.title,
@@ -189,6 +193,7 @@ export async function GET(req: NextRequest) {
         const dist = haversineKm(lat, lng, geo2.lat, geo2.lng)
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
+          const placeInfo = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
           results.push({
             videoId: v.id,
             title: snippet.title,
@@ -199,7 +204,7 @@ export async function GET(req: NextRequest) {
             distanceKm: Math.round(dist * 10) / 10,
             source: 'ai',
             viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
-            placeName: geo2.address,
+            placeName: placeInfo?.name || geo2.address,
           })
           break
         }

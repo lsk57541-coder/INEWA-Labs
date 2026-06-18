@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { searchPlaceInfo, type PlaceDetails } from '@/lib/geocode'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -103,6 +104,49 @@ export async function getFavorites(): Promise<FavoriteVideo[]> {
 
   if (error) throw new Error(error.message)
   return data ?? []
+}
+
+export async function toggleVisited(video: FavoriteVideo): Promise<{ visited: boolean }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('로그인이 필요합니다.')
+
+  const { data: existing } = await supabase
+    .from('visited_places')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('video_id', video.video_id)
+    .maybeSingle()
+
+  if (existing) {
+    const { error } = await supabase.from('visited_places').delete().eq('id', existing.id)
+    if (error) throw new Error(error.message)
+    return { visited: false }
+  }
+
+  const { error } = await supabase.from('visited_places').insert({ user_id: user.id, ...video })
+  if (error) throw new Error(error.message)
+  return { visited: true }
+}
+
+export async function getVisited(): Promise<FavoriteVideo[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('visited_places')
+    .select('video_id, title, thumbnail, channel, lat, lng, place_name')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+export async function getPlaceDetails(videoTitle: string | undefined, lat: number, lng: number): Promise<PlaceDetails | null> {
+  if (!videoTitle) return null
+  return searchPlaceInfo(videoTitle, lat, lng)
 }
 
 export async function reportWrongLocation(videoId: string, lat?: number, lng?: number) {
