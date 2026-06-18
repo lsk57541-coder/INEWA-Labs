@@ -62,6 +62,14 @@ function formatViews(n: number): string {
   return `${n}회`
 }
 
+// Parses the server-formatted "m:ss" / "h:mm:ss" duration string back into
+// seconds, purely for client-side sorting.
+function parseDurationLabel(duration: string): number {
+  const parts = duration.split(':').map(Number)
+  if (parts.some(Number.isNaN)) return 0
+  return parts.reduce((acc, n) => acc * 60 + n, 0)
+}
+
 function navUrl(
   v: VideoResult,
   from: { lat: number; lng: number; label: string } | null
@@ -91,8 +99,8 @@ const FAVORITE_MARKER_SVG =
 function favoriteMarkerImage(): kakao.maps.MarkerImage {
   return new kakao.maps.MarkerImage(
     `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(FAVORITE_MARKER_SVG)}`,
-    new kakao.maps.Size(32, 36),
-    { offset: new kakao.maps.Point(16, 36) }
+    new kakao.maps.Size(24, 27),
+    { offset: new kakao.maps.Point(12, 27) }
   )
 }
 
@@ -105,8 +113,8 @@ const VISITED_MARKER_SVG =
 function visitedMarkerImage(): kakao.maps.MarkerImage {
   return new kakao.maps.MarkerImage(
     `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(VISITED_MARKER_SVG)}`,
-    new kakao.maps.Size(32, 36),
-    { offset: new kakao.maps.Point(16, 36) }
+    new kakao.maps.Size(24, 27),
+    { offset: new kakao.maps.Point(12, 27) }
   )
 }
 
@@ -130,6 +138,28 @@ function NaviIcon({ className = 'w-7 h-7' }: { className?: string }) {
   )
 }
 
+// Original icon shapes (not the official trademarked logos) standing in for
+// "long-form video" and "Shorts" in the filter tabs.
+function LongformIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <title>롱폼</title>
+      <rect x="1" y="4" width="22" height="16" rx="4" fill="#FF0000" />
+      <polygon points="10,8.5 10,15.5 16,12" fill="#fff" />
+    </svg>
+  )
+}
+
+function ShortsIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <title>쇼츠</title>
+      <rect x="7" y="2" width="10" height="20" rx="4" fill="#FF0000" />
+      <polygon points="10.5,9 10.5,15 15,12" fill="#fff" />
+    </svg>
+  )
+}
+
 function TierButton({ tier }: { tier: SubscriberTier }) {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" className="inline-block shrink-0 align-[-2px]">
@@ -140,7 +170,6 @@ function TierButton({ tier }: { tier: SubscriberTier }) {
   )
 }
 
-// Recognizable shapes instead of text glyphs: a YouTube-style play triangle
 // Just the play triangle — no phone-frame outline — for both Shorts and
 // long-form, and a small dot when a location has both.
 function videoTypeGlyphSvg(kind: 'short' | 'long' | 'mixed'): string {
@@ -156,8 +185,8 @@ function pinMarkerImage(fill: string, innerSvg: string): kakao.maps.MarkerImage 
     '</svg>'
   return new kakao.maps.MarkerImage(
     `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    new kakao.maps.Size(32, 36),
-    { offset: new kakao.maps.Point(16, 36) }
+    new kakao.maps.Size(24, 27),
+    { offset: new kakao.maps.Point(12, 27) }
   )
 }
 
@@ -282,6 +311,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [posLabel, setPosLabel] = useState<string>('위치 미설정')
   const [allResults, setAllResults] = useState<VideoResult[]>([])
   const [videoFilter, setVideoFilter] = useState<'all' | 'short' | 'long'>('all')
+  const [sortBy, setSortBy] = useState<'views' | 'duration' | 'distance'>('views')
   const [channelQuery, setChannelQuery] = useState('')
   const [channelSuggestions, setChannelSuggestions] = useState<ChannelSuggestion[]>([])
   const [channelSearching, setChannelSearching] = useState(false)
@@ -305,6 +335,18 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([])
   const [addressSearching, setAddressSearching] = useState(false)
   const addressSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sheetDragStartY = useRef<number | null>(null)
+
+  const handleSheetDragStart = (clientY: number) => {
+    sheetDragStartY.current = clientY
+  }
+  const handleSheetDragMove = (clientY: number) => {
+    if (sheetDragStartY.current === null) return
+    const delta = clientY - sheetDragStartY.current
+    if (delta < -40 && !listOpen) { setListOpen(true); sheetDragStartY.current = clientY }
+    if (delta > 40 && listOpen) { setListOpen(false); sheetDragStartY.current = clientY }
+  }
+  const handleSheetDragEnd = () => { sheetDragStartY.current = null }
 
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<kakao.maps.Map | null>(null)
@@ -678,11 +720,18 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     setFavoritesOverlayOpen(true)
   }
 
-  const filteredResults = allResults.filter((v) => {
-    if (videoFilter === 'short') return v.isShort
-    if (videoFilter === 'long') return !v.isShort
-    return true
-  })
+  const filteredResults = allResults
+    .filter((v) => {
+      if (videoFilter === 'short') return v.isShort
+      if (videoFilter === 'long') return !v.isShort
+      return true
+    })
+    .slice()
+    .sort((a, b) => {
+      if (sortBy === 'distance') return a.distanceKm - b.distanceKm
+      if (sortBy === 'duration') return parseDurationLabel(b.duration) - parseDurationLabel(a.duration)
+      return b.viewCount - a.viewCount
+    })
 
   return (
     <div className="flex flex-1 overflow-hidden relative">
@@ -931,23 +980,50 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col ${
             listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-44px)]'
           }`}
-          style={{ maxHeight: '60vh' }}
+          style={{ maxHeight: listOpen ? '85vh' : '60vh' }}
         >
-          <button
-            onClick={() => setListOpen((o) => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-xs text-gray-500 font-medium border-b shrink-0"
+          <div
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId)
+              handleSheetDragStart(e.clientY)
+            }}
+            onPointerMove={(e) => handleSheetDragMove(e.clientY)}
+            onPointerUp={handleSheetDragEnd}
+            className="shrink-0 cursor-grab touch-none"
           >
-            <span>{`${filteredResults.length}개 · 조회수순`}</span>
-            <span>{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
-          </button>
+            <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mt-2 mb-1.5" />
+            <button
+              onClick={() => setListOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-4 pb-3 text-xs text-gray-500 font-medium border-b"
+            >
+              <span>{`${filteredResults.length}개`}</span>
+              <span>{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
+            </button>
+          </div>
           <div className="flex gap-1.5 px-3 py-2 border-b shrink-0">
-            {([['all', '전체'], ['long', '롱폼'], ['short', '쇼츠']] as const).map(([key, label]) => (
+            {([['all', '전체'] as const, ['long', null] as const, ['short', null] as const]).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setVideoFilter(key)}
-                className={`flex-1 text-xs rounded-lg py-1.5 border transition font-medium ${
+                title={key === 'long' ? '롱폼' : key === 'short' ? '쇼츠' : '전체'}
+                className={`flex-1 flex items-center justify-center gap-1 text-xs rounded-lg py-1.5 border transition font-medium ${
                   videoFilter === key
                     ? 'bg-black text-white border-black'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {key === 'long' ? <LongformIcon className="w-5 h-5" /> : key === 'short' ? <ShortsIcon className="w-5 h-5" /> : label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1.5 px-3 py-2 border-b shrink-0">
+            {([['views', '조회수'], ['duration', '영상길이'], ['distance', '거리(가까운)']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setSortBy(key)}
+                className={`flex-1 text-xs rounded-lg py-1.5 border transition font-medium ${
+                  sortBy === key
+                    ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                 }`}
               >
