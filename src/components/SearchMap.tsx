@@ -96,6 +96,20 @@ function favoriteMarkerImage(): kakao.maps.MarkerImage {
   )
 }
 
+const VISITED_MARKER_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36" viewBox="0 0 32 36">' +
+  '<path d="M16 0C7 0 0 7 0 16c0 12 16 20 16 20s16-8 16-20C32 7 25 0 16 0z" fill="#475569" stroke="#fff" stroke-width="2"/>' +
+  '<text x="16" y="21" font-size="14" text-anchor="middle" fill="#fff">⚑</text>' +
+  '</svg>'
+
+function visitedMarkerImage(): kakao.maps.MarkerImage {
+  return new kakao.maps.MarkerImage(
+    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(VISITED_MARKER_SVG)}`,
+    new kakao.maps.Size(32, 36),
+    { offset: new kakao.maps.Point(16, 36) }
+  )
+}
+
 // Colors approximating YouTube's actual Creator Award play-button plaques.
 const TIER_BUTTON_COLORS: Record<SubscriberTier, string> = {
   silver: '#C0C0C0',
@@ -114,11 +128,27 @@ function TierButton({ tier }: { tier: SubscriberTier }) {
   )
 }
 
-function pinMarkerImage(fill: string, glyph: string): kakao.maps.MarkerImage {
+// Recognizable shapes instead of text glyphs: a YouTube-style play triangle
+// for long-form videos, a phone outline with a play triangle for Shorts, and
+// a small dot when a location has both.
+function videoTypeGlyphSvg(kind: 'short' | 'long' | 'mixed'): string {
+  if (kind === 'short') {
+    return (
+      '<rect x="11.5" y="6" width="9" height="16" rx="2.5" fill="none" stroke="#fff" stroke-width="1.4"/>' +
+      '<polygon points="14.3,11.2 14.3,16.8 18.5,14" fill="#fff"/>'
+    )
+  }
+  if (kind === 'long') {
+    return '<polygon points="9,8 9,16 19,12" fill="#fff"/>'
+  }
+  return '<circle cx="16" cy="12" r="3" fill="#fff"/>'
+}
+
+function pinMarkerImage(fill: string, innerSvg: string): kakao.maps.MarkerImage {
   const svg =
     '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36" viewBox="0 0 32 36">' +
     `<path d="M16 0C7 0 0 7 0 16c0 12 16 20 16 20s16-8 16-20C32 7 25 0 16 0z" fill="${fill}" stroke="#fff" stroke-width="2"/>` +
-    `<text x="16" y="22" font-size="13" text-anchor="middle" fill="#fff">${glyph}</text>` +
+    innerSvg +
     '</svg>'
   return new kakao.maps.MarkerImage(
     `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
@@ -138,17 +168,19 @@ function subscriberGradientColor(subscriberCount: number): string {
 }
 
 // Picks the marker look for a group of videos at one location: favorited
-// places keep the existing gold-heart marker; otherwise the pin's shade shows
-// how many subscribers the best-known channel there has, and the glyph shows
-// whether the videos there are Shorts, long-form, or a mix of both.
-function groupMarkerImage(videos: VideoResult[], isFavorite: boolean): kakao.maps.MarkerImage {
+// places keep the gold-heart marker, "가본 곳" places keep the gray-flag
+// marker, and otherwise the pin's shade shows how many subscribers the
+// best-known channel there has, with a shape showing whether the videos
+// there are Shorts, long-form, or a mix of both.
+function groupMarkerImage(videos: VideoResult[], isFavorite: boolean, isVisited: boolean): kakao.maps.MarkerImage {
   if (isFavorite) return favoriteMarkerImage()
+  if (isVisited) return visitedMarkerImage()
 
   const maxSubs = Math.max(0, ...videos.map((v) => v.subscriberCount))
   const allShort = videos.every((v) => v.isShort)
   const allLong = videos.every((v) => !v.isShort)
-  const glyph = allShort ? '📱' : allLong ? '🎬' : '✦'
-  return pinMarkerImage(subscriberGradientColor(maxSubs), glyph)
+  const kind = allShort ? 'short' : allLong ? 'long' : 'mixed'
+  return pinMarkerImage(subscriberGradientColor(maxSubs), videoTypeGlyphSvg(kind))
 }
 
 function toFavoritePayload(v: VideoResult): FavoriteVideo {
@@ -364,7 +396,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   }
 
   const renderMarkers = useCallback(
-    (groups: MarkerGroup[], center: { lat: number; lng: number }, favIds: Set<string>) => {
+    (groups: MarkerGroup[], center: { lat: number; lng: number }, favIds: Set<string>, visitedIdSet: Set<string>) => {
       if (!mapInstanceRef.current) return
       lastCenterRef.current = center
 
@@ -388,10 +420,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       groups.forEach((group) => {
         const pos = new kakao.maps.LatLng(group.lat, group.lng)
         const isFavorite = group.videos.some((v) => favIds.has(v.videoId))
+        const isVisited = group.videos.some((v) => visitedIdSet.has(v.videoId))
         const marker = new kakao.maps.Marker({
           position: pos,
           map: mapInstanceRef.current!,
-          image: groupMarkerImage(group.videos, isFavorite),
+          image: groupMarkerImage(group.videos, isFavorite, isVisited),
         })
         kakao.maps.event.addListener(marker, 'click', () => setSelectedGroup(group))
         markersRef.current.push(marker)
@@ -441,7 +474,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       const videos = json.results ?? []
       setAllResults(videos)
       setVideoFilter('all')
-      renderMarkers(groupByLocation(videos), userPos, favoriteIds)
+      renderMarkers(groupByLocation(videos), userPos, favoriteIds, visitedIds)
 
       if (videos.length === 0) setError('해당 반경 내에 검색 결과가 없습니다.')
     } catch (e) {
@@ -458,13 +491,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     if (wasFavorited) next.delete(v.videoId)
     else next.add(v.videoId)
     setFavoriteIds(next)
-    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, next)
+    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, next, visitedIds)
 
     try {
       await toggleFavorite(toFavoritePayload(v))
     } catch (e) {
       setFavoriteIds(favoriteIds)
-      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds)
+      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, visitedIds)
       setError(e instanceof Error ? e.message : '찜하기 실패')
     }
   }
@@ -476,10 +509,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     if (wasVisited) next.delete(v.videoId)
     else next.add(v.videoId)
     setVisitedIds(next)
+    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, next)
+
     try {
       await toggleVisited(toFavoritePayload(v))
     } catch (e) {
       setVisitedIds(visitedIds)
+      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, visitedIds)
       setError(e instanceof Error ? e.message : '표시 실패')
     }
   }

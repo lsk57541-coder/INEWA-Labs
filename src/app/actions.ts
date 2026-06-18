@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { searchPlaceInfo, geocodeKorean, type PlaceDetails } from '@/lib/geocode'
+import { searchPlaceInfo, geocodeKorean, reverseGeocode, type PlaceDetails } from '@/lib/geocode'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -146,7 +146,13 @@ export async function getVisited(): Promise<FavoriteVideo[]> {
 
 export async function getPlaceDetails(videoTitle: string | undefined, lat: number, lng: number): Promise<PlaceDetails | null> {
   if (!videoTitle) return null
-  return searchPlaceInfo(videoTitle, lat, lng)
+  const titleMatch = await searchPlaceInfo(videoTitle, lat, lng)
+  if (titleMatch?.name) return titleMatch
+
+  const address = await reverseGeocode(lat, lng)
+  if (!address) return titleMatch
+  const addressMatch = await searchPlaceInfo(address, lat, lng)
+  return addressMatch ?? titleMatch
 }
 
 export type ReportReason = 'wrong_address' | 'unrelated' | 'inappropriate' | 'other'

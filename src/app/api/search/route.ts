@@ -275,11 +275,17 @@ export async function GET(req: NextRequest) {
           if (correction) {
             placeName = correction.address
           } else {
-            const [address, place] = await Promise.all([
+            const [address, titleMatch] = await Promise.all([
               reverseGeocode(pointLat, pointLng),
               searchPlaceInfo(snippet.title, pointLat, pointLng),
             ])
-            placeName = place?.name || address || undefined
+            // Video title rarely contains the registered business name verbatim,
+            // so fall back to searching by the address itself before giving up
+            // and showing the bare address.
+            const addressMatch = !titleMatch?.name && address
+              ? await searchPlaceInfo(address, pointLat, pointLng)
+              : null
+            placeName = titleMatch?.name || addressMatch?.name || address || undefined
           }
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
@@ -336,7 +342,10 @@ export async function GET(req: NextRequest) {
         const dist = haversineKm(lat, lng, geo2.lat, geo2.lng)
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
-          const placeInfo = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
+          const titleMatch = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
+          const addressMatch = !titleMatch?.name
+            ? await searchPlaceInfo(geo2.address, geo2.lat, geo2.lng)
+            : null
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
             videoId: v.id,
@@ -348,7 +357,7 @@ export async function GET(req: NextRequest) {
             distanceKm: Math.round(dist * 10) / 10,
             source: 'ai',
             viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
-            placeName: placeInfo?.name || geo2.address,
+            placeName: titleMatch?.name || addressMatch?.name || geo2.address,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
             subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
