@@ -86,6 +86,11 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
             </Link>
           )}
         </div>
+
+        <div className="border-t shrink-0 px-4 py-3 flex gap-3 text-xs text-gray-400">
+          <Link href="/terms" onClick={onClose} className="hover:text-gray-600">이용약관</Link>
+          <Link href="/privacy" onClick={onClose} className="hover:text-gray-600">개인정보처리방침</Link>
+        </div>
       </div>
     </div>
   )
