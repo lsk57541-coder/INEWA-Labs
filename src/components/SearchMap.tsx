@@ -25,6 +25,13 @@ const REPORT_REASONS: { key: ReportReason; label: string }[] = [
   { key: 'other', label: '기타' },
 ]
 
+interface AddressSuggestion {
+  name: string
+  address: string
+  lat: number
+  lng: number
+}
+
 interface MarkerGroup {
   lat: number
   lng: number
@@ -192,6 +199,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [reportAddress, setReportAddress] = useState('')
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [reportResult, setReportResult] = useState<string | null>(null)
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([])
+  const [addressSearching, setAddressSearching] = useState(false)
+  const addressSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<kakao.maps.Map | null>(null)
@@ -454,6 +464,24 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     })
   }
 
+  const handleReportAddressChange = (value: string) => {
+    setReportAddress(value)
+    if (addressSearchTimer.current) clearTimeout(addressSearchTimer.current)
+    if (!value.trim()) { setAddressSuggestions([]); return }
+    addressSearchTimer.current = setTimeout(async () => {
+      setAddressSearching(true)
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(value.trim())}&list=1`)
+        const json = await res.json() as { results?: AddressSuggestion[] }
+        setAddressSuggestions(json.results ?? [])
+      } catch {
+        setAddressSuggestions([])
+      } finally {
+        setAddressSearching(false)
+      }
+    }, 350)
+  }
+
   const handleReport = async (v: VideoResult) => {
     if (!user) { setError('로그인이 필요합니다.'); return }
     if (reportedIds.has(v.videoId)) {
@@ -472,6 +500,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     setReportReason('wrong_address')
     setReportAddress('')
     setReportResult(null)
+    setAddressSuggestions([])
   }
 
   const handleSubmitReport = async () => {
@@ -939,13 +968,35 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               ))}
             </div>
             {reportReason === 'wrong_address' && (
-              <input
-                type="text"
-                value={reportAddress}
-                onChange={(e) => setReportAddress(e.target.value)}
-                placeholder="정확한 주소를 입력해주세요"
-                className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400 mb-3"
-              />
+              <div className="relative mb-3">
+                <input
+                  type="text"
+                  value={reportAddress}
+                  onChange={(e) => handleReportAddressChange(e.target.value)}
+                  placeholder="장소명이나 주소를 입력해보세요 (예: 엄마네돼지찌개)"
+                  className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                />
+                {addressSearching && (
+                  <p className="text-xs text-gray-400 mt-1">검색 중…</p>
+                )}
+                {addressSuggestions.length > 0 && (
+                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {addressSuggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setReportAddress(s.address)
+                          setAddressSuggestions([])
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                      >
+                        <p className="text-sm font-medium">{s.name}</p>
+                        <p className="text-xs text-gray-400">{s.address}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             {reportResult && <p className="text-xs text-gray-600 mb-3">{reportResult}</p>}
             <div className="flex gap-2">
