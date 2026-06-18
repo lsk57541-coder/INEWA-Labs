@@ -118,6 +118,18 @@ const TIER_BUTTON_COLORS: Record<SubscriberTier, string> = {
   red_diamond: '#DC2626',
 }
 
+// Icon-only "navigate there" button — a compass/arrow glyph on a rounded
+// yellow tile, evoking Kakao Navi without using its actual logo asset.
+function NaviIcon({ className = 'w-7 h-7' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 28 28" className={className}>
+      <title>길찾기</title>
+      <rect width="28" height="28" rx="8" fill="#FEE500" />
+      <polygon points="14,6 19,21 14,17.5 9,21" fill="#3C1E1E" />
+    </svg>
+  )
+}
+
 function TierButton({ tier }: { tier: SubscriberTier }) {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" className="inline-block shrink-0 align-[-2px]">
@@ -129,19 +141,11 @@ function TierButton({ tier }: { tier: SubscriberTier }) {
 }
 
 // Recognizable shapes instead of text glyphs: a YouTube-style play triangle
-// for long-form videos, a phone outline with a play triangle for Shorts, and
-// a small dot when a location has both.
+// Just the play triangle — no phone-frame outline — for both Shorts and
+// long-form, and a small dot when a location has both.
 function videoTypeGlyphSvg(kind: 'short' | 'long' | 'mixed'): string {
-  if (kind === 'short') {
-    return (
-      '<rect x="11.5" y="6" width="9" height="16" rx="2.5" fill="none" stroke="#fff" stroke-width="1.4"/>' +
-      '<polygon points="14.3,11.2 14.3,16.8 18.5,14" fill="#fff"/>'
-    )
-  }
-  if (kind === 'long') {
-    return '<polygon points="9,8 9,16 19,12" fill="#fff"/>'
-  }
-  return '<circle cx="16" cy="12" r="3" fill="#fff"/>'
+  if (kind === 'mixed') return '<circle cx="16" cy="12" r="3" fill="#fff"/>'
+  return '<polygon points="9,8 9,16 19,12" fill="#fff"/>'
 }
 
 function pinMarkerImage(fill: string, innerSvg: string): kakao.maps.MarkerImage {
@@ -157,14 +161,13 @@ function pinMarkerImage(fill: string, innerSvg: string): kakao.maps.MarkerImage 
   )
 }
 
-// Same blue hue as the rest of the UI (search radius circle, distance badge),
-// just darker for channels with more subscribers and lighter for fewer —
-// a gradient instead of distinct gold/silver/bronze colors.
+// YouTube-red hue, darker for channels with more subscribers and lighter for
+// fewer — a gradient instead of distinct gold/silver/bronze colors.
 function subscriberGradientColor(subscriberCount: number): string {
   const clamped = Math.min(Math.max(subscriberCount, 1), 10_000_000)
   const t = Math.log10(clamped) / Math.log10(10_000_000) // 0 (few subs) .. 1 (many subs)
-  const lightness = 78 - t * 43 // 78% light .. 35% dark
-  return `hsl(217, 85%, ${lightness}%)`
+  const lightness = 70 - t * 35 // 70% light .. 35% dark
+  return `hsl(0, 85%, ${lightness}%)`
 }
 
 // Picks the marker look for a group of videos at one location: favorited
@@ -273,6 +276,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [panelOpacity, setPanelOpacity] = useState(0.95)
   const [addressInput, setAddressInput] = useState('')
   const [addressLoading, setAddressLoading] = useState(false)
+  const [locationSuggestions, setLocationSuggestions] = useState<AddressSuggestion[]>([])
+  const locationSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null)
   const [posLabel, setPosLabel] = useState<string>('위치 미설정')
   const [allResults, setAllResults] = useState<VideoResult[]>([])
@@ -377,22 +382,40 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     )
   }
 
-  const handleAddressSearch = async () => {
-    if (!addressInput.trim()) { setError('주소를 입력해주세요.'); return }
+  const fetchLocationSuggestions = async (value: string) => {
     setAddressLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/geocode?q=${encodeURIComponent(addressInput.trim())}`)
-      const json = await res.json() as { lat?: number; lng?: number; name?: string; error?: string }
-      if (!res.ok || !json.lat) throw new Error(json.error ?? '주소를 찾을 수 없습니다.')
-      setUserPos({ lat: json.lat, lng: json.lng! })
-      setPosLabel(json.name ?? addressInput.trim())
-      panTo(json.lat, json.lng!)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '주소 검색 실패')
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}&list=1`)
+      const json = await res.json() as { results?: AddressSuggestion[] }
+      setLocationSuggestions(json.results ?? [])
+      if (!json.results || json.results.length === 0) setError('일치하는 주소를 찾을 수 없습니다.')
+    } catch {
+      setLocationSuggestions([])
+      setError('주소 검색 실패')
     } finally {
       setAddressLoading(false)
     }
+  }
+
+  const handleAddressInputChange = (value: string) => {
+    setAddressInput(value)
+    if (locationSearchTimer.current) clearTimeout(locationSearchTimer.current)
+    if (!value.trim()) { setLocationSuggestions([]); return }
+    locationSearchTimer.current = setTimeout(() => fetchLocationSuggestions(value.trim()), 350)
+  }
+
+  const handleAddressSearch = () => {
+    if (!addressInput.trim()) { setError('주소를 입력해주세요.'); return }
+    fetchLocationSuggestions(addressInput.trim())
+  }
+
+  const selectLocationSuggestion = (s: AddressSuggestion) => {
+    setUserPos({ lat: s.lat, lng: s.lng })
+    setPosLabel(s.name)
+    panTo(s.lat, s.lng)
+    setAddressInput(s.name)
+    setLocationSuggestions([])
   }
 
   const renderMarkers = useCallback(
@@ -820,25 +843,49 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           )}
         </div>
 
-        {/* Search location: direct address input only — GPS is the locate-me button on the map */}
+        {/* Search location: direct address input, plus a shortcut back to GPS */}
         <div className="px-3 pt-2 pb-2 border-b">
-          <p className="text-xs text-gray-400 font-medium mb-1.5">📍 검색위치 직접입력</p>
-          <div className="flex gap-1">
-            <input
-              type="text"
-              value={addressInput}
-              onChange={(e) => setAddressInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
-              placeholder="지역명 또는 주소 입력"
-              className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
-            />
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs text-gray-400 font-medium">📍 검색위치 직접입력</p>
             <button
-              onClick={handleAddressSearch}
-              disabled={addressLoading}
-              className="shrink-0 text-xs bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-40 transition"
+              onClick={getLocation}
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium transition"
             >
-              {addressLoading ? '…' : '설정'}
+              🎯 현재 위치로
             </button>
+          </div>
+          <div className="relative">
+            <div className="flex gap-1">
+              <input
+                type="text"
+                value={addressInput}
+                onChange={(e) => handleAddressInputChange(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
+                placeholder="지역명 또는 주소 입력"
+                className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+              />
+              <button
+                onClick={handleAddressSearch}
+                disabled={addressLoading}
+                className="shrink-0 text-xs bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-40 transition"
+              >
+                {addressLoading ? '…' : '검색'}
+              </button>
+            </div>
+            {locationSuggestions.length > 0 && (
+              <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {locationSuggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => selectLocationSuggestion(s)}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                  >
+                    <p className="text-sm font-medium">{s.name}</p>
+                    <p className="text-xs text-gray-400">{s.address}</p>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {posLabel !== '위치 미설정' && (
@@ -876,35 +923,39 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
         {/* Error */}
         {error && <div className="px-3 pb-3 text-xs text-red-500">{error}</div>}
+      </div>
 
-        {/* Results list — compact, sorted by view count, collapsible */}
-        {allResults.length > 0 && (
-          <div className="border-t">
-            <button
-              onClick={() => setListOpen((o) => !o)}
-              className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-400 font-medium border-b hover:bg-gray-50/50 transition"
-            >
-              <span>{`${filteredResults.length}개 · 조회수순`}</span>
-              <span>{listOpen ? '리스트 닫기 ▲' : '리스트 열기 ▼'}</span>
-            </button>
-            {listOpen && (
-            <>
-            <div className="flex gap-1.5 px-3 py-2 border-b">
-              {([['all', '전체'], ['long', '롱폼'], ['short', '쇼츠']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setVideoFilter(key)}
-                  className={`flex-1 text-xs rounded-lg py-1.5 border transition font-medium ${
-                    videoFilter === key
-                      ? 'bg-black text-white border-black'
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="max-h-56 overflow-y-auto">
+      {/* Results list — independent bottom sheet, slides up from the bottom */}
+      {allResults.length > 0 && (
+        <div
+          className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col ${
+            listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-44px)]'
+          }`}
+          style={{ maxHeight: '60vh' }}
+        >
+          <button
+            onClick={() => setListOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-xs text-gray-500 font-medium border-b shrink-0"
+          >
+            <span>{`${filteredResults.length}개 · 조회수순`}</span>
+            <span>{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
+          </button>
+          <div className="flex gap-1.5 px-3 py-2 border-b shrink-0">
+            {([['all', '전체'], ['long', '롱폼'], ['short', '쇼츠']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setVideoFilter(key)}
+                className={`flex-1 text-xs rounded-lg py-1.5 border transition font-medium ${
+                  videoFilter === key
+                    ? 'bg-black text-white border-black'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="overflow-y-auto flex-1">
             {filteredResults.map((v) => (
               <div
                 key={v.videoId}
@@ -938,9 +989,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       href={navUrl(v, userPos ? { ...userPos, label: posLabel } : null)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="shrink-0 text-xs text-blue-500 hover:text-blue-700 font-medium transition"
+                      className="shrink-0"
+                      title="길찾기"
                     >
-                      길 찾기
+                      <NaviIcon className="w-6 h-6" />
                     </a>
                     <VideoActionRow
                       favorited={favoriteIds.has(v.videoId)}
@@ -955,12 +1007,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 </div>
               </div>
             ))}
-            </div>
-            </>
-            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Video list panel — right overlay, shown when a map marker is clicked */}
       {selectedGroup && (
@@ -1025,9 +1074,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       href={navUrl(v, userPos ? { ...userPos, label: posLabel } : null)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-2 py-0.5 font-medium transition"
+                      title="길찾기"
                     >
-                      🗺 길 찾기
+                      <NaviIcon className="w-7 h-7" />
                     </a>
                     <VideoActionRow
                       favorited={favoriteIds.has(v.videoId)}
@@ -1086,9 +1135,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   href={navUrl(selectedVideo, userPos ? { ...userPos, label: posLabel } : null)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-3 py-1.5 font-medium transition"
+                  title="길찾기"
                 >
-                  🗺 길 찾기
+                  <NaviIcon className="w-8 h-8" />
                 </a>
                 <VideoActionRow
                   favorited={favoriteIds.has(selectedVideo.videoId)}
