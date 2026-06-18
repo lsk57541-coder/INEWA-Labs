@@ -33,7 +33,30 @@ export interface VideoResult {
   source: 'geotag' | 'ai'
   viewCount: number
   placeName?: string
+  duration: string
+  isShort: boolean
 }
+
+// YouTube's "duration" format is ISO 8601, e.g. "PT1M30S" or "PT45S"
+function parseDurationSec(iso: string): number {
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!m) return 0
+  const [, h, min, s] = m
+  return parseInt(h ?? '0', 10) * 3600 + parseInt(min ?? '0', 10) * 60 + parseInt(s ?? '0', 10)
+}
+
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m)
+  const ss = String(s).padStart(2, '0')
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
+// YouTube allows Shorts up to 3 minutes; without aspect-ratio data this is the
+// best available signal to label a result as a Short.
+const SHORTS_MAX_SEC = 180
 
 interface YTSearchItem {
   id: { videoId: string }
@@ -54,6 +77,7 @@ interface YTVideoItem {
   }
   recordingDetails?: { location?: { latitude: number; longitude: number } }
   statistics?: { viewCount?: string }
+  contentDetails?: { duration: string }
 }
 
 async function ytSearch(
@@ -88,7 +112,7 @@ async function fetchVideoDetails(ids: string[]): Promise<YTVideoItem[]> {
   const all = await Promise.all(
     chunks.map(async (chunk) => {
       const params = new URLSearchParams({
-        part: 'snippet,recordingDetails,statistics',
+        part: 'snippet,recordingDetails,statistics,contentDetails',
         id: chunk.join(','),
         key,
       })
@@ -169,6 +193,7 @@ export async function GET(req: NextRequest) {
             searchPlaceInfo(snippet.title, geo.latitude, geo.longitude),
           ])
           const placeName = place?.name || address || undefined
+          const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
             videoId: v.id,
             title: snippet.title,
@@ -180,6 +205,8 @@ export async function GET(req: NextRequest) {
             source: 'geotag',
             viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
             placeName,
+            duration: formatDuration(durationSec),
+            isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
           })
         }
       }),
@@ -194,6 +221,7 @@ export async function GET(req: NextRequest) {
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
           const placeInfo = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
+          const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
             videoId: v.id,
             title: snippet.title,
@@ -205,6 +233,8 @@ export async function GET(req: NextRequest) {
             source: 'ai',
             viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
             placeName: placeInfo?.name || geo2.address,
+            duration: formatDuration(durationSec),
+            isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
           })
           break
         }

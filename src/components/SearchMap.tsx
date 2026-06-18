@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import Script from 'next/script'
 import type { VideoResult } from '@/app/api/search/route'
 import { haversineKm } from '@/lib/haversine'
-import { toggleFavorite, getFavorites, toggleVisited, getVisited, reportWrongLocation, type FavoriteVideo } from '@/app/actions'
+import { toggleFavorite, getFavorites, toggleVisited, getVisited, toggleReport, getMyReports, type FavoriteVideo } from '@/app/actions'
 import MenuDrawer, { type MenuUser } from '@/components/MenuDrawer'
 import FavoritesOverlay from '@/components/FavoritesOverlay'
 
@@ -83,6 +83,21 @@ function toFavoritePayload(v: VideoResult): FavoriteVideo {
   }
 }
 
+function DurationBadge({ duration, isShort, className }: { duration: string; isShort: boolean; className: string }) {
+  return (
+    <div className={`absolute flex items-center gap-1 ${className}`}>
+      {isShort && (
+        <span className="bg-pink-600 text-white text-[9px] font-bold px-1 py-0.5 rounded leading-none">Shorts</span>
+      )}
+      {duration && (
+        <span className="bg-black/75 text-white text-[10px] font-medium px-1 py-0.5 rounded leading-none">
+          {duration}
+        </span>
+      )}
+    </div>
+  )
+}
+
 interface VideoActionRowProps {
   favorited: boolean
   visited: boolean
@@ -103,31 +118,30 @@ function VideoActionRow({
   onReport,
 }: VideoActionRowProps) {
   return (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex items-center gap-3 shrink-0">
       <button
         onClick={onToggleFavorite}
         title="찜하기"
-        className={`text-sm transition ${favorited ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
+        className={`text-xl leading-none transition ${favorited ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
       >
         {favorited ? '♥' : '♡'}
       </button>
       <button
         onClick={onToggleVisited}
         title="가본 곳으로 표시"
-        className={`text-sm transition ${visited ? 'text-gray-600' : 'text-gray-300 hover:text-gray-500'}`}
+        className={`text-lg leading-none transition ${visited ? 'text-gray-600' : 'text-gray-300 hover:text-gray-500'}`}
       >
         {visited ? '⚑' : '⚐'}
       </button>
-      <button onClick={onShare} title="카카오톡 공유" className="text-xs text-gray-400 hover:text-yellow-500 transition">
+      <button onClick={onShare} title="카카오톡 공유" className="text-base leading-none text-gray-400 hover:text-yellow-500 transition">
         🔗
       </button>
       <button
         onClick={onReport}
-        disabled={reported}
-        title="위치 오류 신고"
-        className={`text-xs transition ${reported ? 'text-gray-300' : 'text-gray-400 hover:text-red-400'}`}
+        title={reported ? '신고 취소' : '위치 오류 신고'}
+        className={`text-base leading-none transition ${reported ? 'text-red-500' : 'text-gray-400 hover:text-red-400'}`}
       >
-        {reported ? '신고됨' : '⚠'}
+        {reported ? '🚩' : '⚠'}
       </button>
     </div>
   )
@@ -194,11 +208,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       if (!user) {
         setFavoriteIds(new Set())
         setVisitedIds(new Set())
+        setReportedIds(new Set())
         return
       }
-      const [favs, vis] = await Promise.all([getFavorites(), getVisited()])
+      const [favs, vis, reports] = await Promise.all([getFavorites(), getVisited(), getMyReports()])
       setFavoriteIds(new Set(favs.map((f) => f.video_id)))
       setVisitedIds(new Set(vis.map((v) => v.video_id)))
+      setReportedIds(new Set(reports))
     }
     load().catch(() => {})
   }, [user])
@@ -415,16 +431,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   }
 
   const handleReport = async (v: VideoResult) => {
-    if (reportedIds.has(v.videoId)) return
-    setReportedIds((prev) => new Set(prev).add(v.videoId))
+    if (!user) { setError('로그인이 필요합니다.'); return }
+    const wasReported = reportedIds.has(v.videoId)
+    const next = new Set(reportedIds)
+    if (wasReported) next.delete(v.videoId)
+    else next.add(v.videoId)
+    setReportedIds(next)
     try {
-      await reportWrongLocation(v.videoId, v.lat, v.lng)
-    } catch {
-      setReportedIds((prev) => {
-        const next = new Set(prev)
-        next.delete(v.videoId)
-        return next
-      })
+      await toggleReport(v.videoId, v.lat, v.lng)
+    } catch (e) {
+      setReportedIds(reportedIds)
+      setError(e instanceof Error ? e.message : '신고 처리 실패')
     }
   }
 
@@ -622,12 +639,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 key={v.videoId}
                 className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition border-b last:border-0"
               >
-                <img
-                  src={v.thumbnail}
-                  alt=""
-                  className="w-14 h-8 object-cover rounded shrink-0 cursor-pointer"
-                  onClick={() => setSelectedVideo(v)}
-                />
+                <div className="relative shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
+                  <img src={v.thumbnail} alt="" className="w-14 h-8 object-cover rounded" />
+                  <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-0.5 right-0.5" />
+                </div>
                 <div className="flex-1 overflow-hidden min-w-0">
                   <p
                     className="text-xs font-medium line-clamp-2 leading-tight cursor-pointer hover:text-blue-600"
@@ -702,6 +717,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       <div className="w-0 h-0 border-y-[6px] border-y-transparent border-l-[10px] border-l-white ml-0.5" />
                     </div>
                   </div>
+                  <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-1 right-1" />
                 </div>
 
                 {/* Info */}
@@ -772,6 +788,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 )}
                 <p className="text-xs text-gray-400 mt-0.5">
                   {selectedVideo.channel} · {formatViews(selectedVideo.viewCount)} · {selectedVideo.distanceKm}km 이내
+                  {selectedVideo.duration && <> · {selectedVideo.duration}</>}
+                  {selectedVideo.isShort && <span className="ml-1 text-pink-500 font-semibold">Shorts</span>}
                 </p>
               </div>
               <div className="shrink-0 flex items-center gap-3">

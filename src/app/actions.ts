@@ -149,14 +149,40 @@ export async function getPlaceDetails(videoTitle: string | undefined, lat: numbe
   return searchPlaceInfo(videoTitle, lat, lng)
 }
 
-export async function reportWrongLocation(videoId: string, lat?: number, lng?: number) {
+export async function toggleReport(videoId: string, lat?: number, lng?: number): Promise<{ reported: boolean }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('로그인이 필요합니다.')
+
+  const { data: existing } = await supabase
+    .from('location_reports')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('video_id', videoId)
+    .maybeSingle()
+
+  if (existing) {
+    const { error } = await supabase.from('location_reports').delete().eq('id', existing.id)
+    if (error) throw new Error(error.message)
+    return { reported: false }
+  }
+
   const { error } = await supabase.from('location_reports').insert({
     video_id: videoId,
     lat: lat ?? null,
     lng: lng ?? null,
-    user_id: user?.id ?? null,
+    user_id: user.id,
   })
   if (error) throw new Error(error.message)
+  return { reported: true }
+}
+
+export async function getMyReports(): Promise<string[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase.from('location_reports').select('video_id').eq('user_id', user.id)
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((r) => r.video_id)
 }
