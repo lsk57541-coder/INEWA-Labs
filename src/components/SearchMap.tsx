@@ -471,10 +471,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             />
             <button
               onClick={() => setPanelOpen(false)}
-              className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500 text-xs shrink-0"
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500 shrink-0"
               title="검색창 닫기"
             >
-              ▲
+              ✕
             </button>
           </div>
         </div>
@@ -519,7 +519,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 onChange={(e) => setAddressInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
                 placeholder="지역명 또는 주소 입력"
-                className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300"
+                className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
               />
               <button
                 onClick={handleAddressSearch}
@@ -544,7 +544,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             onChange={(e) => setKeyword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="키워드 검색 (예: 한강 카페, 제주 맛집)"
-            className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
           />
         </div>
 
