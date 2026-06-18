@@ -267,7 +267,7 @@ function VideoActionRow({
 export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [keyword, setKeyword] = useState('')
   const [radius, setRadius] = useState<Radius>(1)
-  const [locMode, setLocMode] = useState<'gps' | 'addr'>('gps')
+  const [searchMode, setSearchMode] = useState<'keyword' | 'channel'>('keyword')
   const [panelOpen, setPanelOpen] = useState(true)
   const [listOpen, setListOpen] = useState(true)
   const [panelOpacity, setPanelOpacity] = useState(0.95)
@@ -449,7 +449,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   )
 
   const handleSearch = async () => {
-    if (!keyword.trim() && !selectedChannel) { setError('검색어를 입력해주세요.'); return }
+    if (searchMode === 'keyword' && !keyword.trim()) { setError('검색어를 입력해주세요.'); return }
+    if (searchMode === 'channel' && !selectedChannel) { setError('유튜브 채널을 선택해주세요.'); return }
     if (!userPos) { setError('위치를 먼저 설정해주세요.'); return }
 
     setLoading(true)
@@ -464,8 +465,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         lng: String(userPos.lng),
         radius: String(radius),
       })
-      if (keyword.trim()) params.set('q', keyword)
-      if (selectedChannel) params.set('channelId', selectedChannel.channelId)
+      if (searchMode === 'keyword') params.set('q', keyword)
+      else if (selectedChannel) params.set('channelId', selectedChannel.channelId)
       const res = await fetch(`/api/search?${params}`)
       const json = await res.json() as { results?: VideoResult[]; error?: string }
 
@@ -671,6 +672,15 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Map */}
       <div ref={mapRef} className="flex-1 h-full" />
 
+      {/* Locate-me button */}
+      <button
+        onClick={getLocation}
+        title="현재 위치로 이동"
+        className="absolute bottom-6 left-3 z-20 w-11 h-11 bg-white rounded-full shadow-lg flex items-center justify-center text-lg hover:bg-gray-50 transition"
+      >
+        🎯
+      </button>
+
       {/* Hamburger menu */}
       <button
         onClick={() => setMenuOpen(true)}
@@ -732,84 +742,47 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           </div>
         </div>
 
-        {/* Location section */}
+        {/* Search mode: keyword or channel */}
         <div className="px-3 pt-3 pb-2 border-b">
           <div className="flex gap-1 mb-2">
             <button
-              onClick={() => setLocMode('gps')}
+              onClick={() => setSearchMode('keyword')}
               className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition ${
-                locMode === 'gps'
+                searchMode === 'keyword'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              📍 현재 위치
+              🔎 키워드 검색
             </button>
             <button
-              onClick={() => setLocMode('addr')}
+              onClick={() => setSearchMode('channel')}
               className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition ${
-                locMode === 'addr'
+                searchMode === 'channel'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              🔍 주소 입력
+              🎙 유튜브 채널 검색
             </button>
           </div>
 
-          {locMode === 'gps' ? (
-            <button
-              onClick={getLocation}
-              className="w-full text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg px-3 py-2 transition font-medium"
-            >
-              현재 위치 가져오기
-            </button>
-          ) : (
-            <div className="flex gap-1">
-              <input
-                type="text"
-                value={addressInput}
-                onChange={(e) => setAddressInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
-                placeholder="지역명 또는 주소 입력"
-                className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
-              />
-              <button
-                onClick={handleAddressSearch}
-                disabled={addressLoading}
-                className="shrink-0 text-xs bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-40 transition"
-              >
-                {addressLoading ? '…' : '설정'}
-              </button>
-            </div>
-          )}
-
-          {posLabel !== '위치 미설정' && (
-            <p className="text-xs text-blue-600 mt-1.5 truncate font-medium">{posLabel}</p>
-          )}
-        </div>
-
-        {/* Keyword */}
-        <div className="px-3 pt-2 pb-1">
-          <input
-            type="text"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="키워드 검색 (예: 한강 카페, 제주 맛집)"
-            className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
-          />
-        </div>
-
-        {/* Channel filter */}
-        <div className="px-3 pt-1 pb-1">
-          {selectedChannel ? (
+          {searchMode === 'keyword' ? (
+            <input
+              type="text"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="키워드 검색 (예: 한강 카페, 제주 맛집)"
+              className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+            />
+          ) : selectedChannel ? (
             <div className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-lg px-3 py-2 text-xs font-medium">
-              <span className="flex-1 truncate">🎙 {selectedChannel.title} 채널만 검색 중</span>
+              <span className="flex-1 truncate">🎙 {selectedChannel.title} 채널 영상만 검색</span>
               <button
                 onClick={() => { setSelectedChannel(null); setChannelQuery('') }}
                 className="shrink-0 text-blue-400 hover:text-blue-600"
-                title="필터 해제"
+                title="채널 선택 해제"
               >
                 ✕
               </button>
@@ -820,7 +793,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 type="text"
                 value={channelQuery}
                 onChange={(e) => handleChannelQueryChange(e.target.value)}
-                placeholder="유튜버 채널명으로 필터 (선택)"
+                placeholder="유튜버 채널명으로 검색"
                 className="w-full text-xs border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
               />
               {channelSearching && <p className="text-xs text-gray-400 mt-1">검색 중…</p>}
@@ -844,6 +817,32 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 </div>
               )}
             </div>
+          )}
+        </div>
+
+        {/* Search location: direct address input only — GPS is the locate-me button on the map */}
+        <div className="px-3 pt-2 pb-2 border-b">
+          <p className="text-xs text-gray-400 font-medium mb-1.5">📍 검색위치 직접입력</p>
+          <div className="flex gap-1">
+            <input
+              type="text"
+              value={addressInput}
+              onChange={(e) => setAddressInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
+              placeholder="지역명 또는 주소 입력"
+              className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+            />
+            <button
+              onClick={handleAddressSearch}
+              disabled={addressLoading}
+              className="shrink-0 text-xs bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-40 transition"
+            >
+              {addressLoading ? '…' : '설정'}
+            </button>
+          </div>
+
+          {posLabel !== '위치 미설정' && (
+            <p className="text-xs text-blue-600 mt-1.5 truncate font-medium">{posLabel}</p>
           )}
         </div>
 
@@ -936,7 +935,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
                     </p>
                     <a
-                      href={navUrl(v, userPos ? { ...userPos, label: locMode === 'gps' ? '현재 위치' : posLabel } : null)}
+                      href={navUrl(v, userPos ? { ...userPos, label: posLabel } : null)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="shrink-0 text-xs text-blue-500 hover:text-blue-700 font-medium transition"
@@ -1023,7 +1022,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   </p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <a
-                      href={navUrl(v, userPos ? { ...userPos, label: locMode === 'gps' ? '현재 위치' : posLabel } : null)}
+                      href={navUrl(v, userPos ? { ...userPos, label: posLabel } : null)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-2 py-0.5 font-medium transition"

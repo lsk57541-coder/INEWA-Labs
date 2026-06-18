@@ -42,6 +42,42 @@ async function getLocationCorrections(): Promise<Map<string, LocationCorrection>
   return new Map(data.map((row) => [row.video_id, { lat: row.lat, lng: row.lng, address: row.address }]))
 }
 
+// Caches raw search.list results (the expensive 100-quota-unit call) per
+// query/channel + ~1km location grid, so repeated searches — e.g. a user just
+// changing the radius slider — reuse the same YouTube results instead of
+// re-querying. videos.list/channels.list aren't cached since they're cheap.
+const SEARCH_CACHE_TTL_MS = 20 * 60 * 1000
+
+function searchCacheKey(q: string | undefined, channelId: string | undefined, lat: number, lng: number): string {
+  const latR = Math.round(lat * 100) / 100
+  const lngR = Math.round(lng * 100) / 100
+  return channelId ? `ch:${channelId}:${latR}:${lngR}` : `q:${(q ?? '').toLowerCase().trim()}:${latR}:${lngR}`
+}
+
+async function getCachedSearchItems(key: string): Promise<YTSearchItem[] | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anonKey) return null
+
+  const supabase = createClient(url, anonKey)
+  const { data } = await supabase.from('search_cache').select('payload, created_at').eq('key', key).maybeSingle()
+  if (!data) return null
+  if (Date.now() - new Date(data.created_at).getTime() > SEARCH_CACHE_TTL_MS) return null
+  return data.payload as YTSearchItem[]
+}
+
+async function setCachedSearchItems(key: string, items: YTSearchItem[]) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anonKey) return
+
+  const supabase = createClient(url, anonKey)
+  await supabase
+    .from('search_cache')
+    .upsert({ key, payload: items, created_at: new Date().toISOString() })
+    .then(() => {}, () => {})
+}
+
 export type SubscriberTier = 'silver' | 'gold' | 'diamond' | 'red_diamond'
 
 // How confident we are in placeName, from most to least reliable. Logged per
@@ -219,9 +255,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'q (or channelId), lat, lng are required' }, { status: 400 })
   }
 
-  // 2 parallel searches: geo-based + broad KR. "여행" variant is only
-  // fetched as a fallback when these two don't return enough candidates,
-  // to keep quota usage down without hurting coverage for popular keywords.
+  // Fallback searches ("broad KR", then "여행") only fire when the cheaper
+  // search before them didn't return enough candidates, to keep quota usage
+  // down without hurting coverage for popular keywords.
   const MIN_CANDIDATES_BEFORE_FALLBACK = 15
 
   const seen = new Set<string>()
@@ -232,40 +268,47 @@ export async function GET(req: NextRequest) {
       return true
     })
 
-  let unique: YTSearchItem[]
+  // Reuse cached search.list results for the same query/channel + ~1km area
+  // (e.g. the user just changing the radius slider) instead of re-querying.
+  const cacheKey = searchCacheKey(q, channelId, lat, lng)
+  let unique = await getCachedSearchItems(cacheKey)
 
-  if (channelId) {
-    // Filtered to one creator: a single near-me search restricted to their channel is enough.
-    const channelItems = await ytSearch(q ?? '', {
-      channelId,
-      location: `${lat},${lng}`,
-      locationRadius: `${radius}km`,
-      order: 'date',
-    })
-    unique = dedupe(channelItems)
-  } else {
-    const [geoItems, broadItems] = await Promise.all([
-      ytSearch(q!, {
+  if (!unique) {
+    if (channelId) {
+      // Filtered to one creator, not a keyword match — channel selection
+      // replaces keyword search entirely. Deliberately no location param:
+      // YouTube only returns geotagged videos when location/locationRadius
+      // are set, which would wipe out channels that rarely geotag uploads.
+      // Distance filtering against `radius` happens downstream instead,
+      // same as the non-geotagged fallback path for keyword search.
+      const channelItems = await ytSearch('', { channelId, order: 'date' })
+      unique = dedupe(channelItems)
+    } else {
+      const geoItems = await ytSearch(q!, {
         location: `${lat},${lng}`,
         locationRadius: `${radius}km`,
-      }),
-      ytSearch(q!, {
-        relevanceLanguage: 'ko',
-        regionCode: 'KR',
-        order: 'viewCount',
-      }),
-    ])
+      })
+      unique = dedupe(geoItems)
 
-    unique = dedupe([...geoItems, ...broadItems])
+      if (unique.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
+        const broadItems = await ytSearch(q!, {
+          relevanceLanguage: 'ko',
+          regionCode: 'KR',
+          order: 'viewCount',
+        })
+        unique = [...unique, ...dedupe(broadItems)]
+      }
 
-    if (unique.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
-      const travelItems = await ytSearch(`${q} 여행`, {
-        relevanceLanguage: 'ko',
-        regionCode: 'KR',
-        order: 'viewCount',
-      }, 30)
-      unique = [...unique, ...dedupe(travelItems)]
+      if (unique.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
+        const travelItems = await ytSearch(`${q} 여행`, {
+          relevanceLanguage: 'ko',
+          regionCode: 'KR',
+          order: 'viewCount',
+        }, 30)
+        unique = [...unique, ...dedupe(travelItems)]
+      }
     }
+    await setCachedSearchItems(cacheKey, unique)
   }
 
   const [details, corrections, subscriberCounts] = await Promise.all([
