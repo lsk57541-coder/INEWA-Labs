@@ -96,18 +96,23 @@ function favoriteMarkerImage(): kakao.maps.MarkerImage {
   )
 }
 
-const TIER_ICON: Record<SubscriberTier, string> = {
-  gold: '🥇',
-  silver: '🥈',
-  bronze: '🥉',
+// Colors approximating YouTube's actual Creator Award play-button plaques.
+const TIER_BUTTON_COLORS: Record<SubscriberTier, string> = {
+  silver: '#C0C0C0',
+  gold: '#FFC400',
+  diamond: '#7DD3FC',
+  red_diamond: '#DC2626',
 }
 
-const TIER_COLORS: Record<SubscriberTier, string> = {
-  gold: '#facc15',
-  silver: '#94a3b8',
-  bronze: '#b45309',
+function TierButton({ tier }: { tier: SubscriberTier }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" className="inline-block shrink-0 align-[-2px]">
+      <title>{tier} 플레이 버튼</title>
+      <rect x="1" y="3" width="22" height="18" rx="2.5" fill={TIER_BUTTON_COLORS[tier]} stroke="#fff" strokeWidth="1" />
+      <polygon points="9,7.5 9,16.5 17,12" fill="#fff" />
+    </svg>
+  )
 }
-const TIER_ORDER: SubscriberTier[] = ['gold', 'silver', 'bronze']
 
 function pinMarkerImage(fill: string, glyph: string): kakao.maps.MarkerImage {
   const svg =
@@ -122,18 +127,28 @@ function pinMarkerImage(fill: string, glyph: string): kakao.maps.MarkerImage {
   )
 }
 
+// Same blue hue as the rest of the UI (search radius circle, distance badge),
+// just darker for channels with more subscribers and lighter for fewer —
+// a gradient instead of distinct gold/silver/bronze colors.
+function subscriberGradientColor(subscriberCount: number): string {
+  const clamped = Math.min(Math.max(subscriberCount, 1), 10_000_000)
+  const t = Math.log10(clamped) / Math.log10(10_000_000) // 0 (few subs) .. 1 (many subs)
+  const lightness = 78 - t * 43 // 78% light .. 35% dark
+  return `hsl(217, 85%, ${lightness}%)`
+}
+
 // Picks the marker look for a group of videos at one location: favorited
-// places keep the existing gold-heart marker; otherwise the pin color shows
-// the best subscriber tier among that group's channels, and the glyph shows
+// places keep the existing gold-heart marker; otherwise the pin's shade shows
+// how many subscribers the best-known channel there has, and the glyph shows
 // whether the videos there are Shorts, long-form, or a mix of both.
 function groupMarkerImage(videos: VideoResult[], isFavorite: boolean): kakao.maps.MarkerImage {
   if (isFavorite) return favoriteMarkerImage()
 
-  const bestTier = TIER_ORDER.find((t) => videos.some((v) => v.subscriberTier === t)) ?? 'bronze'
+  const maxSubs = Math.max(0, ...videos.map((v) => v.subscriberCount))
   const allShort = videos.every((v) => v.isShort)
   const allLong = videos.every((v) => !v.isShort)
   const glyph = allShort ? '📱' : allLong ? '🎬' : '✦'
-  return pinMarkerImage(TIER_COLORS[bestTier], glyph)
+  return pinMarkerImage(subscriberGradientColor(maxSubs), glyph)
 }
 
 function toFavoritePayload(v: VideoResult): FavoriteVideo {
@@ -881,7 +896,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-xs text-gray-400 truncate flex-1">
-                      {TIER_ICON[v.subscriberTier]} {formatViews(v.viewCount)}
+                      {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {formatViews(v.viewCount)}
                       {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
                     </p>
                     <a
@@ -963,7 +978,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       {v.distanceKm}km
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">{TIER_ICON[v.subscriberTier]} {v.channel}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                    {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel}
+                  </p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {formatViews(v.viewCount)}
                     {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
@@ -1024,7 +1041,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {TIER_ICON[selectedVideo.subscriberTier]} {selectedVideo.channel} · {formatViews(selectedVideo.viewCount)}
+                  {selectedVideo.subscriberTier && <TierButton tier={selectedVideo.subscriberTier} />} {selectedVideo.channel} · {formatViews(selectedVideo.viewCount)}
                   {selectedVideo.duration && <> · {selectedVideo.duration}</>}
                   <span className="ml-1">{selectedVideo.isShort ? '📱' : '🎬'}</span>
                 </p>

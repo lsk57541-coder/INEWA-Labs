@@ -42,7 +42,7 @@ async function getLocationCorrections(): Promise<Map<string, LocationCorrection>
   return new Map(data.map((row) => [row.video_id, { lat: row.lat, lng: row.lng, address: row.address }]))
 }
 
-export type SubscriberTier = 'bronze' | 'silver' | 'gold'
+export type SubscriberTier = 'silver' | 'gold' | 'diamond' | 'red_diamond'
 
 export interface VideoResult {
   videoId: string
@@ -57,7 +57,8 @@ export interface VideoResult {
   placeName?: string
   duration: string
   isShort: boolean
-  subscriberTier: SubscriberTier
+  subscriberTier: SubscriberTier | null
+  subscriberCount: number
 }
 
 // YouTube's "duration" format is ISO 8601, e.g. "PT1M30S" or "PT45S"
@@ -105,18 +106,20 @@ interface YTVideoItem {
   contentDetails?: { duration: string }
 }
 
-// Subscriber-count tiers used to surface well-known creators vs. small channels.
+// YouTube's official Creator Award thresholds. Channels under 100,000
+// subscribers (no award) get no badge at all.
 const TIER_THRESHOLDS: { min: number; tier: SubscriberTier }[] = [
-  { min: 100_000, tier: 'gold' },
-  { min: 10_000, tier: 'silver' },
-  { min: 0, tier: 'bronze' },
+  { min: 100_000_000, tier: 'red_diamond' },
+  { min: 10_000_000, tier: 'diamond' },
+  { min: 1_000_000, tier: 'gold' },
+  { min: 100_000, tier: 'silver' },
 ]
 
-function tierForSubscriberCount(count: number): SubscriberTier {
-  return TIER_THRESHOLDS.find((t) => count >= t.min)?.tier ?? 'bronze'
+function tierForSubscriberCount(count: number): SubscriberTier | null {
+  return TIER_THRESHOLDS.find((t) => count >= t.min)?.tier ?? null
 }
 
-async function getChannelTiers(channelIds: string[]): Promise<Map<string, SubscriberTier>> {
+async function getChannelSubscriberCounts(channelIds: string[]): Promise<Map<string, number>> {
   const key = process.env.YOUTUBE_API_KEY
   const uniqueIds = [...new Set(channelIds)]
   if (!key || uniqueIds.length === 0) return new Map()
@@ -124,7 +127,7 @@ async function getChannelTiers(channelIds: string[]): Promise<Map<string, Subscr
   const chunks: string[][] = []
   for (let i = 0; i < uniqueIds.length; i += 50) chunks.push(uniqueIds.slice(i, i + 50))
 
-  const tiers = new Map<string, SubscriberTier>()
+  const counts = new Map<string, number>()
   await Promise.all(
     chunks.map(async (chunk) => {
       const params = new URLSearchParams({ part: 'statistics', id: chunk.join(','), key })
@@ -132,11 +135,11 @@ async function getChannelTiers(channelIds: string[]): Promise<Map<string, Subscr
       if (!res.ok) return
       const json = await res.json() as { items?: { id: string; statistics?: { subscriberCount?: string } }[] }
       for (const item of json.items ?? []) {
-        tiers.set(item.id, tierForSubscriberCount(parseInt(item.statistics?.subscriberCount ?? '0', 10)))
+        counts.set(item.id, parseInt(item.statistics?.subscriberCount ?? '0', 10))
       }
     })
   )
-  return tiers
+  return counts
 }
 
 async function ytSearch(
@@ -245,10 +248,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const [details, corrections, channelTiers] = await Promise.all([
+  const [details, corrections, subscriberCounts] = await Promise.all([
     fetchVideoDetails(unique.map((i) => i.id.videoId)),
     getLocationCorrections(),
-    getChannelTiers(unique.map((i) => i.snippet.channelId)),
+    getChannelSubscriberCounts(unique.map((i) => i.snippet.channelId)),
   ])
 
   const results: VideoResult[] = []
@@ -292,7 +295,8 @@ export async function GET(req: NextRequest) {
             placeName,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
-            subscriberTier: channelTiers.get(v.snippet.channelId) ?? 'bronze',
+            subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
+            subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
           })
         }
       }),
@@ -318,7 +322,8 @@ export async function GET(req: NextRequest) {
             placeName: correction.address,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
-            subscriberTier: channelTiers.get(v.snippet.channelId) ?? 'bronze',
+            subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
+            subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
           })
         }
         return
@@ -346,7 +351,8 @@ export async function GET(req: NextRequest) {
             placeName: placeInfo?.name || geo2.address,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
-            subscriberTier: channelTiers.get(v.snippet.channelId) ?? 'bronze',
+            subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
+            subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
           })
           break
         }
