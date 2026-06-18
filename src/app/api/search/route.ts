@@ -22,6 +22,26 @@ async function getBlockedVideoIds(): Promise<Set<string>> {
   return new Set([...counts.entries()].filter(([, count]) => count >= REPORT_THRESHOLD).map(([id]) => id))
 }
 
+interface LocationCorrection {
+  lat: number
+  lng: number
+  address: string
+}
+
+// User-confirmed corrections (from "주소가 정확하지 않아요" reports that were
+// successfully verified against Kakao) override the geotag/AI-derived location.
+async function getLocationCorrections(): Promise<Map<string, LocationCorrection>> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) return new Map()
+
+  const supabase = createClient(url, key)
+  const { data } = await supabase.from('location_corrections').select('video_id, lat, lng, address')
+  if (!data) return new Map()
+
+  return new Map(data.map((row) => [row.video_id, { lat: row.lat, lng: row.lng, address: row.address }]))
+}
+
 export interface VideoResult {
   videoId: string
   title: string
@@ -172,7 +192,10 @@ export async function GET(req: NextRequest) {
     unique = [...unique, ...dedupe(travelItems)]
   }
 
-  const details = await fetchVideoDetails(unique.map((i) => i.id.videoId))
+  const [details, corrections] = await Promise.all([
+    fetchVideoDetails(unique.map((i) => i.id.videoId)),
+    getLocationCorrections(),
+  ])
 
   const results: VideoResult[] = []
 
@@ -184,23 +207,31 @@ export async function GET(req: NextRequest) {
     ...details
       .filter((v) => v.recordingDetails?.location?.latitude)
       .map(async (v) => {
-        const geo = v.recordingDetails!.location!
-        const dist = haversineKm(lat, lng, geo.latitude, geo.longitude)
+        const correction = corrections.get(v.id)
+        const original = v.recordingDetails!.location!
+        const pointLat = correction?.lat ?? original.latitude
+        const pointLng = correction?.lng ?? original.longitude
+        const dist = haversineKm(lat, lng, pointLat, pointLng)
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
-          const [address, place] = await Promise.all([
-            reverseGeocode(geo.latitude, geo.longitude),
-            searchPlaceInfo(snippet.title, geo.latitude, geo.longitude),
-          ])
-          const placeName = place?.name || address || undefined
+          let placeName: string | undefined
+          if (correction) {
+            placeName = correction.address
+          } else {
+            const [address, place] = await Promise.all([
+              reverseGeocode(pointLat, pointLng),
+              searchPlaceInfo(snippet.title, pointLat, pointLng),
+            ])
+            placeName = place?.name || address || undefined
+          }
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
             videoId: v.id,
             title: snippet.title,
             thumbnail: snippet.thumbnails.medium.url,
             channel: snippet.channelTitle,
-            lat: geo.latitude,
-            lng: geo.longitude,
+            lat: pointLat,
+            lng: pointLng,
             distanceKm: Math.round(dist * 10) / 10,
             source: 'geotag',
             viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
@@ -213,6 +244,30 @@ export async function GET(req: NextRequest) {
 
     // Non-geotagged: AI extraction (limit to first 40 to keep response time reasonable)
     ...noGeo.slice(0, 40).map(async (v) => {
+      const correction = corrections.get(v.id)
+      if (correction) {
+        const dist = haversineKm(lat, lng, correction.lat, correction.lng)
+        if (dist <= radius) {
+          const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
+          const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
+          results.push({
+            videoId: v.id,
+            title: snippet.title,
+            thumbnail: snippet.thumbnails.medium.url,
+            channel: snippet.channelTitle,
+            lat: correction.lat,
+            lng: correction.lng,
+            distanceKm: Math.round(dist * 10) / 10,
+            source: 'ai',
+            viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
+            placeName: correction.address,
+            duration: formatDuration(durationSec),
+            isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+          })
+        }
+        return
+      }
+
       const places = await extractLocations(v.snippet.title, v.snippet.description ?? '')
       for (const place of places) {
         const geo2 = await geocodeKorean(place)

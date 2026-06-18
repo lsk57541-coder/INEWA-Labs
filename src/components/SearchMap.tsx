@@ -4,9 +4,26 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import Script from 'next/script'
 import type { VideoResult } from '@/app/api/search/route'
 import { haversineKm } from '@/lib/haversine'
-import { toggleFavorite, getFavorites, toggleVisited, getVisited, toggleReport, getMyReports, type FavoriteVideo } from '@/app/actions'
+import {
+  toggleFavorite,
+  getFavorites,
+  toggleVisited,
+  getVisited,
+  submitReport,
+  cancelReport,
+  getMyReports,
+  type FavoriteVideo,
+  type ReportReason,
+} from '@/app/actions'
 import MenuDrawer, { type MenuUser } from '@/components/MenuDrawer'
 import FavoritesOverlay from '@/components/FavoritesOverlay'
+
+const REPORT_REASONS: { key: ReportReason; label: string }[] = [
+  { key: 'wrong_address', label: '주소가 정확하지 않아요' },
+  { key: 'unrelated', label: '전혀 상관없는 영상이에요' },
+  { key: 'inappropriate', label: '부적절한 내용이에요' },
+  { key: 'other', label: '기타' },
+]
 
 interface MarkerGroup {
   lat: number
@@ -159,6 +176,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null)
   const [posLabel, setPosLabel] = useState<string>('위치 미설정')
   const [allResults, setAllResults] = useState<VideoResult[]>([])
+  const [videoFilter, setVideoFilter] = useState<'all' | 'short' | 'long'>('all')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedGroup, setSelectedGroup] = useState<MarkerGroup | null>(null)
@@ -169,6 +187,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [visitedIds, setVisitedIds] = useState<Set<string>>(new Set())
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
   const [favoritesOverlayOpen, setFavoritesOverlayOpen] = useState(false)
+  const [reportTarget, setReportTarget] = useState<VideoResult | null>(null)
+  const [reportReason, setReportReason] = useState<ReportReason>('wrong_address')
+  const [reportAddress, setReportAddress] = useState('')
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [reportResult, setReportResult] = useState<string | null>(null)
 
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<kakao.maps.Map | null>(null)
@@ -340,6 +363,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
       const videos = json.results ?? []
       setAllResults(videos)
+      setVideoFilter('all')
       renderMarkers(groupByLocation(videos), userPos, favoriteIds)
 
       if (videos.length === 0) setError('해당 반경 내에 검색 결과가 없습니다.')
@@ -432,16 +456,46 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
   const handleReport = async (v: VideoResult) => {
     if (!user) { setError('로그인이 필요합니다.'); return }
-    const wasReported = reportedIds.has(v.videoId)
-    const next = new Set(reportedIds)
-    if (wasReported) next.delete(v.videoId)
-    else next.add(v.videoId)
-    setReportedIds(next)
+    if (reportedIds.has(v.videoId)) {
+      const next = new Set(reportedIds)
+      next.delete(v.videoId)
+      setReportedIds(next)
+      try {
+        await cancelReport(v.videoId)
+      } catch (e) {
+        setReportedIds(reportedIds)
+        setError(e instanceof Error ? e.message : '신고 취소 실패')
+      }
+      return
+    }
+    setReportTarget(v)
+    setReportReason('wrong_address')
+    setReportAddress('')
+    setReportResult(null)
+  }
+
+  const handleSubmitReport = async () => {
+    if (!reportTarget) return
+    setReportSubmitting(true)
+    setReportResult(null)
     try {
-      await toggleReport(v.videoId, v.lat, v.lng)
+      const res = await submitReport(reportTarget.videoId, reportTarget.lat, reportTarget.lng, reportReason, reportAddress)
+      setReportedIds((prev) => new Set(prev).add(reportTarget.videoId))
+      if (reportReason === 'wrong_address') {
+        if (res.corrected && res.address) {
+          setReportResult(`카카오맵에서 확인했습니다: "${res.address}" — 이 영상의 위치가 업데이트됩니다.`)
+          const corrected = { ...reportTarget, placeName: res.address }
+          setAllResults((prev) => prev.map((r) => (r.videoId === reportTarget.videoId ? corrected : r)))
+        } else {
+          setReportResult('카카오맵에서 해당 주소를 찾지 못했습니다. 주소를 다시 확인해주세요.')
+          return
+        }
+      }
+      setTimeout(() => setReportTarget(null), 1200)
     } catch (e) {
-      setReportedIds(reportedIds)
-      setError(e instanceof Error ? e.message : '신고 처리 실패')
+      setReportResult(e instanceof Error ? e.message : '신고 처리 실패')
+    } finally {
+      setReportSubmitting(false)
     }
   }
 
@@ -449,6 +503,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     if (!user) { setError('로그인이 필요합니다.'); return }
     setFavoritesOverlayOpen(true)
   }
+
+  const filteredResults = allResults.filter((v) => {
+    if (videoFilter === 'short') return v.isShort
+    if (videoFilter === 'long') return !v.isShort
+    return true
+  })
 
   return (
     <div className="flex flex-1 overflow-hidden relative">
@@ -629,12 +689,28 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               onClick={() => setListOpen((o) => !o)}
               className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-400 font-medium border-b hover:bg-gray-50/50 transition"
             >
-              <span>{`${allResults.length}개 · 조회수순`}</span>
+              <span>{`${filteredResults.length}개 · 조회수순`}</span>
               <span>{listOpen ? '리스트 닫기 ▲' : '리스트 열기 ▼'}</span>
             </button>
             {listOpen && (
+            <>
+            <div className="flex gap-1.5 px-3 py-2 border-b">
+              {([['all', '전체'], ['long', '롱폼'], ['short', '쇼츠']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setVideoFilter(key)}
+                  className={`flex-1 text-xs rounded-lg py-1.5 border transition font-medium ${
+                    videoFilter === key
+                      ? 'bg-black text-white border-black'
+                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="max-h-56 overflow-y-auto">
-            {allResults.map((v) => (
+            {filteredResults.map((v) => (
               <div
                 key={v.videoId}
                 className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition border-b last:border-0"
@@ -650,12 +726,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   >
                     {v.title}
                   </p>
-                  {v.placeName && (
-                    <p className="text-xs font-semibold text-gray-700 truncate mt-0.5">📍 {v.placeName}</p>
-                  )}
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {v.placeName && (
+                      <p className="text-xs font-semibold text-gray-700 truncate">📍 {v.placeName}</p>
+                    )}
+                    <span className="shrink-0 text-xs font-bold text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">
+                      {v.distanceKm}km
+                    </span>
+                  </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-xs text-gray-400 truncate flex-1">
-                      {formatViews(v.viewCount)} · {v.distanceKm}km
+                      {formatViews(v.viewCount)}
                       {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
                     </p>
                     <a
@@ -680,6 +761,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </div>
             ))}
             </div>
+            </>
             )}
           </div>
         )}
@@ -728,12 +810,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   >
                     {v.title}
                   </p>
-                  {v.placeName && (
-                    <p className="text-sm font-semibold text-gray-800 mt-1 truncate">📍 {v.placeName}</p>
-                  )}
+                  <div className="flex items-center gap-1.5 mt-1">
+                    {v.placeName && (
+                      <p className="text-sm font-semibold text-gray-800 truncate">📍 {v.placeName}</p>
+                    )}
+                    <span className="shrink-0 text-xs font-bold text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">
+                      {v.distanceKm}km
+                    </span>
+                  </div>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">{v.channel}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {formatViews(v.viewCount)} · {v.distanceKm}km
+                    {formatViews(v.viewCount)}
                     {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
                   </p>
                   <div className="flex items-center gap-2 mt-1.5">
@@ -783,11 +870,16 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             <div className="flex items-start justify-between p-3 gap-3">
               <div className="flex-1 overflow-hidden">
                 <p className="text-sm font-semibold line-clamp-2">{selectedVideo.title}</p>
-                {selectedVideo.placeName && (
-                  <p className="text-base font-bold text-gray-800 mt-1">📍 {selectedVideo.placeName}</p>
-                )}
+                <div className="flex items-center gap-1.5 mt-1">
+                  {selectedVideo.placeName && (
+                    <p className="text-base font-bold text-gray-800">📍 {selectedVideo.placeName}</p>
+                  )}
+                  <span className="shrink-0 text-xs font-bold text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">
+                    현재 위치에서 {selectedVideo.distanceKm}km
+                  </span>
+                </div>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {selectedVideo.channel} · {formatViews(selectedVideo.viewCount)} · {selectedVideo.distanceKm}km 이내
+                  {selectedVideo.channel} · {formatViews(selectedVideo.viewCount)}
                   {selectedVideo.duration && <> · {selectedVideo.duration}</>}
                   {selectedVideo.isShort && <span className="ml-1 text-pink-500 font-semibold">Shorts</span>}
                 </p>
@@ -818,6 +910,60 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             >
               ✕
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Report reason modal */}
+      {reportTarget && (
+        <div
+          className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !reportSubmitting && setReportTarget(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm font-bold mb-3">위치 오류 신고</p>
+            <div className="space-y-2 mb-3">
+              {REPORT_REASONS.map((r) => (
+                <label key={r.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="reportReason"
+                    checked={reportReason === r.key}
+                    onChange={() => setReportReason(r.key)}
+                  />
+                  {r.label}
+                </label>
+              ))}
+            </div>
+            {reportReason === 'wrong_address' && (
+              <input
+                type="text"
+                value={reportAddress}
+                onChange={(e) => setReportAddress(e.target.value)}
+                placeholder="정확한 주소를 입력해주세요"
+                className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400 mb-3"
+              />
+            )}
+            {reportResult && <p className="text-xs text-gray-600 mb-3">{reportResult}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReportTarget(null)}
+                disabled={reportSubmitting}
+                className="flex-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg py-2 font-medium transition disabled:opacity-40"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSubmitReport}
+                disabled={reportSubmitting || (reportReason === 'wrong_address' && !reportAddress.trim())}
+                className="flex-1 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 transition disabled:opacity-40"
+              >
+                {reportSubmitting ? '제출 중…' : '제출'}
+              </button>
+            </div>
           </div>
         </div>
       )}

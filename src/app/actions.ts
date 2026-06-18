@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { searchPlaceInfo, type PlaceDetails } from '@/lib/geocode'
+import { searchPlaceInfo, geocodeKorean, type PlaceDetails } from '@/lib/geocode'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -149,7 +149,28 @@ export async function getPlaceDetails(videoTitle: string | undefined, lat: numbe
   return searchPlaceInfo(videoTitle, lat, lng)
 }
 
-export async function toggleReport(videoId: string, lat?: number, lng?: number): Promise<{ reported: boolean }> {
+export type ReportReason = 'wrong_address' | 'unrelated' | 'inappropriate' | 'other'
+
+export async function cancelReport(videoId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('로그인이 필요합니다.')
+
+  const { error } = await supabase
+    .from('location_reports')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('video_id', videoId)
+  if (error) throw new Error(error.message)
+}
+
+export async function submitReport(
+  videoId: string,
+  lat: number,
+  lng: number,
+  reason: ReportReason,
+  suggestedAddress?: string
+): Promise<{ corrected: boolean; address?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
@@ -161,20 +182,36 @@ export async function toggleReport(videoId: string, lat?: number, lng?: number):
     .eq('video_id', videoId)
     .maybeSingle()
 
-  if (existing) {
-    const { error } = await supabase.from('location_reports').delete().eq('id', existing.id)
-    if (error) throw new Error(error.message)
-    return { reported: false }
+  const row = {
+    video_id: videoId,
+    lat,
+    lng,
+    user_id: user.id,
+    reason,
+    suggested_address: suggestedAddress?.trim() || null,
   }
 
-  const { error } = await supabase.from('location_reports').insert({
-    video_id: videoId,
-    lat: lat ?? null,
-    lng: lng ?? null,
-    user_id: user.id,
-  })
-  if (error) throw new Error(error.message)
-  return { reported: true }
+  if (existing) {
+    const { error } = await supabase.from('location_reports').update(row).eq('id', existing.id)
+    if (error) throw new Error(error.message)
+  } else {
+    const { error } = await supabase.from('location_reports').insert(row)
+    if (error) throw new Error(error.message)
+  }
+
+  if (reason === 'wrong_address' && suggestedAddress?.trim()) {
+    const geo = await geocodeKorean(suggestedAddress.trim())
+    if (!geo) return { corrected: false }
+
+    const { error } = await supabase.from('location_corrections').upsert(
+      { video_id: videoId, lat: geo.lat, lng: geo.lng, address: geo.address, created_by: user.id },
+      { onConflict: 'video_id' }
+    )
+    if (error) throw new Error(error.message)
+    return { corrected: true, address: geo.address }
+  }
+
+  return { corrected: false }
 }
 
 export async function getMyReports(): Promise<string[]> {
