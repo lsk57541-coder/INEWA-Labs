@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { haversineKm } from '@/lib/haversine'
 import { geocodeKorean, reverseGeocode, searchPlaceInfo } from '@/lib/geocode'
 import { extractLocations, extractExplicitBusinessName } from '@/lib/extractLocation'
+import { extractPlaceFromComments } from '@/lib/extractFromComments'
+import { getMinConfidenceSetting } from '@/app/actions'
 
 const REPORT_THRESHOLD = 3
 
@@ -83,7 +85,29 @@ export type SubscriberTier = 'silver' | 'gold' | 'diamond' | 'red_diamond'
 // How confident we are in placeName, from most to least reliable. Logged per
 // video so accuracy can be measured later (e.g. cross-referenced against
 // "주소가 정확하지 않아요" reports) instead of just guessing where to improve.
-export type PlaceNameSource = 'explicit_description' | 'title_match' | 'address_match' | 'address_fallback' | 'correction'
+export type PlaceNameSource =
+  | 'explicit_description'
+  | 'title_match'
+  | 'address_match'
+  | 'comment_match'
+  | 'address_fallback'
+  | 'correction'
+
+// Most to least reliable. Used to decide which placeName sources are
+// trustworthy enough to display — admin-configurable via app_settings, see
+// getMinConfidenceSetting().
+const SOURCE_RANK: PlaceNameSource[] = [
+  'correction',
+  'explicit_description',
+  'title_match',
+  'address_match',
+  'comment_match',
+  'address_fallback',
+]
+
+function meetsConfidence(source: PlaceNameSource, minSource: PlaceNameSource): boolean {
+  return SOURCE_RANK.indexOf(source) <= SOURCE_RANK.indexOf(minSource)
+}
 
 export interface VideoResult {
   videoId: string
@@ -311,10 +335,11 @@ export async function GET(req: NextRequest) {
     await setCachedSearchItems(cacheKey, unique)
   }
 
-  const [details, corrections, subscriberCounts] = await Promise.all([
+  const [details, corrections, subscriberCounts, minConfidence] = await Promise.all([
     fetchVideoDetails(unique.map((i) => i.id.videoId)),
     getLocationCorrections(),
     getChannelSubscriberCounts(unique.map((i) => i.snippet.channelId)),
+    getMinConfidenceSetting(),
   ])
 
   const results: VideoResult[] = []
@@ -354,10 +379,25 @@ export async function GET(req: NextRequest) {
             const addressMatch = !titleMatch?.name && address
               ? await searchPlaceInfo(address, pointLat, pointLng)
               : null
-            placeName = titleMatch?.name || addressMatch?.name || address || undefined
-            placeNameSource = titleMatch?.name ? 'title_match' : addressMatch?.name ? 'address_match' : 'address_fallback'
+            // Both title and address matching failed — check whether
+            // viewers/the creator named the place in the comments before
+            // giving up and showing only the bare address.
+            const commentMatch = !titleMatch?.name && !addressMatch?.name
+              ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
+                  candidate ? searchPlaceInfo(candidate, pointLat, pointLng) : null
+                )
+              : null
+            placeName = titleMatch?.name || addressMatch?.name || commentMatch?.name || address || undefined
+            placeNameSource = titleMatch?.name
+              ? 'title_match'
+              : addressMatch?.name
+                ? 'address_match'
+                : commentMatch?.name
+                  ? 'comment_match'
+                  : 'address_fallback'
           }
           logPlaceNameResolution(v.id, placeNameSource, placeName)
+          if (!meetsConfidence(placeNameSource, minConfidence)) return
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
             videoId: v.id,
@@ -426,10 +466,22 @@ export async function GET(req: NextRequest) {
             const addressMatch = !titleMatch?.name
               ? await searchPlaceInfo(geo2.address, geo2.lat, geo2.lng)
               : null
-            resolvedName = titleMatch?.name || addressMatch?.name || geo2.address
-            placeNameSource = titleMatch?.name ? 'title_match' : addressMatch?.name ? 'address_match' : 'address_fallback'
+            const commentMatch = !titleMatch?.name && !addressMatch?.name
+              ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
+                  candidate ? searchPlaceInfo(candidate, geo2.lat, geo2.lng) : null
+                )
+              : null
+            resolvedName = titleMatch?.name || addressMatch?.name || commentMatch?.name || geo2.address
+            placeNameSource = titleMatch?.name
+              ? 'title_match'
+              : addressMatch?.name
+                ? 'address_match'
+                : commentMatch?.name
+                  ? 'comment_match'
+                  : 'address_fallback'
           }
           logPlaceNameResolution(v.id, placeNameSource, resolvedName)
+          if (!meetsConfidence(placeNameSource, minConfidence)) break
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
           results.push({
             videoId: v.id,

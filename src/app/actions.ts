@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { searchPlaceInfo, geocodeKorean, reverseGeocode, type PlaceDetails } from '@/lib/geocode'
+import { PLACENAME_SOURCES, type MinConfidenceSource } from '@/lib/placeNameSources'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -12,6 +13,36 @@ async function requireAdmin() {
     .from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') throw new Error('Forbidden')
   return supabase
+}
+
+const DEFAULT_MIN_CONFIDENCE: MinConfidenceSource = 'address_match'
+
+// Public read — called from the search API for every request, no auth
+// required since it's just the display threshold, not sensitive data.
+export async function getMinConfidenceSetting(): Promise<MinConfidenceSource> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', 'min_placename_confidence')
+    .maybeSingle()
+
+  const value = data?.value
+  return (PLACENAME_SOURCES as readonly string[]).includes(value ?? '')
+    ? (value as MinConfidenceSource)
+    : DEFAULT_MIN_CONFIDENCE
+}
+
+export async function setMinConfidenceSetting(formData: FormData) {
+  const supabase = await requireAdmin()
+  const source = formData.get('source') as string
+  if (!(PLACENAME_SOURCES as readonly string[]).includes(source)) throw new Error('Invalid source')
+
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: 'min_placename_confidence', value: source, updated_at: new Date().toISOString() })
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin')
 }
 
 export interface AccuracyStat {

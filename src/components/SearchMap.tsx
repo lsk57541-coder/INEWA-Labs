@@ -747,7 +747,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       <Script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" />
 
       {/* Map */}
-      <div ref={mapRef} className="flex-1 h-full" />
+      <div ref={mapRef} className="flex-1 h-full touch-none" />
 
       {/* Locate-me button */}
       <button
@@ -985,7 +985,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col ${
             listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-56px)]'
           }`}
-          style={{ maxHeight: '50vh' }}
+          style={{ maxHeight: '50dvh' }}
         >
           <div
             onPointerDown={(e) => {
@@ -1098,7 +1098,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {selectedGroup && (
         <div
           className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl flex flex-col"
-          style={{ maxHeight: '45vh' }}
+          style={{ maxHeight: '45dvh' }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50 shrink-0 rounded-t-2xl">
             <div>

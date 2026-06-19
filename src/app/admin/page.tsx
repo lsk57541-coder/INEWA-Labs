@@ -1,6 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { deleteLocation, getAccuracyStats } from '@/app/actions'
+import {
+  deleteLocation,
+  getAccuracyStats,
+  getMinConfidenceSetting,
+  setMinConfidenceSetting,
+} from '@/app/actions'
+import { PLACENAME_SOURCES } from '@/lib/placeNameSources'
 import DeleteButton from '@/components/admin/DeleteButton'
 import Link from 'next/link'
 
@@ -8,7 +14,8 @@ const SOURCE_LABEL: Record<string, string> = {
   explicit_description: '설명란 명시 (상호명: ○○)',
   title_match: '제목 기반 카카오 매칭',
   address_match: '주소 기반 카카오 매칭',
-  address_fallback: '매칭 실패 → 주소 그대로',
+  comment_match: '댓글/답글 기반 매칭',
+  address_fallback: '매칭 실패 → 주소 그대로(숨김 대상)',
   correction: '사용자 신고로 보정됨',
 }
 
@@ -27,6 +34,18 @@ export default async function AdminPage() {
     .order('created_at', { ascending: false })
 
   const accuracyStats = await getAccuracyStats()
+  const minConfidence = await getMinConfidenceSetting()
+
+  const cutoffRank = PLACENAME_SOURCES.indexOf(minConfidence)
+  const shownStats = accuracyStats.filter((s) => {
+    const rank = PLACENAME_SOURCES.indexOf(s.source as typeof PLACENAME_SOURCES[number])
+    return rank !== -1 && rank <= cutoffRank
+  })
+  const totalAll = accuracyStats.reduce((sum, s) => sum + s.total, 0)
+  const totalShown = shownStats.reduce((sum, s) => sum + s.total, 0)
+  const reportedShown = shownStats.reduce((sum, s) => sum + s.reported, 0)
+  const exposureRate = totalAll > 0 ? (totalShown / totalAll) * 100 : null
+  const estimatedAccuracy = totalShown > 0 ? (1 - reportedShown / totalShown) * 100 : null
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -41,6 +60,45 @@ export default async function AdminPage() {
         >
           + 장소 추가
         </Link>
+      </div>
+
+      <div className="mb-8 border rounded-lg overflow-hidden">
+        <p className="text-sm font-bold px-4 py-2 bg-gray-50 border-b">노출 기준 (정확도 관리)</p>
+        <form action={setMinConfidenceSetting} className="flex items-center gap-2 px-4 py-3 border-b">
+          <label className="text-xs text-gray-500 shrink-0">최소 노출 기준</label>
+          <select
+            name="source"
+            defaultValue={minConfidence}
+            className="flex-1 text-sm border rounded-lg px-2 py-1.5 bg-white"
+          >
+            {PLACENAME_SOURCES.map((s) => (
+              <option key={s} value={s}>{SOURCE_LABEL[s] ?? s}</option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition"
+          >
+            저장
+          </button>
+        </form>
+        <div className="px-4 py-3 text-xs text-gray-500 flex gap-4">
+          <p>
+            노출률{' '}
+            <span className="font-medium text-gray-700">
+              {exposureRate !== null ? `${exposureRate.toFixed(1)}%` : '-'}
+            </span>
+          </p>
+          <p>
+            추정 정확도{' '}
+            <span className="font-medium text-gray-700">
+              {estimatedAccuracy !== null ? `${estimatedAccuracy.toFixed(1)}%` : '-'}
+            </span>
+          </p>
+        </div>
+        <p className="px-4 pb-3 text-xs text-gray-400">
+          기준보다 신뢰도 낮은 영상은 검색결과에서 숨겨집니다. 추정 정확도가 80~90% 이상이 될 때까지 기준을 올려보세요.
+        </p>
       </div>
 
       {accuracyStats.length > 0 && (
