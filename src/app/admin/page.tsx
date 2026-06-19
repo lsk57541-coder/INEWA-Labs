@@ -54,12 +54,20 @@ export default async function AdminPage() {
           <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← 메인으로</Link>
           <h1 className="text-xl font-bold mt-1">장소 관리</h1>
         </div>
-        <Link
-          href="/admin/locations/new"
-          className="bg-black text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800 transition"
-        >
-          + 장소 추가
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/admin/partners"
+            className="bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition"
+          >
+            파트너 신청 관리
+          </Link>
+          <Link
+            href="/admin/locations/new"
+            className="bg-black text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+          >
+            + 장소 추가
+          </Link>
+        </div>
       </div>
 
       <div className="mb-8 border rounded-lg overflow-hidden">

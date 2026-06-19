@@ -323,3 +323,40 @@ export async function getMyReports(): Promise<string[]> {
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => r.video_id)
 }
+
+export interface PartnerApplication {
+  id: string
+  channel_id: string
+  channel_name: string
+  subscriber_count: number | null
+  categories: string[]
+  region: string
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+}
+
+// Token columns are deliberately excluded — the admin review list never
+// needs to display them.
+export async function getPartnerApplications(): Promise<PartnerApplication[]> {
+  const supabase = await requireAdmin()
+  const { data, error } = await supabase
+    .from('partners')
+    .select('id, channel_id, channel_name, subscriber_count, categories, region, status, created_at')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+export async function approvePartnerApplication(id: string) {
+  const supabase = await requireAdmin()
+  const { error } = await supabase.from('partners').update({ status: 'approved' }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/partners')
+}
+
+export async function rejectPartnerApplication(id: string) {
+  const supabase = await requireAdmin()
+  const { error } = await supabase.from('partners').update({ status: 'rejected' }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/partners')
+}
