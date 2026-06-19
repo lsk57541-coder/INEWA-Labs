@@ -337,26 +337,15 @@ export interface PartnerApplication {
 
 // Token columns are deliberately excluded — the admin review list never
 // needs to display them.
-export async function getPartnerApplications(): Promise<PartnerApplication[]> {
+export async function getPartnerApplications(status?: 'pending' | 'approved' | 'rejected'): Promise<PartnerApplication[]> {
   const supabase = await requireAdmin()
-  const { data, error } = await supabase
+  let query = supabase
     .from('partners')
     .select('id, channel_id, channel_name, subscriber_count, categories, region, status, created_at')
     .order('created_at', { ascending: false })
+  if (status) query = query.eq('status', status)
+
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return data ?? []
-}
-
-export async function approvePartnerApplication(id: string) {
-  const supabase = await requireAdmin()
-  const { error } = await supabase.from('partners').update({ status: 'approved' }).eq('id', id)
-  if (error) throw new Error(error.message)
-  revalidatePath('/admin/partners')
-}
-
-export async function rejectPartnerApplication(id: string) {
-  const supabase = await requireAdmin()
-  const { error } = await supabase.from('partners').update({ status: 'rejected' }).eq('id', id)
-  if (error) throw new Error(error.message)
-  revalidatePath('/admin/partners')
 }
