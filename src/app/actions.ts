@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { searchPlaceInfo, geocodeKorean, reverseGeocode, type PlaceDetails } from '@/lib/geocode'
+import { searchPlaceInfo, reverseGeocode, type PlaceDetails } from '@/lib/geocode'
 import { PLACENAME_SOURCES, type MinConfidenceSource } from '@/lib/placeNameSources'
 
 async function requireAdmin() {
@@ -222,6 +222,18 @@ export async function getPlaceDetails(videoTitle: string | undefined, lat: numbe
 
 export type ReportReason = 'wrong_address' | 'unrelated' | 'inappropriate' | 'other'
 
+// What the user picked from the address/business-name autocomplete (already
+// Kakao-verified by /api/geocode, no need to re-geocode here). `address` and
+// `name` just say which kind of error they're flagging (for the report log);
+// the suggestion's name, address, and coordinates always travel together as
+// one real place, since a corrected business name implies its own real
+// location too — the marker should move to match it either way.
+export interface ReportFix {
+  address: boolean
+  name: boolean
+  suggestion: { name: string; address: string; lat: number; lng: number }
+}
+
 export async function cancelReport(videoId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -240,8 +252,8 @@ export async function submitReport(
   lat: number,
   lng: number,
   reason: ReportReason,
-  suggestedAddress?: string
-): Promise<{ corrected: boolean; address?: string }> {
+  fix?: ReportFix
+): Promise<{ corrected: boolean; address?: string; placeName?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
@@ -253,13 +265,20 @@ export async function submitReport(
     .eq('video_id', videoId)
     .maybeSingle()
 
+  const suggestedLabel = fix
+    ? [
+        fix.address ? `주소: ${fix.suggestion.address}` : null,
+        fix.name ? `상호명: ${fix.suggestion.name}` : null,
+      ].filter(Boolean).join(' / ') || null
+    : null
+
   const row = {
     video_id: videoId,
     lat,
     lng,
     user_id: user.id,
     reason,
-    suggested_address: suggestedAddress?.trim() || null,
+    suggested_address: suggestedLabel,
   }
 
   if (existing) {
@@ -270,16 +289,20 @@ export async function submitReport(
     if (error) throw new Error(error.message)
   }
 
-  if (reason === 'wrong_address' && suggestedAddress?.trim()) {
-    const geo = await geocodeKorean(suggestedAddress.trim())
-    if (!geo) return { corrected: false }
-
+  if (reason === 'wrong_address' && fix && (fix.address || fix.name)) {
     const { error } = await supabase.from('location_corrections').upsert(
-      { video_id: videoId, lat: geo.lat, lng: geo.lng, address: geo.address, created_by: user.id },
+      {
+        video_id: videoId,
+        lat: fix.suggestion.lat,
+        lng: fix.suggestion.lng,
+        address: fix.suggestion.address,
+        place_name: fix.suggestion.name,
+        created_by: user.id,
+      },
       { onConflict: 'video_id' }
     )
     if (error) throw new Error(error.message)
-    return { corrected: true, address: geo.address }
+    return { corrected: true, address: fix.suggestion.address, placeName: fix.suggestion.name }
   }
 
   return { corrected: false }

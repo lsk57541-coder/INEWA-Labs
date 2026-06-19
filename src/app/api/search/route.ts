@@ -27,21 +27,24 @@ async function getBlockedVideoIds(): Promise<Set<string>> {
 interface LocationCorrection {
   lat: number
   lng: number
-  address: string
+  address: string | null
+  placeName: string | null
 }
 
-// User-confirmed corrections (from "주소가 정확하지 않아요" reports that were
-// successfully verified against Kakao) override the geotag/AI-derived location.
+// User-confirmed corrections (from "주소/상호명이 잘못됐어요" reports) override
+// the geotag/AI-derived location and/or business name. address and placeName
+// are corrected independently — e.g. a name-only fix keeps the original
+// point, an address-only fix re-resolves the name normally at the new point.
 async function getLocationCorrections(): Promise<Map<string, LocationCorrection>> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return new Map()
 
   const supabase = createClient(url, key)
-  const { data } = await supabase.from('location_corrections').select('video_id, lat, lng, address')
+  const { data } = await supabase.from('location_corrections').select('video_id, lat, lng, address, place_name')
   if (!data) return new Map()
 
-  return new Map(data.map((row) => [row.video_id, { lat: row.lat, lng: row.lng, address: row.address }]))
+  return new Map(data.map((row) => [row.video_id, { lat: row.lat, lng: row.lng, address: row.address, placeName: row.place_name }]))
 }
 
 // Caches raw search.list results (the expensive 100-quota-unit call) per
@@ -362,15 +365,15 @@ export async function GET(req: NextRequest) {
           const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
           let placeName: string | undefined
           let placeNameSource: PlaceNameSource
-          if (correction) {
-            placeName = correction.address
+          if (correction?.placeName) {
+            placeName = correction.placeName
             placeNameSource = 'correction'
           } else if (explicitName) {
             placeName = explicitName
             placeNameSource = 'explicit_description'
           } else {
             const [address, titleMatch] = await Promise.all([
-              reverseGeocode(pointLat, pointLng),
+              correction?.address ? Promise.resolve(correction.address) : reverseGeocode(pointLat, pointLng),
               searchPlaceInfo(snippet.title, pointLat, pointLng),
             ])
             // Video title rarely contains the registered business name verbatim,
@@ -426,24 +429,55 @@ export async function GET(req: NextRequest) {
         const dist = haversineKm(lat, lng, correction.lat, correction.lng)
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
-          const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
-          results.push({
-            videoId: v.id,
-            title: snippet.title,
-            thumbnail: snippet.thumbnails.medium.url,
-            channel: snippet.channelTitle,
-            lat: correction.lat,
-            lng: correction.lng,
-            distanceKm: Math.round(dist * 10) / 10,
-            source: 'ai',
-            viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
-            placeName: correction.address,
-            placeNameSource: 'correction',
-            duration: formatDuration(durationSec),
-            isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
-            subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
-            subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
-          })
+          const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
+          let placeName: string | undefined
+          let placeNameSource: PlaceNameSource
+          if (correction.placeName) {
+            placeName = correction.placeName
+            placeNameSource = 'correction'
+          } else if (explicitName) {
+            placeName = explicitName
+            placeNameSource = 'explicit_description'
+          } else {
+            const titleMatch = await searchPlaceInfo(snippet.title, correction.lat, correction.lng)
+            const addressMatch = !titleMatch?.name && correction.address
+              ? await searchPlaceInfo(correction.address, correction.lat, correction.lng)
+              : null
+            const commentMatch = !titleMatch?.name && !addressMatch?.name
+              ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
+                  candidate ? searchPlaceInfo(candidate, correction.lat, correction.lng) : null
+                )
+              : null
+            placeName = titleMatch?.name || addressMatch?.name || commentMatch?.name || correction.address || undefined
+            placeNameSource = titleMatch?.name
+              ? 'title_match'
+              : addressMatch?.name
+                ? 'address_match'
+                : commentMatch?.name
+                  ? 'comment_match'
+                  : 'address_fallback'
+          }
+          logPlaceNameResolution(v.id, placeNameSource, placeName)
+          if (meetsConfidence(placeNameSource, minConfidence)) {
+            const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
+            results.push({
+              videoId: v.id,
+              title: snippet.title,
+              thumbnail: snippet.thumbnails.medium.url,
+              channel: snippet.channelTitle,
+              lat: correction.lat,
+              lng: correction.lng,
+              distanceKm: Math.round(dist * 10) / 10,
+              source: 'ai',
+              viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
+              placeName,
+              placeNameSource,
+              duration: formatDuration(durationSec),
+              isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+              subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
+              subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
+            })
+          }
         }
         return
       }

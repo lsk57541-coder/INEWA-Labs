@@ -15,12 +15,13 @@ import {
   getMyReports,
   type FavoriteVideo,
   type ReportReason,
+  type ReportFix,
 } from '@/app/actions'
 import MenuDrawer, { type MenuUser } from '@/components/MenuDrawer'
 import FavoritesOverlay from '@/components/FavoritesOverlay'
 
 const REPORT_REASONS: { key: ReportReason; label: string }[] = [
-  { key: 'wrong_address', label: '주소가 정확하지 않아요' },
+  { key: 'wrong_address', label: '주소 또는 상호명이 잘못됐어요' },
   { key: 'unrelated', label: '전혀 상관없는 영상이에요' },
   { key: 'inappropriate', label: '부적절한 내용이에요' },
   { key: 'other', label: '기타' },
@@ -329,7 +330,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [favoritesOverlayOpen, setFavoritesOverlayOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<VideoResult | null>(null)
   const [reportReason, setReportReason] = useState<ReportReason>('wrong_address')
-  const [reportAddress, setReportAddress] = useState('')
+  const [reportFixAddress, setReportFixAddress] = useState(true)
+  const [reportFixName, setReportFixName] = useState(false)
+  const [reportQuery, setReportQuery] = useState('')
+  const [reportSelected, setReportSelected] = useState<AddressSuggestion | null>(null)
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [reportResult, setReportResult] = useState<string | null>(null)
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([])
@@ -638,8 +642,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     })
   }
 
-  const handleReportAddressChange = (value: string) => {
-    setReportAddress(value)
+  const handleReportQueryChange = (value: string) => {
+    setReportQuery(value)
+    setReportSelected(null)
     if (addressSearchTimer.current) clearTimeout(addressSearchTimer.current)
     if (!value.trim()) { setAddressSuggestions([]); return }
     addressSearchTimer.current = setTimeout(async () => {
@@ -690,7 +695,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     }
     setReportTarget(v)
     setReportReason('wrong_address')
-    setReportAddress('')
+    setReportFixAddress(true)
+    setReportFixName(false)
+    setReportQuery('')
+    setReportSelected(null)
     setReportResult(null)
     setAddressSuggestions([])
   }
@@ -700,17 +708,29 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     setReportSubmitting(true)
     setReportResult(null)
     try {
-      const res = await submitReport(reportTarget.videoId, reportTarget.lat, reportTarget.lng, reportReason, reportAddress)
+      const fix: ReportFix | undefined = reportSelected
+        ? { address: reportFixAddress, name: reportFixName, suggestion: reportSelected }
+        : undefined
+      const res = await submitReport(reportTarget.videoId, reportTarget.lat, reportTarget.lng, reportReason, fix)
       setReportedIds((prev) => new Set(prev).add(reportTarget.videoId))
+      // The reported video is wrong info for this viewer — drop it from what
+      // they're currently looking at immediately, in both the list and the
+      // marker-group popup. The corrected address (if any) is only saved as
+      // a reference for resolving other users' future searches, not shown
+      // back to this viewer as if it were a confirmed business name.
+      setAllResults((prev) => prev.filter((r) => r.videoId !== reportTarget.videoId))
+      setSelectedGroup((prev) =>
+        prev ? { ...prev, videos: prev.videos.filter((v) => v.videoId !== reportTarget.videoId) } : prev
+      )
       if (reportReason === 'wrong_address') {
-        if (res.corrected && res.address) {
-          setReportResult(`카카오맵에서 확인했습니다: "${res.address}" — 이 영상의 위치가 업데이트됩니다.`)
-          const corrected = { ...reportTarget, placeName: res.address }
-          setAllResults((prev) => prev.map((r) => (r.videoId === reportTarget.videoId ? corrected : r)))
+        if (res.corrected) {
+          const fixedLabel = [res.address, res.placeName].filter(Boolean).join(' / ')
+          setReportResult(`반영했습니다: "${fixedLabel}" — 다음 검색부터 정확한 정보로 반영됩니다.`)
         } else {
-          setReportResult('카카오맵에서 해당 주소를 찾지 못했습니다. 주소를 다시 확인해주세요.')
-          return
+          setReportResult('신고가 접수되었습니다.')
         }
+      } else {
+        setReportResult('신고가 접수되었습니다.')
       }
       setTimeout(() => setReportTarget(null), 1200)
     } catch (e) {
@@ -1271,35 +1291,58 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               ))}
             </div>
             {reportReason === 'wrong_address' && (
-              <div className="relative mb-3">
-                <input
-                  type="text"
-                  value={reportAddress}
-                  onChange={(e) => handleReportAddressChange(e.target.value)}
-                  placeholder="장소명이나 주소를 입력해보세요 (예: 엄마네돼지찌개)"
-                  className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
-                />
-                {addressSearching && (
-                  <p className="text-xs text-gray-400 mt-1">검색 중…</p>
-                )}
-                {addressSuggestions.length > 0 && (
-                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {addressSuggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          setReportAddress(s.address)
-                          setAddressSuggestions([])
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
-                      >
-                        <p className="text-sm font-medium">{s.name}</p>
-                        <p className="text-xs text-gray-400">{s.address}</p>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <>
+                {/* What's wrong — checked independently so a name-only fix
+                    doesn't move the pin, and an address-only fix doesn't
+                    overwrite a perfectly good business name. */}
+                <div className="flex gap-3 mb-2 px-1">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={reportFixAddress}
+                      onChange={(e) => setReportFixAddress(e.target.checked)}
+                    />
+                    주소가 잘못됐어요
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={reportFixName}
+                      onChange={(e) => setReportFixName(e.target.checked)}
+                    />
+                    상호명이 잘못됐어요
+                  </label>
+                </div>
+                <div className="relative mb-3">
+                  <input
+                    type="text"
+                    value={reportSelected ? `${reportSelected.name} (${reportSelected.address})` : reportQuery}
+                    onChange={(e) => handleReportQueryChange(e.target.value)}
+                    placeholder="정확한 장소명이나 주소를 검색해보세요 (예: 엄마네돼지찌개)"
+                    className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                  />
+                  {addressSearching && (
+                    <p className="text-xs text-gray-400 mt-1">검색 중…</p>
+                  )}
+                  {addressSuggestions.length > 0 && (
+                    <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {addressSuggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setReportSelected(s)
+                            setAddressSuggestions([])
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                        >
+                          <p className="text-sm font-medium">{s.name}</p>
+                          <p className="text-xs text-gray-400">{s.address}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
             {reportResult && <p className="text-xs text-gray-600 mb-3">{reportResult}</p>}
             <div className="flex gap-2">
@@ -1312,7 +1355,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </button>
               <button
                 onClick={handleSubmitReport}
-                disabled={reportSubmitting || (reportReason === 'wrong_address' && !reportAddress.trim())}
+                disabled={
+                  reportSubmitting ||
+                  (reportReason === 'wrong_address' &&
+                    (!reportSelected || (!reportFixAddress && !reportFixName)))
+                }
                 className="flex-1 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 transition disabled:opacity-40"
               >
                 {reportSubmitting ? '제출 중…' : '제출'}
