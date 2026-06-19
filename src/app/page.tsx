@@ -9,6 +9,10 @@ export default async function Home() {
     ? await supabase.from('profiles').select('role, nickname, avatar_url').eq('id', user.id).single()
     : { data: null }
 
+  const { data: partnerData } = user
+    ? await supabase.from('partners').select('id').eq('user_id', user.id).eq('status', 'approved').maybeSingle()
+    : { data: null }
+
   return (
     <div className="flex flex-col h-screen">
       <main className="flex flex-1 overflow-hidden">
@@ -19,6 +23,7 @@ export default async function Home() {
                   nickname: profileData?.nickname ?? '사용자',
                   avatarUrl: profileData?.avatar_url ?? null,
                   isAdmin: profileData?.role === 'admin',
+                  isApprovedPartner: !!partnerData,
                 }
               : null
           }

@@ -9,6 +9,7 @@ export interface MenuUser {
   nickname: string
   avatarUrl: string | null
   isAdmin: boolean
+  isApprovedPartner: boolean
 }
 
 interface MenuDrawerProps {
@@ -76,13 +77,23 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
             ❤️ 관심목록
           </button>
 
-          <Link
-            href="/partner/apply"
-            onClick={onClose}
-            className="w-full flex items-center gap-2 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
-          >
-            🎬 유튜버 파트너 신청
-          </Link>
+          {user?.isApprovedPartner ? (
+            <Link
+              href="/partner/dashboard"
+              onClick={onClose}
+              className="w-full flex items-center gap-2 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+            >
+              🎬 파트너 대시보드
+            </Link>
+          ) : (
+            <Link
+              href="/partner/apply"
+              onClick={onClose}
+              className="w-full flex items-center gap-2 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+            >
+              🎬 유튜버 파트너 신청
+            </Link>
+          )}
 
           {user?.isAdmin && (
             <Link
