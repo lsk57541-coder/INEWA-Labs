@@ -37,5 +37,22 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  // Partner dashboard is only for users with an approved partner application.
+  if (request.nextUrl.pathname.startsWith('/partner/dashboard')) {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    const { data: partner } = await supabase
+      .from('partners')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .limit(1)
+      .maybeSingle()
+    if (!partner) {
+      return NextResponse.redirect(new URL('/partner/apply', request.url))
+    }
+  }
+
   return supabaseResponse
 }

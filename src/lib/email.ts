@@ -1,9 +1,7 @@
 import { Resend } from 'resend'
 
 const CONTACT_EMAIL = 'inewalabs@gmail.com'
-// No partner dashboard exists yet — the application-status page is the
-// closest stand-in until one is built.
-const DASHBOARD_URL = 'https://inewa-labs.vercel.app/partner/apply/complete'
+const DASHBOARD_URL = 'https://inewa-labs.vercel.app/partner/dashboard'
 
 export async function sendPartnerApplicationEmail(to: string, channelName: string) {
   const apiKey = process.env.RESEND_API_KEY
