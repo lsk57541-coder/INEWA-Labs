@@ -272,6 +272,11 @@ export async function submitReport(
       ].filter(Boolean).join(' / ') || null
     : null
 
+  // A single admin report is treated as a confirmed takedown (see
+  // getBlockedVideoIds in route.ts), so everyone stops seeing the video
+  // immediately instead of waiting for the usual 3-report threshold.
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+
   const row = {
     video_id: videoId,
     lat,
@@ -279,6 +284,7 @@ export async function submitReport(
     user_id: user.id,
     reason,
     suggested_address: suggestedLabel,
+    is_admin_report: profile?.role === 'admin',
   }
 
   if (existing) {

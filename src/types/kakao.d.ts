@@ -6,6 +6,12 @@ declare namespace kakao {
       getCenter(): LatLng
       setLevel(level: number): void
       getLevel(): number
+      getProjection(): MapProjection
+    }
+
+    interface MapProjection {
+      containerPointFromCoords(latlng: LatLng): Point
+      coordsFromContainerPoint(point: Point): LatLng
     }
 
     class LatLng {
@@ -47,8 +53,8 @@ declare namespace kakao {
 
     class Point {
       constructor(x: number, y: number)
-      getX(): number
-      getY(): number
+      x: number
+      y: number
     }
 
     class Size {

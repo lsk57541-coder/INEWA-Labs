@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { haversineKm } from '@/lib/haversine'
 import { geocodeKorean, reverseGeocode, searchPlaceInfo } from '@/lib/geocode'
 import { extractLocations, extractExplicitBusinessName } from '@/lib/extractLocation'
@@ -8,20 +9,47 @@ import { getMinConfidenceSetting } from '@/app/actions'
 
 const REPORT_THRESHOLD = 3
 
+// Blocked for everyone: either enough independent reports, or a single
+// admin report (admins are trusted to call this correctly, so we don't make
+// them wait for the threshold). wrong_address is excluded from the
+// single-report admin rule since it's a location-fix request, not a
+// moderation flag — it goes through location_corrections instead.
 async function getBlockedVideoIds(): Promise<Set<string>> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return new Set()
 
   const supabase = createClient(url, key)
-  const { data } = await supabase.from('location_reports').select('video_id')
+  const { data } = await supabase.from('location_reports').select('video_id, reason, is_admin_report')
   if (!data) return new Set()
 
   const counts = new Map<string, number>()
+  const blocked = new Set<string>()
   for (const row of data) {
     counts.set(row.video_id, (counts.get(row.video_id) ?? 0) + 1)
+    if (row.is_admin_report && row.reason !== 'wrong_address') blocked.add(row.video_id)
   }
-  return new Set([...counts.entries()].filter(([, count]) => count >= REPORT_THRESHOLD).map(([id]) => id))
+  for (const [id, count] of counts) {
+    if (count >= REPORT_THRESHOLD) blocked.add(id)
+  }
+  return blocked
+}
+
+// Reported-but-not-yet-globally-blocked videos should still disappear from
+// the reporting user's own future searches immediately. wrong_address is
+// excluded since that's a fix request — the video should keep showing
+// (now with the corrected info), not hide.
+async function getMyHiddenVideoIds(): Promise<Set<string>> {
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return new Set()
+
+  const { data } = await supabase
+    .from('location_reports')
+    .select('video_id')
+    .eq('user_id', user.id)
+    .neq('reason', 'wrong_address')
+  return new Set((data ?? []).map((r) => r.video_id))
 }
 
 interface LocationCorrection {
@@ -547,8 +575,8 @@ export async function GET(req: NextRequest) {
     finalSeen.add(r.videoId)
     return true
   })
-  const blocked = await getBlockedVideoIds()
-  const filtered = deduped.filter((r) => !blocked.has(r.videoId))
+  const [blocked, myHidden] = await Promise.all([getBlockedVideoIds(), getMyHiddenVideoIds()])
+  const filtered = deduped.filter((r) => !blocked.has(r.videoId) && !myHidden.has(r.videoId))
   filtered.sort((a, b) => b.viewCount - a.viewCount)
 
   return NextResponse.json({ results: filtered })

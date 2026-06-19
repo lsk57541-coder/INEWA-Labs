@@ -22,7 +22,7 @@ import FavoritesOverlay from '@/components/FavoritesOverlay'
 
 const REPORT_REASONS: { key: ReportReason; label: string }[] = [
   { key: 'wrong_address', label: '주소 또는 상호명이 잘못됐어요' },
-  { key: 'unrelated', label: '전혀 상관없는 영상이에요' },
+  { key: 'unrelated', label: '주소와 상관없는 영상이에요' },
   { key: 'inappropriate', label: '부적절한 내용이에요' },
   { key: 'other', label: '기타' },
 ]
@@ -310,6 +310,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const locationSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null)
   const [posLabel, setPosLabel] = useState<string>('위치 미설정')
+  // True once the user has set their search point via the address input
+  // rather than real GPS — the locate-me button re-centers on this point
+  // instead of overwriting it with the device's actual location.
+  const [isManualLocation, setIsManualLocation] = useState(false)
   const [allResults, setAllResults] = useState<VideoResult[]>([])
   const [videoFilter, setVideoFilter] = useState<'all' | 'short' | 'long'>('all')
   const [sortBy, setSortBy] = useState<'views' | 'duration' | 'distance'>('views')
@@ -340,6 +344,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [addressSearching, setAddressSearching] = useState(false)
   const addressSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sheetDragStartY = useRef<number | null>(null)
+
+  // How much of the map's height is currently covered by a bottom sheet, so
+  // panTo can keep whatever point it's centering on inside the visible area
+  // instead of behind the sheet. Marker clicks and searches pass their own
+  // fraction explicitly since they fire just before the sheet's state
+  // actually changes.
+  const currentSheetFraction = selectedGroup ? 0.45 : allResults.length > 0 && listOpen ? 0.5 : 0
 
   const handleSheetDragStart = (clientY: number) => {
     sheetDragStartY.current = clientY
@@ -401,12 +412,32 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     load().catch(() => {})
   }, [user])
 
+  // sheetFraction is how much of the map's height a bottom sheet currently
+  // covers (0–1). Without it, setCenter puts the point at the geometric
+  // center of the whole container, which sits behind/just above the sheet
+  // instead of in the middle of what's actually visible. We center normally
+  // first, then read back its screen position and re-center on the point
+  // that far below it, which pushes the original point up into the middle
+  // of the visible area.
   const panTo = useCallback(
-    (lat: number, lng: number) => {
-      if (!mapInstanceRef.current) return
-      mapInstanceRef.current.setCenter(new kakao.maps.LatLng(lat, lng))
+    (lat: number, lng: number, sheetFraction = 0) => {
+      const map = mapInstanceRef.current
+      if (!map) return
+      const target = new kakao.maps.LatLng(lat, lng)
+      map.setCenter(target)
       const levelMap: Record<number, number> = { 1: 4, 3: 6, 5: 7, 10: 8 }
-      mapInstanceRef.current.setLevel(levelMap[radius] ?? 7)
+      map.setLevel(levelMap[radius] ?? 7)
+
+      const containerHeight = mapRef.current?.clientHeight
+      if (sheetFraction > 0 && containerHeight) {
+        const projection = map.getProjection()
+        const centerPoint = projection.containerPointFromCoords(target)
+        const shifted = new kakao.maps.Point(
+          centerPoint.x,
+          centerPoint.y + (containerHeight * sheetFraction) / 2
+        )
+        map.setCenter(projection.coordsFromContainerPoint(shifted))
+      }
     },
     [radius]
   )
@@ -421,11 +452,23 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         const { latitude, longitude } = pos.coords
         setUserPos({ lat: latitude, lng: longitude })
         setPosLabel(`현재 위치 (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
+        setIsManualLocation(false)
         setError(null)
-        panTo(latitude, longitude)
+        panTo(latitude, longitude, currentSheetFraction)
       },
       () => setError('위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요.')
     )
+  }
+
+  // The floating locate-me button: if the user has set a manual search
+  // address, it re-centers on that (their actual GPS position usually isn't
+  // where they're trying to browse), otherwise it falls back to real GPS.
+  const handleLocateButtonClick = () => {
+    if (isManualLocation && userPos) {
+      panTo(userPos.lat, userPos.lng, currentSheetFraction)
+      return
+    }
+    getLocation()
   }
 
   const fetchLocationSuggestions = async (value: string) => {
@@ -459,13 +502,20 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const selectLocationSuggestion = (s: AddressSuggestion) => {
     setUserPos({ lat: s.lat, lng: s.lng })
     setPosLabel(s.name)
-    panTo(s.lat, s.lng)
+    setIsManualLocation(true)
+    panTo(s.lat, s.lng, currentSheetFraction)
     setAddressInput(s.name)
     setLocationSuggestions([])
   }
 
   const renderMarkers = useCallback(
-    (groups: MarkerGroup[], center: { lat: number; lng: number }, favIds: Set<string>, visitedIdSet: Set<string>) => {
+    (
+      groups: MarkerGroup[],
+      center: { lat: number; lng: number },
+      favIds: Set<string>,
+      visitedIdSet: Set<string>,
+      sheetFraction = 0
+    ) => {
       if (!mapInstanceRef.current) return
       lastCenterRef.current = center
 
@@ -495,7 +545,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           map: mapInstanceRef.current!,
           image: groupMarkerImage(group.videos, isFavorite, isVisited),
         })
-        kakao.maps.event.addListener(marker, 'click', () => setSelectedGroup(group))
+        kakao.maps.event.addListener(marker, 'click', () => {
+          setSelectedGroup(group)
+          panTo(group.lat, group.lng, 0.45)
+        })
         markersRef.current.push(marker)
 
         if (group.videos.length > 1) {
@@ -510,11 +563,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         }
       })
 
-      mapInstanceRef.current.setCenter(new kakao.maps.LatLng(center.lat, center.lng))
-      const levelMap: Record<number, number> = { 1: 4, 3: 6, 5: 7, 10: 8 }
-      mapInstanceRef.current.setLevel(levelMap[radius] ?? 7)
+      panTo(center.lat, center.lng, sheetFraction)
     },
-    [radius]
+    [radius, panTo]
   )
 
   const handleSearch = async () => {
@@ -544,12 +595,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       const videos = json.results ?? []
       setAllResults(videos)
       setVideoFilter('all')
-      renderMarkers(groupByLocation(videos), userPos, favoriteIds, visitedIds)
+      renderMarkers(groupByLocation(videos), userPos, favoriteIds, visitedIds, 0.5)
 
-      // Markers on the map take priority, then the results sheet — keep the
-      // search panel out of the way and the results collapsed to a peek.
+      // Close the search panel out of the way and open the results sheet so
+      // the list is visible right away, instead of collapsed to a peek.
       setPanelOpen(false)
-      setListOpen(false)
+      setListOpen(true)
 
       if (videos.length === 0) setError('해당 반경 내에 검색 결과가 없습니다.')
     } catch (e) {
@@ -566,13 +617,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     if (wasFavorited) next.delete(v.videoId)
     else next.add(v.videoId)
     setFavoriteIds(next)
-    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, next, visitedIds)
+    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, next, visitedIds, currentSheetFraction)
 
     try {
       await toggleFavorite(toFavoritePayload(v))
     } catch (e) {
       setFavoriteIds(favoriteIds)
-      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, visitedIds)
+      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction)
       setError(e instanceof Error ? e.message : '찜하기 실패')
     }
   }
@@ -584,13 +635,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     if (wasVisited) next.delete(v.videoId)
     else next.add(v.videoId)
     setVisitedIds(next)
-    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, next)
+    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, next, currentSheetFraction)
 
     try {
       await toggleVisited(toFavoritePayload(v))
     } catch (e) {
       setVisitedIds(visitedIds)
-      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, visitedIds)
+      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction)
       setError(e instanceof Error ? e.message : '표시 실패')
     }
   }
@@ -758,6 +809,15 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       return b.viewCount - a.viewCount
     })
 
+  // Keep the locate-me button clear of whichever bottom sheet is currently
+  // showing (results list or a marker group's video list), instead of
+  // floating on top of it.
+  const locateButtonBottomClass = selectedGroup
+    ? 'bottom-[calc(45dvh+12px)]'
+    : allResults.length > 0
+      ? listOpen ? 'bottom-[calc(50dvh+12px)]' : 'bottom-16'
+      : 'bottom-6'
+
   return (
     <div className="flex flex-1 overflow-hidden relative">
       <Script
@@ -769,13 +829,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Map */}
       <div ref={mapRef} className="flex-1 h-full touch-none" />
 
-      {/* Locate-me button */}
+      {/* Locate-me button — same target+crosshair glyph Google/Kakao/Naver
+          maps use, so its purpose reads at a glance. Sits above whichever
+          bottom sheet is open instead of overlapping it. */}
       <button
-        onClick={getLocation}
+        onClick={handleLocateButtonClick}
         title="현재 위치로 이동"
-        className="absolute bottom-6 left-3 z-20 w-11 h-11 bg-white rounded-full shadow-lg flex items-center justify-center text-lg hover:bg-gray-50 transition"
+        className={`absolute ${locateButtonBottomClass} left-3 z-20 w-11 h-11 bg-white rounded-full shadow-lg flex items-center justify-center text-blue-600 hover:bg-gray-50 transition`}
       >
-        🎯
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+          <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
+        </svg>
       </button>
 
       {/* Hamburger menu */}
