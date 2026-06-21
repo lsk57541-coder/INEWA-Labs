@@ -40,6 +40,43 @@ export async function sendPartnerApprovedEmail(to: string, channelName: string, 
   })
 }
 
+// Unlike the partner-flow emails above (best-effort, failure is silently
+// swallowed by the caller), outreach sends report success/failure back —
+// the caller must not flip status to 'sent' if the email never went out.
+export async function sendOutreachEmail(to: string, subject: string, body: string): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return false
+
+  const resend = new Resend(apiKey)
+  const { error } = await resend.emails.send({
+    from: 'AI맵튜브 <onboarding@resend.dev>',
+    to,
+    subject,
+    html: body.split('\n').map((line) => `<p>${line.trim() ? line : '&nbsp;'}</p>`).join(''),
+  })
+  return !error
+}
+
+export async function sendOutreachFollowUpEmail(to: string, channelName: string): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return false
+
+  const resend = new Resend(apiKey)
+  const { error } = await resend.emails.send({
+    from: 'AI맵튜브 <onboarding@resend.dev>',
+    to,
+    subject: `[AI MAPTUBE] ${channelName} 채널 파트너십 제안 - 다시 안내드립니다`,
+    html: `
+      <p>안녕하세요, <strong>${channelName}</strong> 채널 운영자님.</p>
+      <p>지난번 보내드린 AI MAPTUBE 파트너십 제안에 대해 다시 한번 안내드립니다.</p>
+      <p>궁금한 점이 있으시면 언제든 회신 부탁드립니다.</p>
+      <p>👉 파트너 신청: <a href="https://maptube.ai/partner/apply">https://maptube.ai/partner/apply</a></p>
+      <p>감사합니다. AI MAPTUBE 팀 드림</p>
+    `,
+  })
+  return !error
+}
+
 export async function sendPartnerRejectedEmail(to: string, channelName: string, reason: string) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return
