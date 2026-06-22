@@ -1,9 +1,6 @@
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { PENDING_CHANNEL_COOKIE } from '@/lib/partnerPendingChannel'
-import { completePartnerSignup } from './actions'
 
 const ERROR_MESSAGE: Record<string, string> = {
   youtube_denied: 'YouTube 채널 연동이 취소되었습니다.',
@@ -21,13 +18,6 @@ export default async function PartnerApplyPage({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-
-  // YouTube OAuth가 끝나고 돌아오는 길이면, 입력 폼 없이 바로 가입을 마친다
-  // (Outbound 채널은 outreach에서 이미 검증됐으므로 심사가 필요 없음).
-  const cookieStore = await cookies()
-  if (cookieStore.get(PENDING_CHANNEL_COOKIE)?.value) {
-    await completePartnerSignup()
-  }
 
   return (
     <div className="max-w-lg mx-auto px-4 py-12 text-center">

@@ -6,8 +6,9 @@ import {
   OAUTH_STATE_COOKIE,
   OAUTH_REDIRECT_PATH,
 } from '@/lib/googleOAuth'
-import { PENDING_CHANNEL_COOKIE, PENDING_CHANNEL_MAX_AGE_SEC, type PendingChannel } from '@/lib/partnerPendingChannel'
+import { type PendingChannel } from '@/lib/partnerPendingChannel'
 import { createClient } from '@/lib/supabase/server'
+import { completePartnerSignup } from '@/app/partner/apply/actions'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -46,13 +47,17 @@ export async function GET(request: NextRequest) {
   }
 
   // Reconnecting an already-approved channel: just refresh its tokens in
-  // place instead of routing through the application flow again.
+  // place instead of routing through the application flow again. Only
+  // 'approved' counts — a withdrawn row for the same channel/user must NOT
+  // short-circuit here, or the applicant gets bounced to a dashboard they
+  // can no longer access without ever re-applying.
   if (user) {
     const { data: ownedPartner } = await supabase
       .from('partners')
       .select('id')
       .eq('user_id', user.id)
       .eq('channel_id', channel.channelId)
+      .eq('status', 'approved')
       .maybeSingle()
     if (ownedPartner) {
       await supabase
@@ -68,6 +73,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Outbound 채널은 카테고리/지역 입력 폼이 따로 없으므로, 쿠키로 다음 페이지에
+  // 넘기지 않고 이 Route Handler 안에서 곧바로 가입을 완료한다.
   const pending: PendingChannel = {
     channelId: channel.channelId,
     channelName: channel.channelName,
@@ -75,14 +82,5 @@ export async function GET(request: NextRequest) {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token ?? null,
   }
-
-  const res = NextResponse.redirect(`${origin}/partner/apply`)
-  res.cookies.set(PENDING_CHANNEL_COOKIE, JSON.stringify(pending), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: PENDING_CHANNEL_MAX_AGE_SEC,
-    path: '/',
-  })
-  return res
+  await completePartnerSignup(pending)
 }

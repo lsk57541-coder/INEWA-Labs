@@ -33,22 +33,14 @@ async function findOutreachMatch(
 }
 
 // Outbound 가입 플로우: 우리가 먼저 컨택해 검증한 채널이므로 admin 심사 없이
-// OAuth 연동만으로 즉시 승인한다. /partner/apply 페이지가 연동 완료 직후 호출.
-export async function completePartnerSignup() {
+// OAuth 연동만으로 즉시 승인한다. 쿠키 핸드오프 없이 OAuth 콜백 Route Handler
+// (api/auth/youtube/route.ts)에서 채널을 가져온 직후 바로 호출한다 — 쿠키
+// 삭제/설정은 Server Action이나 Route Handler 안에서만 가능해서, 페이지 렌더링
+// 중에 호출하면 에러가 난다.
+export async function completePartnerSignup(channel: PendingChannel) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-
-  const cookieStore = await cookies()
-  const raw = cookieStore.get(PENDING_CHANNEL_COOKIE)?.value
-  if (!raw) redirect('/partner/apply?error=no_channel')
-
-  let channel: PendingChannel
-  try {
-    channel = JSON.parse(raw) as PendingChannel
-  } catch {
-    redirect('/partner/apply?error=youtube_failed')
-  }
 
   const match = await findOutreachMatch(supabase, channel.channelId, channel.channelName)
 
@@ -64,8 +56,6 @@ export async function completePartnerSignup() {
     youtube_access_token: channel.accessToken,
     youtube_refresh_token: channel.refreshToken,
   })
-
-  cookieStore.delete(PENDING_CHANNEL_COOKIE)
 
   if (error) {
     redirect(error.code === '23505' ? '/partner/apply?error=already_applied' : '/partner/apply?error=youtube_failed')
