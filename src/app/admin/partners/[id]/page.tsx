@@ -46,8 +46,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           </a>
         </p>
         <p>구독자 {(partner.subscriber_count ?? 0).toLocaleString()}명</p>
-        <p>카테고리: {partner.categories.join(', ')}</p>
-        <p>활동 지역: {partner.region}</p>
+        <p>카테고리: {partner.categories?.length ? partner.categories.join(', ') : '-'}</p>
+        <p>활동 지역: {partner.region ?? '-'}</p>
         <p>신청일: {new Date(partner.created_at).toLocaleDateString('ko-KR')}</p>
         <p>
           상태: <span className="font-semibold">{STATUS_LABEL[partner.status] ?? partner.status}</span>

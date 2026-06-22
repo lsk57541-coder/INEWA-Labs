@@ -5,8 +5,84 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { PENDING_CHANNEL_COOKIE, type PendingChannel } from '@/lib/partnerPendingChannel'
 import { PARTNER_CATEGORIES, KOREA_REGIONS } from '@/lib/partnerOptions'
-import { sendPartnerApplicationEmail } from '@/lib/email'
+import { sendPartnerApplicationEmail, sendPartnerApprovedEmail } from '@/lib/email'
 
+// Outbound 채널은 관리자가 outreach_targets에 등록할 때 이미 category/region을
+// 입력해뒀으므로, 가입 폼에서 다시 받지 않고 여기서 복사해온다. 매칭되는 대상이
+// 없으면(Inbound로 직접 들어온 경우) null로 둔다.
+async function findOutreachMatch(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  channelId: string,
+  channelName: string
+): Promise<{ category: string | null; region: string | null } | null> {
+  const byUrl = await supabase
+    .from('outreach_targets')
+    .select('category, region')
+    .ilike('youtube_url', `%${channelId}%`)
+    .limit(1)
+    .maybeSingle()
+  if (byUrl.data) return byUrl.data
+
+  const byName = await supabase
+    .from('outreach_targets')
+    .select('category, region')
+    .ilike('channel_name', channelName)
+    .limit(1)
+    .maybeSingle()
+  return byName.data
+}
+
+// Outbound 가입 플로우: 우리가 먼저 컨택해 검증한 채널이므로 admin 심사 없이
+// OAuth 연동만으로 즉시 승인한다. /partner/apply 페이지가 연동 완료 직후 호출.
+export async function completePartnerSignup() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const cookieStore = await cookies()
+  const raw = cookieStore.get(PENDING_CHANNEL_COOKIE)?.value
+  if (!raw) redirect('/partner/apply?error=no_channel')
+
+  let channel: PendingChannel
+  try {
+    channel = JSON.parse(raw) as PendingChannel
+  } catch {
+    redirect('/partner/apply?error=youtube_failed')
+  }
+
+  const match = await findOutreachMatch(supabase, channel.channelId, channel.channelName)
+
+  const { error } = await supabase.from('partners').insert({
+    user_id: user.id,
+    channel_id: channel.channelId,
+    channel_name: channel.channelName,
+    subscriber_count: channel.subscriberCount,
+    categories: match?.category ? [match.category] : null,
+    region: match?.region ?? null,
+    status: 'approved',
+    grade: 'general',
+    youtube_access_token: channel.accessToken,
+    youtube_refresh_token: channel.refreshToken,
+  })
+
+  cookieStore.delete(PENDING_CHANNEL_COOKIE)
+
+  if (error) {
+    redirect(error.code === '23505' ? '/partner/apply?error=already_applied' : '/partner/apply?error=youtube_failed')
+  }
+
+  if (user.email) {
+    try {
+      await sendPartnerApprovedEmail(user.email, channel.channelName, 'general')
+    } catch {}
+  }
+
+  redirect('/partner/dashboard')
+}
+
+// --- Inbound(유튜버 자발적 신청) 전용, 현재 /partner/apply에서는 호출하지
+// 않음. Inbound 신청을 다시 열 때 카테고리/지역 입력 폼(PartnerApplyForm)과
+// 함께 재사용할 수 있도록 admin 심사 플로우째 남겨둔다. ---
 export interface SubmitState {
   error?: string
 }

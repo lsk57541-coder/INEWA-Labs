@@ -329,8 +329,8 @@ export interface PartnerApplication {
   channel_id: string
   channel_name: string
   subscriber_count: number | null
-  categories: string[]
-  region: string
+  categories: string[] | null
+  region: string | null
   status: 'pending' | 'approved' | 'rejected'
   created_at: string
 }

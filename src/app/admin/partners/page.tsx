@@ -111,8 +111,8 @@ export default async function AdminPartnersPage({
                     </a>
                   </td>
                   <td className="px-3 py-2 text-right">{(p.subscriber_count ?? 0).toLocaleString()}</td>
-                  <td className="px-3 py-2">{p.categories.join(', ')}</td>
-                  <td className="px-3 py-2">{p.region}</td>
+                  <td className="px-3 py-2">{p.categories?.length ? p.categories.join(', ') : '-'}</td>
+                  <td className="px-3 py-2">{p.region ?? '-'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{new Date(p.created_at).toLocaleDateString('ko-KR')}</td>
                   <td className="px-3 py-2">{STATUS_LABEL[p.status] ?? p.status}</td>
                   <td className="px-3 py-2">

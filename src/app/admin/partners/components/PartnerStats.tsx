@@ -26,8 +26,8 @@ export default function PartnerStats({ partners }: { partners: PartnerApplicatio
   const monthCounts = new Map<string, number>()
 
   for (const p of partners) {
-    for (const c of p.categories) categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1)
-    regionCounts.set(p.region, (regionCounts.get(p.region) ?? 0) + 1)
+    for (const c of p.categories ?? []) categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1)
+    if (p.region) regionCounts.set(p.region, (regionCounts.get(p.region) ?? 0) + 1)
     const month = p.created_at.slice(0, 7)
     monthCounts.set(month, (monthCounts.get(month) ?? 0) + 1)
   }
