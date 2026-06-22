@@ -43,7 +43,7 @@ interface MarkerGroup {
 const RADIUS_OPTIONS = [1, 3, 5, 10] as const
 type Radius = (typeof RADIUS_OPTIONS)[number]
 
-function groupByLocation(videos: VideoResult[], thresholdKm = 0.08): MarkerGroup[] {
+function groupByLocation(videos: VideoResult[], thresholdKm: number): MarkerGroup[] {
   const groups: MarkerGroup[] = []
   for (const v of videos) {
     const g = groups.find((gr) => haversineKm(gr.lat, gr.lng, v.lat, v.lng) < thresholdKm)
@@ -54,6 +54,30 @@ function groupByLocation(videos: VideoResult[], thresholdKm = 0.08): MarkerGroup
     }
   }
   return groups
+}
+
+// A fixed real-world clustering radius looks fine at a 1km search (zoomed
+// way in) but leaves dense areas full of overlapping pins at 10km (zoomed
+// way out), since the same 80m on the ground covers far fewer screen pixels
+// once the map is zoomed out. Scale the threshold with the search radius
+// (which also drives the map's zoom level via panTo's levelMap) so distinct
+// pins stay visually separated at every zoom.
+function clusterThresholdKm(radius: Radius): number {
+  return Math.max(0.08, radius * 0.04)
+}
+
+// Used by handleSearch to grab GPS silently when the user searches without
+// ever having set a location — promise-wrapped so the search flow can just
+// await it instead of bouncing the user to a separate "set location first"
+// error (real map apps default to your current location, they don't block).
+function requestCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null)
+    )
+  })
 }
 
 function formatViews(n: number): string {
@@ -116,6 +140,17 @@ function visitedMarkerImage(): kakao.maps.MarkerImage {
     `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(VISITED_MARKER_SVG)}`,
     new kakao.maps.Size(24, 27),
     { offset: new kakao.maps.Point(12, 27) }
+  )
+}
+
+// Shared by every "disabled + 처리 중…" button so a server-bound action
+// reads as busy at a glance, not just as a greyed-out label.
+function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={`${className} animate-spin`} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
   )
 }
 
@@ -272,7 +307,7 @@ function VideoActionRow({
       <button
         onClick={onToggleFavorite}
         title="찜하기"
-        className={`text-xl leading-none transition ${favorited ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
+        className={`text-xl leading-none transition ${favorited ? 'text-favorite' : 'text-gray-300 hover:text-favorite'}`}
       >
         {favorited ? '♥' : '♡'}
       </button>
@@ -283,13 +318,13 @@ function VideoActionRow({
       >
         {visited ? '⚑' : '⚐'}
       </button>
-      <button onClick={onShare} title="카카오톡 공유" className="text-base leading-none text-gray-400 hover:text-yellow-500 transition">
+      <button onClick={onShare} title="카카오톡 공유" className="text-base leading-none text-gray-400 hover:text-gray-600 transition">
         🔗
       </button>
       <button
         onClick={onReport}
         title={reported ? '신고 취소' : '위치 오류 신고'}
-        className={`text-base leading-none transition ${reported ? 'text-red-500' : 'text-gray-400 hover:text-red-400'}`}
+        className={`text-base leading-none transition ${reported ? 'text-danger' : 'text-gray-400 hover:text-danger'}`}
       >
         {reported ? '🚩' : '⚠'}
       </button>
@@ -301,7 +336,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [keyword, setKeyword] = useState('')
   const [radius, setRadius] = useState<Radius>(1)
   const [searchMode, setSearchMode] = useState<'keyword' | 'channel'>('keyword')
-  const [panelOpen, setPanelOpen] = useState(true)
+  const [optionsOpen, setOptionsOpen] = useState(false)
   const [listOpen, setListOpen] = useState(true)
   const [panelOpacity, setPanelOpacity] = useState(0.95)
   const [addressInput, setAddressInput] = useState('')
@@ -571,18 +606,33 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const handleSearch = async () => {
     if (searchMode === 'keyword' && !keyword.trim()) { setError('검색어를 입력해주세요.'); return }
     if (searchMode === 'channel' && !selectedChannel) { setError('유튜브 채널을 선택해주세요.'); return }
-    if (!userPos) { setError('위치를 먼저 설정해주세요.'); return }
 
     setLoading(true)
     setError(null)
+
+    // No location set yet — grab GPS automatically instead of bouncing the
+    // user out to find a "현재 위치로" button first.
+    let pos = userPos
+    if (!pos) {
+      pos = await requestCurrentPosition()
+      if (!pos) {
+        setLoading(false)
+        setError('위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인하거나 검색위치를 직접 입력해주세요.')
+        return
+      }
+      setUserPos(pos)
+      setPosLabel(`현재 위치 (${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)})`)
+      setIsManualLocation(false)
+    }
+
     setAllResults([])
     setSelectedGroup(null)
     setSelectedVideo(null)
 
     try {
       const params = new URLSearchParams({
-        lat: String(userPos.lat),
-        lng: String(userPos.lng),
+        lat: String(pos.lat),
+        lng: String(pos.lng),
         radius: String(radius),
       })
       if (searchMode === 'keyword') params.set('q', keyword)
@@ -595,11 +645,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       const videos = json.results ?? []
       setAllResults(videos)
       setVideoFilter('all')
-      renderMarkers(groupByLocation(videos), userPos, favoriteIds, visitedIds, 0.5)
+      renderMarkers(groupByLocation(videos, clusterThresholdKm(radius)), pos, favoriteIds, visitedIds, 0.5)
 
-      // Close the search panel out of the way and open the results sheet so
-      // the list is visible right away, instead of collapsed to a peek.
-      setPanelOpen(false)
+      // Collapse the options panel out of the way and open the results sheet
+      // so the list is visible right away — the search bar itself (with the
+      // query still showing) stays visible, it just isn't expanded anymore.
+      setOptionsOpen(false)
       setListOpen(true)
 
       if (videos.length === 0) setError('해당 반경 내에 검색 결과가 없습니다.')
@@ -617,13 +668,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     if (wasFavorited) next.delete(v.videoId)
     else next.add(v.videoId)
     setFavoriteIds(next)
-    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, next, visitedIds, currentSheetFraction)
+    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults, clusterThresholdKm(radius)), lastCenterRef.current, next, visitedIds, currentSheetFraction)
 
     try {
       await toggleFavorite(toFavoritePayload(v))
     } catch (e) {
       setFavoriteIds(favoriteIds)
-      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction)
+      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults, clusterThresholdKm(radius)), lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction)
       setError(e instanceof Error ? e.message : '찜하기 실패')
     }
   }
@@ -635,13 +686,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     if (wasVisited) next.delete(v.videoId)
     else next.add(v.videoId)
     setVisitedIds(next)
-    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, next, currentSheetFraction)
+    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults, clusterThresholdKm(radius)), lastCenterRef.current, favoriteIds, next, currentSheetFraction)
 
     try {
       await toggleVisited(toFavoritePayload(v))
     } catch (e) {
       setVisitedIds(visitedIds)
-      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults), lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction)
+      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults, clusterThresholdKm(radius)), lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction)
       setError(e instanceof Error ? e.message : '표시 실패')
     }
   }
@@ -864,69 +915,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         onToggleVisited={handleToggleVisited}
       />
 
-      {/* Search panel — left overlay */}
-      {!panelOpen && (
-        <button
-          onClick={() => setPanelOpen(true)}
-          className="absolute top-16 left-3 z-10 bg-white shadow-lg rounded-full px-4 py-2 text-sm font-medium flex items-center gap-1.5 hover:bg-gray-50 transition"
-        >
-          🔍 검색창 열기
-        </button>
-      )}
-
+      {/* Search bar — always visible single line, like Google/Kakao/Naver
+          Maps. Tap the text directly to type right away; the chevron
+          expands mode/location/radius options below it instead of hiding
+          the bar itself (real map apps don't have a "fully hide search"
+          mode, so neither do we). */}
       <div
-        className={`absolute top-16 left-3 z-10 w-72 rounded-xl shadow-lg overflow-hidden ${panelOpen ? '' : 'hidden'}`}
+        className={`absolute top-16 left-3 z-10 w-72 shadow-lg ${optionsOpen ? 'rounded-2xl' : 'rounded-full'}`}
         style={{ backgroundColor: `rgba(255,255,255,${panelOpacity})` }}
       >
-        {/* Panel header — collapse + opacity control */}
-        <div className="flex items-center justify-between px-3 py-2 border-b">
-          <span className="text-xs font-bold text-gray-700">AI맵튜브 검색</span>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">투명도</span>
-            <input
-              type="range"
-              min={0.3}
-              max={1}
-              step={0.05}
-              value={panelOpacity}
-              onChange={(e) => setPanelOpacity(parseFloat(e.target.value))}
-              className="w-14 accent-blue-600"
-              title="검색창 투명도"
-            />
-            <button
-              onClick={() => setPanelOpen(false)}
-              className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-500 shrink-0"
-              title="검색창 닫기"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* Search mode: keyword or channel */}
-        <div className="px-3 pt-3 pb-2 border-b">
-          <div className="flex gap-1 mb-2">
-            <button
-              onClick={() => setSearchMode('keyword')}
-              className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition ${
-                searchMode === 'keyword'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              🔎 키워드 검색
-            </button>
-            <button
-              onClick={() => setSearchMode('channel')}
-              className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition ${
-                searchMode === 'channel'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              🎙 유튜브 채널 검색
-            </button>
-          </div>
+        <div className="relative flex items-center gap-2 h-11 px-3">
+          <span className="shrink-0 text-base">{searchMode === 'channel' ? '🎙' : '🔎'}</span>
 
           {searchMode === 'keyword' ? (
             <input
@@ -935,11 +934,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               onChange={(e) => setKeyword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               placeholder="키워드 검색 (예: 한강 카페, 제주 맛집)"
-              className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+              className="flex-1 min-w-0 text-sm outline-none bg-transparent placeholder-gray-400"
             />
           ) : selectedChannel ? (
-            <div className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-lg px-3 py-2 text-xs font-medium">
-              <span className="flex-1 truncate">🎙 {selectedChannel.title} 채널 영상만 검색</span>
+            <div className="flex-1 min-w-0 flex items-center gap-1.5 text-xs font-medium text-blue-700">
+              <span className="flex-1 truncate">{selectedChannel.title} 채널만 검색</span>
               <button
                 onClick={() => { setSelectedChannel(null); setChannelQuery('') }}
                 className="shrink-0 text-blue-400 hover:text-blue-600"
@@ -949,118 +948,172 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </button>
             </div>
           ) : (
-            <div className="relative">
-              <input
-                type="text"
-                value={channelQuery}
-                onChange={(e) => handleChannelQueryChange(e.target.value)}
-                placeholder="유튜버 채널명으로 검색"
-                className="w-full text-xs border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
-              />
-              {channelSearching && <p className="text-xs text-gray-400 mt-1">검색 중…</p>}
-              {channelSuggestions.length > 0 && (
-                <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {channelSuggestions.map((c) => (
-                    <button
-                      key={c.channelId}
-                      onClick={() => {
-                        setSelectedChannel(c)
-                        setChannelQuery('')
-                        setChannelSuggestions([])
-                      }}
-                      className="w-full flex items-center gap-2 text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={c.thumbnail} alt="" className="w-6 h-6 rounded-full shrink-0" />
-                      <p className="text-sm font-medium truncate">{c.title}</p>
-                    </button>
-                  ))}
-                </div>
-              )}
+            <input
+              type="text"
+              value={channelQuery}
+              onChange={(e) => handleChannelQueryChange(e.target.value)}
+              placeholder="유튜버 채널명으로 검색"
+              className="flex-1 min-w-0 text-sm outline-none bg-transparent placeholder-gray-400"
+            />
+          )}
+
+          <button
+            onClick={() => setOptionsOpen((o) => !o)}
+            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
+            title={optionsOpen ? '검색 옵션 닫기' : '검색 옵션 (모드·위치·반경)'}
+          >
+            {optionsOpen ? '▲' : '▾'}
+          </button>
+
+          {/* Channel suggestions overlay this bar regardless of whether the
+              options section below is expanded. */}
+          {searchMode === 'channel' && !selectedChannel && (channelSearching || channelSuggestions.length > 0) && (
+            <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {channelSearching && <p className="text-xs text-gray-400 px-3 py-2">검색 중…</p>}
+              {channelSuggestions.map((c) => (
+                <button
+                  key={c.channelId}
+                  onClick={() => {
+                    setSelectedChannel(c)
+                    setChannelQuery('')
+                    setChannelSuggestions([])
+                  }}
+                  className="w-full flex items-center gap-2 text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.thumbnail} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                  <p className="text-sm font-medium truncate">{c.title}</p>
+                </button>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Search location: direct address input, plus a shortcut back to GPS */}
-        <div className="px-3 pt-2 pb-2 border-b">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-xs text-gray-400 font-medium">📍 검색위치 직접입력</p>
-            <button
-              onClick={getLocation}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium transition"
-            >
-              🎯 현재 위치로
-            </button>
-          </div>
-          <div className="relative">
+        {/* Validation/search errors must stay visible even while the
+            options below are collapsed, since Enter in the bar above can
+            trigger handleSearch directly. */}
+        {error && <p className="px-3 pb-2 text-xs text-red-500">{error}</p>}
+
+        <div className={`overflow-hidden transition-all duration-200 ${optionsOpen ? 'max-h-[28rem]' : 'max-h-0'}`}>
+          <div className="px-3 pt-2 pb-3 border-t space-y-3">
+            {/* Search mode */}
             <div className="flex gap-1">
-              <input
-                type="text"
-                value={addressInput}
-                onChange={(e) => handleAddressInputChange(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
-                placeholder="지역명 또는 주소 입력"
-                className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
-              />
               <button
-                onClick={handleAddressSearch}
-                disabled={addressLoading}
-                className="shrink-0 text-xs bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-40 transition"
+                onClick={() => setSearchMode('keyword')}
+                className={`flex-1 text-xs py-1.5 rounded-full font-medium transition ${
+                  searchMode === 'keyword'
+                    ? 'bg-accent text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
               >
-                {addressLoading ? '…' : '검색'}
+                🔎 키워드 검색
+              </button>
+              <button
+                onClick={() => setSearchMode('channel')}
+                className={`flex-1 text-xs py-1.5 rounded-full font-medium transition ${
+                  searchMode === 'channel'
+                    ? 'bg-accent text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                🎙 유튜브 채널 검색
               </button>
             </div>
-            {locationSuggestions.length > 0 && (
-              <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                {locationSuggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => selectLocationSuggestion(s)}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
-                  >
-                    <p className="text-sm font-medium">{s.name}</p>
-                    <p className="text-xs text-gray-400">{s.address}</p>
-                  </button>
-                ))}
+
+            {/* Search location: direct address input, plus a shortcut back to GPS */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs text-gray-400 font-medium">📍 검색위치 직접입력</p>
+                <button
+                  onClick={getLocation}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium transition"
+                >
+                  🎯 현재 위치로
+                </button>
               </div>
-            )}
-          </div>
+              <div className="relative">
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={addressInput}
+                    onChange={(e) => handleAddressInputChange(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
+                    placeholder="지역명 또는 주소 입력"
+                    className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                  />
+                  <button
+                    onClick={handleAddressSearch}
+                    disabled={addressLoading}
+                    className="shrink-0 text-xs bg-gray-100 text-gray-700 rounded-lg px-3 py-2 hover:bg-gray-200 disabled:opacity-40 transition"
+                  >
+                    {addressLoading ? '…' : '검색'}
+                  </button>
+                </div>
+                {locationSuggestions.length > 0 && (
+                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {locationSuggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        onClick={() => selectLocationSuggestion(s)}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                      >
+                        <p className="text-sm font-medium">{s.name}</p>
+                        <p className="text-xs text-gray-400">{s.address}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-          {posLabel !== '위치 미설정' && (
-            <p className="text-xs text-blue-600 mt-1.5 truncate font-medium">{posLabel}</p>
-          )}
-        </div>
+              {posLabel !== '위치 미설정' && (
+                <p className="text-xs text-blue-600 mt-1.5 truncate font-medium">{posLabel}</p>
+              )}
+            </div>
 
-        {/* Radius */}
-        <div className="px-3 pb-2 flex gap-1.5">
-          {RADIUS_OPTIONS.map((r) => (
+            {/* Radius */}
+            <div className="flex gap-1.5">
+              {RADIUS_OPTIONS.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRadius(r)}
+                  className={`flex-1 text-xs rounded-full py-1.5 border transition font-medium ${
+                    radius === r
+                      ? 'bg-accent text-white border-accent'
+                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  {r}km
+                </button>
+              ))}
+            </div>
+
+            {/* Panel opacity — only worth controlling once the panel is
+                tall enough to meaningfully block the map underneath. */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 shrink-0">투명도</span>
+              <input
+                type="range"
+                min={0.3}
+                max={1}
+                step={0.05}
+                value={panelOpacity}
+                onChange={(e) => setPanelOpacity(parseFloat(e.target.value))}
+                className="flex-1 accent-blue-600"
+                title="검색창 투명도"
+              />
+            </div>
+
+            {/* Search button */}
             <button
-              key={r}
-              onClick={() => setRadius(r)}
-              className={`flex-1 text-xs rounded-lg py-1.5 border transition font-medium ${
-                radius === r
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-              }`}
+              onClick={handleSearch}
+              disabled={loading || !mapReady}
+              className="w-full flex items-center justify-center gap-1.5 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 disabled:opacity-40 transition"
             >
-              {r}km
+              {loading && <Spinner />}
+              {loading ? '검색 중…' : '검색'}
             </button>
-          ))}
+          </div>
         </div>
-
-        {/* Search button */}
-        <div className="px-3 pb-3">
-          <button
-            onClick={handleSearch}
-            disabled={loading || !mapReady}
-            className="w-full text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 disabled:opacity-40 transition"
-          >
-            {loading ? '검색 중…' : '검색'}
-          </button>
-        </div>
-
-        {/* Error */}
-        {error && <div className="px-3 pb-3 text-xs text-red-500">{error}</div>}
       </div>
 
       {/* Results list — independent bottom sheet, slides up from the bottom */}
@@ -1103,7 +1156,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                 }`}
               >
-                {key === 'long' ? <LongformIcon className="w-5 h-5" /> : key === 'short' ? <ShortsIcon className="w-5 h-5" /> : label}
+                {key === 'long' ? (
+                  <><LongformIcon className="w-4 h-4" /> 롱폼</>
+                ) : key === 'short' ? (
+                  <><ShortsIcon className="w-4 h-4" /> 쇼츠</>
+                ) : (
+                  label
+                )}
               </button>
             ))}
           </div>
@@ -1112,9 +1171,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               <button
                 key={key}
                 onClick={() => setSortBy(key)}
-                className={`flex-1 text-xs rounded-lg py-1.5 border transition font-medium ${
+                className={`flex-1 text-xs rounded-full py-1.5 border transition font-medium ${
                   sortBy === key
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-accent text-white border-accent'
                     : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                 }`}
               >
@@ -1123,6 +1182,23 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             ))}
           </div>
           <div className="overflow-y-auto flex-1">
+            {filteredResults.length === 0 && (
+              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center px-6">
+                <p className="text-sm text-gray-400">
+                  {videoFilter === 'all' ? '조건에 맞는 영상이 없어요' : '이 필터에 맞는 영상이 없어요'}
+                </p>
+                {videoFilter !== 'all' ? (
+                  <button
+                    onClick={() => setVideoFilter('all')}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    전체 보기로 전환
+                  </button>
+                ) : (
+                  <p className="text-xs text-gray-400">반경을 넓히거나 다른 키워드로 검색해보세요</p>
+                )}
+              </div>
+            )}
             {filteredResults.map((v) => (
               <div
                 key={v.videoId}
@@ -1179,7 +1255,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       )}
 
       {/* Video list — bottom sheet capped under half the screen, shown when a map marker is clicked */}
-      {selectedGroup && (
+      {selectedGroup && !selectedVideo && (
         <div
           className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl flex flex-col"
           style={{ maxHeight: '45dvh' }}
@@ -1424,8 +1500,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   (reportReason === 'wrong_address' &&
                     (!reportSelected || (!reportFixAddress && !reportFixName)))
                 }
-                className="flex-1 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 transition disabled:opacity-40"
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 transition disabled:opacity-40"
               >
+                {reportSubmitting && <Spinner />}
                 {reportSubmitting ? '제출 중…' : '제출'}
               </button>
             </div>

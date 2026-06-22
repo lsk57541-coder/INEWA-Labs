@@ -88,7 +88,7 @@ export default function FavoritesOverlay({
             onClick={() => setTab(key)}
             className={`text-xs font-medium px-3 py-1.5 rounded-full border transition ${
               tab === key
-                ? 'bg-red-50 text-red-500 border-red-300'
+                ? 'bg-accent text-white border-accent'
                 : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
             }`}
           >
