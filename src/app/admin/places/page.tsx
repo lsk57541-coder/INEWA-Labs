@@ -1,51 +1,51 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { getMyPartner } from '../actions'
-import PlacesList from './PlacesList'
+import { redirect } from 'next/navigation'
+import PlaceReviewList from './PlaceReviewList'
 
 const TABS = [
   { key: '', label: '전체' },
-  { key: 'active', label: '지도 표시 중' },
   { key: 'reviewing', label: '검토 중' },
+  { key: 'active', label: '승인됨' },
   { key: 'rejected', label: '반려됨' },
-  { key: 'hidden', label: '비공개' },
 ] as const
 
-export default async function PartnerPlacesPage({
+export default async function AdminPlacesPage({
   searchParams,
 }: {
   searchParams: Promise<{ status?: string }>
 }) {
   const { status } = await searchParams
-  const partner = await getMyPartner()
-
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') redirect('/')
+
   let query = supabase
     .from('places')
-    .select('id, name, address, category, video_url, status, click_count, rejection_reason')
-    .eq('partner_id', partner.id)
+    .select('id, name, address, category, video_url, status, rejection_reason, created_at, partners(channel_name)')
     .order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
 
   const { data: places } = await query
 
   return (
-    <div>
+    <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold">장소 관리</h1>
-        <Link
-          href="/partner/dashboard/places/extract"
-          className="text-xs bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition"
-        >
-          + 영상으로 등록하기
-        </Link>
+        <div>
+          <Link href="/admin" className="text-xs text-gray-400 hover:text-gray-600">← 관리자 홈</Link>
+          <h1 className="text-xl font-bold mt-1">파트너 장소 검토</h1>
+        </div>
       </div>
 
       <div className="flex gap-1.5 mb-4">
-        {TABS.map((t) => (
+        {TABS.map(t => (
           <Link
             key={t.key}
-            href={t.key ? `/partner/dashboard/places?status=${t.key}` : '/partner/dashboard/places'}
+            href={t.key ? `/admin/places?status=${t.key}` : '/admin/places'}
             className={`text-xs px-3 py-1.5 rounded-lg border transition font-medium ${
               (status ?? '') === t.key
                 ? 'bg-black text-white border-black'
@@ -57,7 +57,7 @@ export default async function PartnerPlacesPage({
         ))}
       </div>
 
-      <PlacesList places={places ?? []} />
+      <PlaceReviewList places={(places ?? []) as unknown as Parameters<typeof PlaceReviewList>[0]['places']} />
     </div>
   )
 }

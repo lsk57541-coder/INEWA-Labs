@@ -9,14 +9,23 @@ export interface Place {
   address: string | null
   category: string | null
   video_url: string | null
-  status: 'active' | 'reviewing' | 'hidden'
+  status: 'active' | 'reviewing' | 'hidden' | 'rejected'
   click_count: number
+  rejection_reason?: string | null
+}
+
+const STATUS_BADGE: Record<string, string> = {
+  active: 'bg-green-100 text-green-700',
+  reviewing: 'bg-yellow-100 text-yellow-700',
+  hidden: 'bg-gray-100 text-gray-500',
+  rejected: 'bg-red-100 text-red-700',
 }
 
 const STATUS_LABEL: Record<string, string> = {
   active: '지도 표시 중',
   reviewing: '검토 중',
   hidden: '비공개',
+  rejected: '반려됨',
 }
 
 export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: (id: string) => void }) {
@@ -61,7 +70,9 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
           onBlur={() => saveField({ name: fields.name })}
           className="flex-1 text-sm font-medium border-b border-transparent hover:border-gray-200 focus:border-blue-400 outline-none px-1 py-0.5"
         />
-        <span className="text-xs text-gray-400 shrink-0">{STATUS_LABEL[place.status]}</span>
+        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_BADGE[place.status] ?? 'bg-gray-100 text-gray-500'}`}>
+          {STATUS_LABEL[place.status] ?? place.status}
+        </span>
       </div>
 
       <input
@@ -102,6 +113,11 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
           </button>
         )}
       </div>
+      {place.status === 'rejected' && place.rejection_reason && (
+        <p className="text-xs text-red-600 bg-red-50 rounded px-2 py-1.5">
+          반려 사유: {place.rejection_reason}
+        </p>
+      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   )

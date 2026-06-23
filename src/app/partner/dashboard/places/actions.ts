@@ -74,3 +74,42 @@ export async function hidePlace(id: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/partner/dashboard/places')
 }
+
+export interface BulkPlaceInput {
+  name: string
+  address?: string
+  category?: string
+  video_url?: string
+  latitude?: number
+  longitude?: number
+}
+
+export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ succeeded: number; errors: string[] }> {
+  const supabase = await createClient()
+  const partnerId = await requireMyPartnerId()
+
+  let succeeded = 0
+  const errors: string[] = []
+
+  for (const p of places) {
+    if (!p.name?.trim()) continue
+    const { error } = await supabase.from('places').insert({
+      partner_id: partnerId,
+      name: p.name.trim(),
+      address: p.address?.trim() || null,
+      category: p.category?.trim() || null,
+      video_url: p.video_url?.trim() || null,
+      latitude: p.latitude ?? null,
+      longitude: p.longitude ?? null,
+      status: 'reviewing',
+    })
+    if (error) {
+      errors.push(`${p.name}: ${error.message}`)
+    } else {
+      succeeded++
+    }
+  }
+
+  revalidatePath('/partner/dashboard/places')
+  return { succeeded, errors }
+}
