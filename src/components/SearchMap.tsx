@@ -1028,6 +1028,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         visitedIds={visitedIds}
         onToggleFavorite={handleToggleFavoriteById}
         onToggleVisited={handleToggleVisited}
+        onJumpToPlace={(lat, lng, videoId) => {
+          setFavoritesOverlayOpen(false)
+          panTo(lat, lng, 0)
+          const match = allResults.find((r) => r.videoId === videoId)
+          if (match) setSelectedVideo(match)
+        }}
       />
       <OnboardingOverlay key={onboardingKey} searchBarRef={searchBarRef} hamburgerRef={hamburgerRef} />
 
