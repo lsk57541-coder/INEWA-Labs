@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getPartnerApplications } from '@/app/actions'
 import dynamic from 'next/dynamic'
-const PartnerStats = dynamic(() => import('./components/PartnerStats'), { ssr: false })
+const PartnerStats = dynamic(() => import('./components/PartnerStats'), {
+  loading: () => <div className="h-40 bg-gray-100 rounded-lg animate-pulse" />,
+})
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '검토 중',
