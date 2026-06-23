@@ -31,7 +31,7 @@ const STEPS = [
     targetKey: 'none' as const,
     title: '마커를 탭하면 영상을 볼 수 있어요',
     description: '지도 위 빨간 핀을 클릭하면\n해당 장소의 유튜브 영상이 바로 열려요',
-    tooltipDir: 'center' as const,
+    tooltipDir: 'below-marker' as const,
   },
   {
     targetKey: 'hamburger' as const,
@@ -40,6 +40,21 @@ const STEPS = [
     tooltipDir: 'right' as const,
   },
 ]
+
+function MapPinIcon() {
+  return (
+    <svg width="40" height="48" viewBox="0 0 80 92" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M40 4C23.4 4 10 17.4 10 34C10 53.5 40 88 40 88C40 88 70 53.5 70 34C70 17.4 56.6 4 40 4Z"
+        fill="#FF5C5C"
+      />
+      <circle cx="40" cy="34" r="19" fill="rgba(0,0,0,0.18)" />
+      <ellipse cx="33" cy="23" rx="7" ry="4.5" fill="rgba(255,255,255,0.18)" />
+      <polygon points="34,24 34,44 54,34" fill="white" />
+      <ellipse cx="40" cy="91" rx="7" ry="2.5" fill="rgba(255,92,92,0.22)" />
+    </svg>
+  )
+}
 
 export default function OnboardingOverlay({ searchBarRef, hamburgerRef }: OnboardingOverlayProps) {
   const [visible, setVisible] = useState(false)
@@ -89,21 +104,26 @@ export default function OnboardingOverlay({ searchBarRef, hamburgerRef }: Onboar
 
   const current = STEPS[step]
   const totalSteps = STEPS.length
-
-  // Tooltip position
   const vw = typeof window !== 'undefined' ? window.innerWidth : 390
   const TOOLTIP_W = 260
 
+  // Tooltip position
   let tooltipStyle: React.CSSProperties = {}
-  if (current.tooltipDir === 'center' || !rect) {
+  if (current.tooltipDir === 'below-marker') {
+    tooltipStyle = {
+      position: 'fixed',
+      top: 'calc(36% + 68px)',
+      left: '50%',
+      transform: 'translateX(-50%)',
+    }
+  } else if (!rect || current.tooltipDir === ('center' as string)) {
     tooltipStyle = { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
   } else if (current.tooltipDir === 'below') {
     const left = Math.max(12, Math.min(rect.left, vw - TOOLTIP_W - 12))
     tooltipStyle = { position: 'fixed', top: rect.bottom + PADDING + 8, left }
   } else if (current.tooltipDir === 'right') {
     const left = rect.right + PADDING + 8
-    const top = rect.top
-    tooltipStyle = { position: 'fixed', top, left: Math.min(left, vw - TOOLTIP_W - 12) }
+    tooltipStyle = { position: 'fixed', top: rect.top, left: Math.min(left, vw - TOOLTIP_W - 12) }
   }
 
   // SVG spotlight dimensions
@@ -130,10 +150,31 @@ export default function OnboardingOverlay({ searchBarRef, hamburgerRef }: Onboar
         <rect width="100%" height="100%" fill="rgba(0,0,0,0.68)" mask="url(#ob-mask)" />
       </svg>
 
+      {/* Step 2: example marker with pulse, above the dim */}
+      {step === 1 && (
+        <div
+          className="fixed pointer-events-none z-[61]"
+          style={{ top: '36%', left: '50%', transform: 'translate(-50%, -100%)' }}
+        >
+          <div className="relative flex items-center justify-center">
+            {/* Pulse rings */}
+            <span
+              className="absolute rounded-full bg-red-400 animate-ping opacity-40"
+              style={{ width: 44, height: 44, top: 2, left: '50%', transform: 'translateX(-50%)' }}
+            />
+            <span
+              className="absolute rounded-full bg-red-300 animate-ping opacity-20"
+              style={{ width: 60, height: 60, top: -6, left: '50%', transform: 'translateX(-50%)', animationDelay: '0.3s' }}
+            />
+            <MapPinIcon />
+          </div>
+        </div>
+      )}
+
       {/* Tooltip card */}
       <div
         className="bg-white rounded-2xl shadow-2xl p-4 pointer-events-auto"
-        style={{ ...tooltipStyle, width: TOOLTIP_W }}
+        style={{ ...tooltipStyle, width: TOOLTIP_W, position: 'fixed' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Progress bar */}
@@ -159,10 +200,7 @@ export default function OnboardingOverlay({ searchBarRef, hamburgerRef }: Onboar
         )}
 
         <div className="flex items-center justify-between">
-          <button
-            onClick={finish}
-            className="text-xs text-gray-400 hover:text-gray-600 transition"
-          >
+          <button onClick={finish} className="text-xs text-gray-400 hover:text-gray-600 transition">
             건너뛰기
           </button>
           <button
