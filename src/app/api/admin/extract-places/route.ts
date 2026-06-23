@@ -18,6 +18,41 @@ function mmssToSeconds(mmss: string): number | null {
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10)
 }
 
+// Clean trailing parenthetical notes like "(수영장 - 바베큐 풀빌라)" from place names
+function cleanName(raw: string): string {
+  return raw.replace(/\s*[\(\（].*?[\)\）]$/, '').replace(/\s+/g, ' ').trim()
+}
+
+// Non-place keywords to skip from timestamp lines
+const SKIP_KEYWORDS = ['인트로', '아침', '점심', '저녁', '출발', '이동', '도착', '일기', 'outro', 'intro', 'ending']
+
+// Primary extraction: parse "mm:ss 장소명" lines directly from description.
+// Works without Claude and handles the most common Korean travel vlog format.
+function extractFromTimestamps(description: string): ExtractedPlace[] {
+  const results: ExtractedPlace[] = []
+  const lines = description.split('\n')
+
+  for (const line of lines) {
+    const match = line.trim().match(/^(\d{1,2}:\d{2})\s+(.+)$/)
+    if (!match) continue
+
+    const [, ts, rawName] = match
+    const name = cleanName(rawName)
+    if (!name || name.length < 2) continue
+
+    // Skip lines that are clearly not businesses
+    const lower = name.toLowerCase()
+    if (SKIP_KEYWORDS.some(kw => lower.includes(kw))) continue
+
+    // Skip lines that look like pure Korean geography (도/시/군 etc.) with no brand feel
+    if (/^[가-힣]{2,4}(시|군|구|동|읍|면)$/.test(name)) continue
+
+    results.push({ name, timestamp_seconds: mmssToSeconds(ts) })
+  }
+
+  return results.slice(0, 15)
+}
+
 async function getVideoSnippet(videoId: string): Promise<YouTubeSnippet | null> {
   const key = process.env.YOUTUBE_API_KEY
   if (!key) return null
@@ -30,7 +65,8 @@ async function getVideoSnippet(videoId: string): Promise<YouTubeSnippet | null> 
   return item.snippet
 }
 
-async function extractBusinessNames(title: string, description: string): Promise<ExtractedPlace[]> {
+// Fallback: use Claude when no timestamp-format entries found
+async function extractWithClaude(title: string, description: string): Promise<ExtractedPlace[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return []
 
@@ -65,9 +101,10 @@ ${text}`,
     return parsed
       .filter(p => p.name && typeof p.name === 'string')
       .map(p => ({
-        name: p.name.trim(),
+        name: cleanName(p.name),
         timestamp_seconds: p.timestamp ? mmssToSeconds(p.timestamp) : null,
       }))
+      .filter(p => p.name.length >= 2)
       .slice(0, 15)
   } catch {
     return []
@@ -89,6 +126,13 @@ export async function GET(request: NextRequest) {
   const snippet = await getVideoSnippet(videoId)
   if (!snippet) return NextResponse.json({ error: '영상을 찾을 수 없습니다' }, { status: 404 })
 
-  const places = await extractBusinessNames(snippet.title, snippet.description)
+  // Try timestamp regex first (fast, no API call needed)
+  let places = extractFromTimestamps(snippet.description)
+
+  // Fall back to Claude if nothing found via regex
+  if (places.length === 0) {
+    places = await extractWithClaude(snippet.title, snippet.description)
+  }
+
   return NextResponse.json({ places })
 }
