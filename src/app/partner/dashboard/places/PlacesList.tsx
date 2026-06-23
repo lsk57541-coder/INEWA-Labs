@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useOptimistic, useState, useTransition } from 'react'
 import PlaceRow, { type Place } from './PlaceRow'
 import AddPlaceModal from './AddPlaceModal'
@@ -39,24 +40,51 @@ export default function PlacesList({ places }: { places: Place[] }) {
   }
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setModalOpen(true)}
-        className="mb-4 text-sm bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
-      >
-        + 장소 수동 추가
-      </button>
-
+    <div>
       {modalOpen && <AddPlaceModal onSubmit={handleAdd} onClose={() => setModalOpen(false)} />}
 
       {optimisticPlaces.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-12">등록된 장소가 없습니다</p>
+        <div className="border rounded-lg p-8 text-center mt-2">
+          <p className="text-sm font-medium mb-1">등록된 장소가 없어요</p>
+          <p className="text-xs text-gray-400 mb-6">영상에서 방문 장소를 자동으로 추출해 등록할 수 있어요</p>
+          <Link
+            href="/partner/dashboard/places/extract"
+            className="inline-block bg-black text-white text-sm font-medium px-6 py-3 rounded-lg hover:bg-gray-800 transition"
+          >
+            영상으로 장소 등록하기
+          </Link>
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition"
+            >
+              직접 입력하기
+            </button>
+          </div>
+        </div>
       ) : (
-        <div className="space-y-3">
-          {optimisticPlaces.map((p) => (
-            <PlaceRow key={p.id} place={p} onHidden={handleHidden} />
-          ))}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <Link
+              href="/partner/dashboard/places/extract"
+              className="text-sm bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+            >
+              + 영상으로 등록하기
+            </Link>
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition"
+            >
+              직접 입력
+            </button>
+          </div>
+          <div className="space-y-3">
+            {optimisticPlaces.map((p) => (
+              <PlaceRow key={p.id} place={p} onHidden={handleHidden} />
+            ))}
+          </div>
         </div>
       )}
     </div>

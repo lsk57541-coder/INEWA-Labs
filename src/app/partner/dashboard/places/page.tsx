@@ -31,15 +31,7 @@ export default async function PartnerPlacesPage({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold">장소 관리</h1>
-        <Link
-          href="/partner/dashboard/places/extract"
-          className="text-xs bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition"
-        >
-          + 영상으로 등록하기
-        </Link>
-      </div>
+      <h1 className="text-xl font-bold mb-6">장소 관리</h1>
 
       <div className="flex gap-1.5 mb-4">
         {TABS.map((t) => (
