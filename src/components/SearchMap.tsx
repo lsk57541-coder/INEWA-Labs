@@ -620,8 +620,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     [radius, panTo]
   )
 
-  const handleSearch = async (opts?: { radiusOverride?: number }) => {
-    if (searchMode === 'keyword' && !keyword.trim()) { setError('검색어를 입력해주세요.'); return }
+  const handleSearch = async (opts?: { radiusOverride?: number; keywordOverride?: string }) => {
+    const effectiveKeyword = opts?.keywordOverride ?? keyword
+    if (searchMode === 'keyword' && !effectiveKeyword.trim()) { setError('검색어를 입력해주세요.'); return }
     if (searchMode === 'channel' && !selectedChannel) { setError('유튜버 채널을 선택해주세요.'); return }
 
     setLoading(true)
@@ -654,7 +655,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         lng: String(pos.lng),
         radius: String(effectiveRadius),
       })
-      if (searchMode === 'keyword') params.set('q', keyword)
+      if (searchMode === 'keyword') params.set('q', effectiveKeyword)
       else if (selectedChannel) params.set('channelId', selectedChannel.channelId)
       const res = await fetch(`/api/search?${params}`)
       const json = await res.json() as { results?: VideoResult[]; error?: string }
@@ -673,7 +674,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       setListOpen(true)
 
       if (videos.length === 0) {
-        setLastSearchQuery(searchMode === 'keyword' ? keyword.trim() : (selectedChannel?.title ?? ''))
+        setLastSearchQuery(searchMode === 'keyword' ? effectiveKeyword.trim() : (selectedChannel?.title ?? ''))
         setRadius(effectiveRadius as Radius)
       }
     } catch (e) {
@@ -1176,60 +1177,41 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       )}
       {/* No results state */}
       {noResults && !selectedGroup && (() => {
-        const nextRadius = RADIUS_OPTIONS[RADIUS_OPTIONS.indexOf(radius) + 1] as Radius | undefined
+        const q = (lastSearchQuery ?? '').toLowerCase()
+        let chips: string[]
+        if (/맛집|음식|식당|밥|레스토랑|한식|중식|일식|양식|치킨|피자|고기|술/.test(q)) {
+          chips = ['레스토랑', '한식', '양식', '일식', '브런치']
+        } else if (/카페|커피|디저트|케이크|빵|베이커리/.test(q)) {
+          chips = ['커피', '디저트', '브런치', '베이커리']
+        } else if (/여행|관광|명소|핫플|숙소|호텔|펜션/.test(q)) {
+          chips = ['관광지', '핫플', '명소', '숙소']
+        } else {
+          chips = ['맛집', '카페', '여행', '숙소']
+        }
         return (
-          <div className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl px-4 pb-6 pt-3">
-            <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-4" />
-            <div className="flex flex-col items-center text-center mb-4">
-              <svg className="mb-2" width="36" height="36" viewBox="0 0 36 36" fill="none">
-                <circle cx="18" cy="18" r="17" stroke="#E5E7EB" strokeWidth="2" />
-                <path d="M12 20c1.5-2 4-3 6-3s4.5 1 6 3" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
-                <circle cx="13" cy="15" r="1.5" fill="#9CA3AF" />
-                <circle cx="23" cy="15" r="1.5" fill="#9CA3AF" />
-              </svg>
-              <p className="text-sm font-semibold text-gray-800">
-                &ldquo;{lastSearchQuery}&rdquo; 검색 결과가 없어요
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                반경을 넓히거나 다른 키워드로 시도해보세요
-              </p>
-            </div>
-            {nextRadius && (
-              <button
-                onClick={() => handleSearch({ radiusOverride: nextRadius })}
-                className="w-full text-sm border border-gray-200 text-gray-600 rounded-lg py-2.5 mb-4 hover:bg-gray-50 transition font-medium"
-              >
-                반경 {radius}km → {nextRadius}km로 넓혀서 재검색
-              </button>
-            )}
-            <p className="text-xs text-gray-400 mb-2.5">이런 검색 어때요?</p>
-            <div className="flex flex-wrap gap-2">
-              {['한강 카페', '성수 맛집', '제주 흑돼지', '홍대 라멘', '부산 회', '강남 디저트'].map((ex) => (
+          <div className="absolute top-[140px] left-1/2 -translate-x-1/2 z-10 w-72 max-w-[calc(100vw-24px)] bg-white rounded-2xl shadow-xl px-4 py-4">
+            <p className="text-sm font-semibold text-gray-800 mb-1 text-center">
+              이 지역에서 &lsquo;{lastSearchQuery}&rsquo; 결과가 없어요
+            </p>
+            <p className="text-xs text-gray-400 text-center mb-3">다른 키워드로 찾아볼까요?</p>
+            <div className="flex flex-wrap gap-1.5 justify-center mb-3">
+              {chips.map((chip) => (
                 <button
-                  key={ex}
+                  key={chip}
                   onClick={() => {
-                    setKeyword(ex)
+                    setKeyword(chip)
                     setSearchMode('keyword')
-                    setLastSearchQuery(null)
+                    handleSearch({ keywordOverride: chip })
                   }}
-                  className="text-xs bg-gray-100 text-gray-600 rounded-full px-3 py-1.5 hover:bg-gray-200 transition"
+                  className="text-xs border border-gray-800 text-gray-800 rounded-full px-3 py-1 hover:bg-gray-800 hover:text-white transition font-medium"
                 >
-                  {ex}
+                  {chip}
                 </button>
               ))}
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-100 text-center">
-              <p className="text-xs text-gray-500 mb-3">
-                아직 이 지역 데이터가 부족해요.<br />
-                파트너 유튜버가 늘어날수록 더 많은 장소가 표시됩니다.
-              </p>
-              <a
-                href="/partner/apply"
-                className="inline-block text-xs font-medium text-white bg-black rounded-lg px-4 py-2 hover:bg-gray-800 transition"
-              >
-                파트너 유튜버 신청하기
-              </a>
-            </div>
+            <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+              더 많은 장소는 유튜버 파트너가 늘어날수록 채워집니다
+            </p>
           </div>
         )
       })()}
