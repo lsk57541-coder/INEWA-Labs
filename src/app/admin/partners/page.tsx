@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getPartnerApplications } from '@/app/actions'
-import PartnerStats from './components/PartnerStats'
+import dynamic from 'next/dynamic'
+const PartnerStats = dynamic(() => import('./components/PartnerStats'), { ssr: false })
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '검토 중',

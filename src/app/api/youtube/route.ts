@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     key: process.env.YOUTUBE_API_KEY!,
   })
 
-  const res = await fetch(`${YOUTUBE_API_BASE}/search?${params}`)
+  const res = await fetch(`${YOUTUBE_API_BASE}/search?${params}`, { next: { revalidate: 300 } })
   const data = await res.json()
 
   if (!res.ok) {

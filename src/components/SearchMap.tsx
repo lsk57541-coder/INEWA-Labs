@@ -873,12 +873,28 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     <div className="flex flex-1 overflow-hidden relative">
       <Script
         src={`//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY}&autoload=false&libraries=drawing`}
+        strategy="afterInteractive"
         onLoad={initMap}
       />
-      <Script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" />
+      <Script
+        src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"
+        strategy="lazyOnload"
+      />
 
       {/* Map */}
       <div ref={mapRef} className="flex-1 h-full touch-none" />
+      {!mapReady && (
+        <div className="absolute inset-0 z-[5] pointer-events-none bg-gray-100 flex flex-col items-center justify-center gap-2">
+          <div className="animate-pulse flex flex-col items-center gap-3">
+            <svg width="32" height="42" viewBox="0 0 32 42" fill="none">
+              <path d="M16 0C7 0 0 7 0 16c0 11 16 26 16 26S32 27 32 16C32 7 25 0 16 0z" fill="#d1d5db"/>
+              <circle cx="16" cy="16" r="7" fill="#9ca3af"/>
+            </svg>
+            <div className="h-2.5 w-28 bg-gray-300 rounded" />
+          </div>
+          <p className="text-xs text-gray-400 mt-1">지도 불러오는 중...</p>
+        </div>
+      )}
 
       {/* Locate-me button — same target+crosshair glyph Google/Kakao/Naver
           maps use, so its purpose reads at a glance. Sits above whichever
@@ -1116,6 +1132,22 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       </div>
 
+      {/* Search loading skeleton */}
+      {loading && allResults.length === 0 && (
+        <div className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl px-3 pb-4 pt-3">
+          <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-3" />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex gap-2 py-2.5 border-b last:border-0 animate-pulse">
+              <div className="w-14 h-8 bg-gray-200 rounded shrink-0" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-2.5 bg-gray-200 rounded w-full" />
+                <div className="h-2.5 bg-gray-200 rounded w-2/3" />
+                <div className="h-2 bg-gray-100 rounded w-1/3" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {/* Results list — independent bottom sheet, slides up from the bottom */}
       {allResults.length > 0 && !selectedGroup && (
         <div

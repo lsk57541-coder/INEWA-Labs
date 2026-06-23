@@ -242,7 +242,7 @@ async function getChannelSubscriberCounts(channelIds: string[]): Promise<Map<str
   await Promise.all(
     chunks.map(async (chunk) => {
       const params = new URLSearchParams({ part: 'statistics', id: chunk.join(','), key })
-      const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?${params}`)
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?${params}`, { next: { revalidate: 3600 } })
       if (!res.ok) return
       const json = await res.json() as { items?: { id: string; statistics?: { subscriberCount?: string } }[] }
       for (const item of json.items ?? []) {
@@ -268,7 +268,7 @@ async function ytSearch(
     key,
     ...extra,
   })
-  const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`)
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`, { next: { revalidate: 300 } })
   if (!res.ok) return []
   const json = await res.json() as { items?: YTSearchItem[] }
   return json.items ?? []
@@ -289,7 +289,7 @@ async function fetchVideoDetails(ids: string[]): Promise<YTVideoItem[]> {
         id: chunk.join(','),
         key,
       })
-      const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params}`)
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params}`, { next: { revalidate: 300 } })
       if (!res.ok) return []
       const json = await res.json() as { items?: YTVideoItem[] }
       return json.items ?? []
