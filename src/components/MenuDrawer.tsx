@@ -58,9 +58,9 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
   if (!open) return null
 
   return (
-    <div className="absolute inset-0 z-30 flex">
+    <div className="absolute inset-0 z-30 flex items-start">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-72 h-full bg-white shadow-2xl flex flex-col">
+      <div className="relative w-72 max-h-screen overflow-y-auto shadow-2xl flex flex-col" style={{ backgroundColor: '#F8FAFF' }}>
 
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 h-14 shrink-0" style={{ backgroundColor: '#0F1C2E' }}>
@@ -73,13 +73,13 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
           </button>
         </div>
 
-        {/* 서비스 소개 */}
-        <div className="px-4 py-3 border-b">
-          <p className="text-xs text-muted">유튜버가 다녀온 그곳, 지도에서 바로 찾아보세요</p>
+        {/* 서비스 소개 — 헤더와 이어지는 영역 */}
+        <div className="px-4 py-3 border-b border-gray-200" style={{ backgroundColor: '#0F1C2E' }}>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>유튜버가 다녀온 그곳, 지도에서 바로 찾아보세요</p>
         </div>
 
         {/* 유저 섹션 */}
-        <div className="px-4 py-4 border-b">
+        <div className="px-4 py-4 border-b border-gray-200">
           {user ? (
             <div className="flex items-center gap-3">
               {user.avatarUrl ? (
@@ -103,17 +103,17 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
               <p className="text-xs text-gray-500 mb-3">로그인하면 이런 게 가능해요</p>
               <div className="space-y-2 mb-4">
                 <div className="flex items-center gap-2 text-xs text-gray-600">
-                  <HeartIcon />
+                  <span className="flex-shrink-0"><HeartIcon /></span>
                   관심 장소 저장
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-600">
-                  <FlagIcon />
+                  <span className="flex-shrink-0"><FlagIcon /></span>
                   가본 곳 기록
                 </div>
               </div>
               <KakaoLoginButton
                 label="카카오 1초 로그인"
-                className="w-full justify-center mt-5 mb-1"
+                className="w-full justify-center mt-6 mb-1"
               />
               <button
                 onClick={onClose}
@@ -126,7 +126,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
         </div>
 
         {/* 메뉴 항목 */}
-        <div className="flex-1 overflow-y-auto">
+        <div>
           {user && (
             <button
               onClick={() => { onShowFavorites(); onClose() }}
