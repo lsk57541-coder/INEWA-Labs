@@ -13,7 +13,11 @@ export async function GET(req: NextRequest) {
   if (!res.ok) return NextResponse.json({ error: '주소 검색 실패' }, { status: 500 })
 
   const json = await res.json() as {
-    documents: { y: string; x: string; place_name: string; address_name: string; road_address_name: string }[]
+    documents: {
+      y: string; x: string
+      place_name: string; address_name: string; road_address_name: string
+      category_name: string; phone: string
+    }[]
   }
 
   if (list) {
@@ -23,6 +27,8 @@ export async function GET(req: NextRequest) {
         lng: parseFloat(doc.x),
         name: doc.place_name || doc.address_name,
         address: doc.road_address_name || doc.address_name,
+        category: doc.category_name || undefined,
+        phone: doc.phone || undefined,
       })),
     })
   }

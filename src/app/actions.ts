@@ -123,6 +123,58 @@ export async function deleteVideo(videoId: string, locationId: string) {
   revalidatePath('/')
 }
 
+export async function bulkAddLocations(
+  video: { youtube_id: string; title: string; thumbnail: string; channel: string; published_at: string },
+  places: { name: string; address: string; category?: string; lat: number; lng: number; timestamp_sec?: number }[]
+): Promise<{ succeeded: number; errors: string[] }> {
+  const supabase = await requireAdmin()
+  const errors: string[] = []
+  let succeeded = 0
+
+  for (const place of places) {
+    const { data: loc, error: locErr } = await supabase
+      .from('locations')
+      .insert({
+        name: place.name,
+        address: place.address,
+        lat: place.lat,
+        lng: place.lng,
+        category: place.category ?? null,
+        description: place.category ?? null,
+      })
+      .select('id')
+      .single()
+
+    if (locErr || !loc) {
+      errors.push(`"${place.name}" 장소 등록 실패: ${locErr?.message ?? '알 수 없는 오류'}`)
+      continue
+    }
+
+    const videoRow: Record<string, unknown> = {
+      location_id: loc.id,
+      youtube_id: video.youtube_id,
+      title: video.title,
+      thumbnail: video.thumbnail,
+      channel: video.channel,
+      published_at: video.published_at,
+    }
+    if (place.timestamp_sec != null) videoRow.timestamp_sec = place.timestamp_sec
+
+    const { error: vidErr } = await supabase.from('videos').insert(videoRow)
+
+    if (vidErr) {
+      errors.push(`"${place.name}" 영상 연결 실패: ${vidErr.message}`)
+      continue
+    }
+
+    succeeded++
+  }
+
+  revalidatePath('/admin')
+  revalidatePath('/')
+  return { succeeded, errors }
+}
+
 export interface FavoriteVideo {
   video_id: string
   title: string

@@ -68,6 +68,12 @@ export default async function AdminPage() {
             콜드 아웃리치
           </Link>
           <Link
+            href="/admin/locations/new/bulk"
+            className="bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition"
+          >
+            영상으로 일괄 등록
+          </Link>
+          <Link
             href="/admin/locations/new"
             className="bg-black text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800 transition"
           >
