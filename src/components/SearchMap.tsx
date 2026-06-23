@@ -1290,7 +1290,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         )
       })()}
       {/* Results list — independent bottom sheet, slides up from the bottom */}
-      {allResults.length > 0 && !selectedGroup && (
+      {allResults.length > 0 && !selectedGroup && !selectedVideo && (
         <div
           className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col ${
             listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-56px)]'
