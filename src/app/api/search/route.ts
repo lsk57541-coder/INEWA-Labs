@@ -192,6 +192,8 @@ function formatDuration(totalSeconds: number): string {
 // YouTube allows Shorts up to 3 minutes; without aspect-ratio data this is the
 // best available signal to label a result as a Short.
 const SHORTS_MAX_SEC = 180
+// Videos shorter than this are almost certainly preview clips or ads — exclude.
+const MIN_VIDEO_SEC = 60
 
 interface YTSearchItem {
   id: { videoId: string }
@@ -430,6 +432,7 @@ export async function GET(req: NextRequest) {
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (!meetsConfidence(placeNameSource, minConfidence)) return
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
+          if (durationSec > 0 && durationSec < MIN_VIDEO_SEC) return
           results.push({
             videoId: v.id,
             title: snippet.title,
@@ -488,7 +491,7 @@ export async function GET(req: NextRequest) {
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (meetsConfidence(placeNameSource, minConfidence)) {
             const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
-            results.push({
+            if (!(durationSec > 0 && durationSec < MIN_VIDEO_SEC)) results.push({
               videoId: v.id,
               title: snippet.title,
               thumbnail: snippet.thumbnails.medium.url,
@@ -545,6 +548,7 @@ export async function GET(req: NextRequest) {
           logPlaceNameResolution(v.id, placeNameSource, resolvedName)
           if (!meetsConfidence(placeNameSource, minConfidence)) break
           const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
+          if (durationSec > 0 && durationSec < MIN_VIDEO_SEC) break
           results.push({
             videoId: v.id,
             title: snippet.title,

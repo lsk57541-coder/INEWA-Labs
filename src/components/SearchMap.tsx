@@ -944,7 +944,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           the bar itself (real map apps don't have a "fully hide search"
           mode, so neither do we). */}
       <div
-        className={`absolute top-16 left-3 z-10 w-72 shadow-lg ${optionsOpen ? 'rounded-2xl' : 'rounded-full'}`}
+        className={`absolute top-16 left-3 z-10 w-72 max-w-[calc(100vw-24px)] shadow-lg ${optionsOpen ? 'rounded-2xl' : 'rounded-full'}`}
         style={{ backgroundColor: `rgba(255,255,255,${panelOpacity})` }}
       >
         <div className="relative flex items-center gap-2 h-11 px-3">
@@ -1017,7 +1017,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             trigger handleSearch directly. */}
         {error && <p className="px-3 pb-2 text-xs text-red-500">{error}</p>}
 
-        <div className={`overflow-hidden transition-all duration-200 ${optionsOpen ? 'max-h-[28rem]' : 'max-h-0'}`}>
+        <div className={`overflow-hidden transition-all duration-200 ${optionsOpen ? 'max-h-[min(28rem,calc(100dvh-140px))] overflow-y-auto' : 'max-h-0'}`}>
           <div className="px-3 pt-2 pb-3 border-t space-y-3">
             {/* Search mode */}
             <div className="flex gap-1">
@@ -1362,17 +1362,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             {selectedGroup.videos.map((v) => (
               <div
                 key={v.videoId}
-                className="flex gap-3 p-3 hover:bg-gray-50 transition border-b last:border-0 group"
+                className="flex gap-3 px-3 py-3.5 hover:bg-gray-50 transition border-b last:border-0 group"
               >
                 {/* Thumbnail — click to play */}
                 <div
                   className="relative shrink-0 cursor-pointer"
                   onClick={() => setSelectedVideo(v)}
                 >
-                  <img src={v.thumbnail} alt="" className="w-24 h-14 object-cover rounded-lg" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                    <div className="w-8 h-8 bg-black/60 rounded-full flex items-center justify-center">
-                      <div className="w-0 h-0 border-y-[6px] border-y-transparent border-l-[10px] border-l-white ml-0.5" />
+                  <img src={v.thumbnail} alt="" className="w-28 h-[68px] object-cover rounded-lg" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center shadow-sm">
+                      <div className="w-0 h-0 border-y-[7px] border-y-transparent border-l-[13px] border-l-white ml-1" />
                     </div>
                   </div>
                   <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-1 right-1" />
