@@ -31,7 +31,8 @@ export default async function PartnerPlacesPage({
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-6">장소 관리</h1>
+      <Link href="/partner/dashboard" className="text-xs text-gray-400 hover:text-gray-600">← 대시보드</Link>
+      <h1 className="text-xl font-bold mt-3 mb-6">장소 관리</h1>
 
       <div className="flex gap-1.5 mb-4">
         {TABS.map((t) => (

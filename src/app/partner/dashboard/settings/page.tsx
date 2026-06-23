@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getMyPartner } from '../actions'
 import SettingsControls from './SettingsControls'
 
@@ -13,7 +14,8 @@ export default async function PartnerSettingsPage({
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-6">설정</h1>
+      <Link href="/partner/dashboard" className="text-xs text-gray-400 hover:text-gray-600">← 대시보드</Link>
+      <h1 className="text-xl font-bold mt-3 mb-6">설정</h1>
 
       {reconnected && (
         <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
