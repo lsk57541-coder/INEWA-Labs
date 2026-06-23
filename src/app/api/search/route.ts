@@ -195,6 +195,50 @@ const SHORTS_MAX_SEC = 180
 // Videos shorter than this are almost certainly preview clips or ads — exclude.
 const MIN_VIDEO_SEC = 60
 
+type SearchCategory = 'food' | 'cafe' | 'date' | 'travel' | 'bar' | 'hotspot' | 'stay' | 'default'
+
+function classifyCategory(q: string): SearchCategory {
+  if (/카페|커피|브런치|디저트/.test(q)) return 'cafe'
+  if (/데이트코스|데이트|커플/.test(q)) return 'date'
+  if (/이자카야|포차|술집/.test(q)) return 'bar'
+  if (/호텔|숙소|펜션|모텔/.test(q)) return 'stay'
+  if (/핫플|명소|포토스팟|가볼만한/.test(q)) return 'hotspot'
+  if (/여행|투어|관광|브이로그/.test(q)) return 'travel'
+  if (/맛집|식당|음식|먹방/.test(q)) return 'food'
+  return 'default'
+}
+
+function buildCategoryParams(q: string, category: SearchCategory): {
+  enrichedQ: string
+  publishedAfter: string
+  order: 'relevance' | 'viewCount' | 'date'
+} {
+  const now = new Date()
+  const monthsAgo = (n: number) => {
+    const d = new Date(now)
+    d.setMonth(d.getMonth() - n)
+    return d.toISOString()
+  }
+
+  const MAP: Record<SearchCategory, { suffix: string; months: number; order: 'relevance' | 'viewCount' | 'date' }> = {
+    food:    { suffix: ' 추천 리뷰',      months: 12, order: 'relevance' },
+    cafe:    { suffix: ' 투어 추천',      months: 6,  order: 'relevance' },
+    date:    { suffix: ' 코스 추천 장소', months: 12, order: 'viewCount' },
+    travel:  { suffix: ' 브이로그 코스',  months: 24, order: 'viewCount' },
+    bar:     { suffix: ' 추천 분위기',    months: 12, order: 'date'      },
+    hotspot: { suffix: ' 추천 명소',      months: 6,  order: 'viewCount' },
+    stay:    { suffix: ' 후기 리뷰',      months: 12, order: 'relevance' },
+    default: { suffix: '',                months: 12, order: 'relevance' },
+  }
+
+  const cfg = MAP[category]
+  return {
+    enrichedQ: q + cfg.suffix,
+    publishedAfter: monthsAgo(cfg.months),
+    order: cfg.order,
+  }
+}
+
 interface YTSearchItem {
   id: { videoId: string }
   snippet: {
@@ -341,17 +385,22 @@ export async function GET(req: NextRequest) {
       const channelItems = await ytSearch('', { channelId, order: 'date' })
       unique = dedupe(channelItems)
     } else {
-      const geoItems = await ytSearch(q!, {
+      const category = classifyCategory(q!)
+      const { enrichedQ, publishedAfter, order: catOrder } = buildCategoryParams(q!, category)
+
+      const geoItems = await ytSearch(enrichedQ, {
         location: `${lat},${lng}`,
         locationRadius: `${radius}km`,
+        publishedAfter,
       })
       unique = dedupe(geoItems)
 
       if (unique.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
-        const broadItems = await ytSearch(q!, {
+        const broadItems = await ytSearch(enrichedQ, {
           relevanceLanguage: 'ko',
           regionCode: 'KR',
-          order: 'viewCount',
+          order: catOrder,
+          publishedAfter,
         })
         unique = [...unique, ...dedupe(broadItems)]
       }
