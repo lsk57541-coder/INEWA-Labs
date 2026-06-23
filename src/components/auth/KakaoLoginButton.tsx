@@ -2,7 +2,12 @@
 
 import { createClient } from '@/lib/supabase/client'
 
-export default function KakaoLoginButton() {
+interface KakaoLoginButtonProps {
+  label?: string
+  className?: string
+}
+
+export default function KakaoLoginButton({ label = '카카오로 시작하기', className = '' }: KakaoLoginButtonProps) {
   const supabase = createClient()
 
   const handleLogin = async () => {
@@ -18,10 +23,10 @@ export default function KakaoLoginButton() {
   return (
     <button
       onClick={handleLogin}
-      className="flex items-center gap-2 bg-[#FEE500] text-[#191919] font-semibold px-5 py-3 rounded-lg hover:brightness-95 transition"
+      className={`flex items-center gap-2 bg-[#FEE500] text-[#191919] font-semibold px-5 py-3 rounded-lg hover:brightness-95 transition ${className}`}
     >
       <KakaoIcon />
-      카카오로 시작하기
+      {label}
     </button>
   )
 }
