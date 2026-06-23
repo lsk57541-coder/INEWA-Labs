@@ -359,6 +359,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const channelSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null)
   const [selectedGroup, setSelectedGroup] = useState<MarkerGroup | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<VideoResult | null>(null)
   const [mapReady, setMapReady] = useState(false)
@@ -385,7 +386,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   // instead of behind the sheet. Marker clicks and searches pass their own
   // fraction explicitly since they fire just before the sheet's state
   // actually changes.
-  const currentSheetFraction = selectedGroup ? 0.45 : allResults.length > 0 && listOpen ? 0.5 : 0
+  const noResults = !loading && lastSearchQuery !== null && allResults.length === 0
+  const currentSheetFraction = selectedGroup ? 0.45 : (allResults.length > 0 || noResults) && listOpen ? 0.5 : 0
 
   const handleSheetDragStart = (clientY: number) => {
     sheetDragStartY.current = clientY
@@ -603,12 +605,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     [radius, panTo]
   )
 
-  const handleSearch = async () => {
+  const handleSearch = async (opts?: { radiusOverride?: number }) => {
     if (searchMode === 'keyword' && !keyword.trim()) { setError('검색어를 입력해주세요.'); return }
-    if (searchMode === 'channel' && !selectedChannel) { setError('유튜브 채널을 선택해주세요.'); return }
+    if (searchMode === 'channel' && !selectedChannel) { setError('유튜버 채널을 선택해주세요.'); return }
 
     setLoading(true)
     setError(null)
+    setLastSearchQuery(null)
 
     // No location set yet — grab GPS automatically instead of bouncing the
     // user out to find a "현재 위치로" button first.
@@ -629,11 +632,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     setSelectedGroup(null)
     setSelectedVideo(null)
 
+    const effectiveRadius = opts?.radiusOverride ?? radius
     try {
       const params = new URLSearchParams({
         lat: String(pos.lat),
         lng: String(pos.lng),
-        radius: String(radius),
+        radius: String(effectiveRadius),
       })
       if (searchMode === 'keyword') params.set('q', keyword)
       else if (selectedChannel) params.set('channelId', selectedChannel.channelId)
@@ -653,7 +657,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       setOptionsOpen(false)
       setListOpen(true)
 
-      if (videos.length === 0) setError('해당 반경 내에 검색 결과가 없습니다.')
+      if (videos.length === 0) {
+        setLastSearchQuery(searchMode === 'keyword' ? keyword.trim() : (selectedChannel?.title ?? ''))
+        setRadius(effectiveRadius as Radius)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '검색 중 오류가 발생했습니다.')
     } finally {
@@ -865,7 +872,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   // floating on top of it.
   const locateButtonBottomClass = selectedGroup
     ? 'bottom-[calc(45dvh+12px)]'
-    : allResults.length > 0
+    : allResults.length > 0 || noResults
       ? listOpen ? 'bottom-[calc(50dvh+12px)]' : 'bottom-16'
       : 'bottom-6'
 
@@ -1121,7 +1128,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
             {/* Search button */}
             <button
-              onClick={handleSearch}
+              onClick={() => handleSearch()}
               disabled={loading || !mapReady}
               className="w-full flex items-center justify-center gap-1.5 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 disabled:opacity-40 transition"
             >
@@ -1148,6 +1155,53 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           ))}
         </div>
       )}
+      {/* No results state */}
+      {noResults && !selectedGroup && (() => {
+        const nextRadius = RADIUS_OPTIONS[RADIUS_OPTIONS.indexOf(radius) + 1] as Radius | undefined
+        return (
+          <div className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl px-4 pb-6 pt-3">
+            <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-4" />
+            <div className="flex flex-col items-center text-center mb-4">
+              <svg className="mb-2" width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <circle cx="18" cy="18" r="17" stroke="#E5E7EB" strokeWidth="2" />
+                <path d="M12 20c1.5-2 4-3 6-3s4.5 1 6 3" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
+                <circle cx="13" cy="15" r="1.5" fill="#9CA3AF" />
+                <circle cx="23" cy="15" r="1.5" fill="#9CA3AF" />
+              </svg>
+              <p className="text-sm font-semibold text-gray-800">
+                &ldquo;{lastSearchQuery}&rdquo; 검색 결과가 없어요
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                반경을 넓히거나 다른 키워드로 시도해보세요
+              </p>
+            </div>
+            {nextRadius && (
+              <button
+                onClick={() => handleSearch({ radiusOverride: nextRadius })}
+                className="w-full text-sm border border-gray-200 text-gray-600 rounded-lg py-2.5 mb-4 hover:bg-gray-50 transition font-medium"
+              >
+                반경 {radius}km → {nextRadius}km로 넓혀서 재검색
+              </button>
+            )}
+            <p className="text-xs text-gray-400 mb-2.5">이런 검색 어때요?</p>
+            <div className="flex flex-wrap gap-2">
+              {['한강 카페', '성수 맛집', '제주 흑돼지', '홍대 라멘', '부산 회', '강남 디저트'].map((ex) => (
+                <button
+                  key={ex}
+                  onClick={() => {
+                    setKeyword(ex)
+                    setSearchMode('keyword')
+                    setLastSearchQuery(null)
+                  }}
+                  className="text-xs bg-gray-100 text-gray-600 rounded-full px-3 py-1.5 hover:bg-gray-200 transition"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
       {/* Results list — independent bottom sheet, slides up from the bottom */}
       {allResults.length > 0 && !selectedGroup && (
         <div
