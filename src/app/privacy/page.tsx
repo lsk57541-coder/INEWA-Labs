@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: '개인정보처리방침 | AI맵튜브',
+  title: '개인정보처리방침 | MAPTUBE',
 }
 
 export default function PrivacyPage() {
@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <p className="text-gray-400 mb-8">시행일: 2026년 6월 18일</p>
 
       <p className="mb-8">
-        INEWA Labs(이하 &apos;회사&apos;)는 AI맵튜브 서비스(이하 &apos;서비스&apos;)를 운영하며,
+        INEWA Labs(이하 &apos;회사&apos;)는 MAPTUBE 서비스(이하 &apos;서비스&apos;)를 운영하며,
         이용자의 개인정보를 중요하게 생각하고 「개인정보보호법」 등 관련 법령을 준수합니다.
         회사는 본 방침을 통해 이용자가 제공하는 개인정보가 어떠한 목적과 방식으로 이용되고 있으며,
         개인정보보호를 위해 어떠한 조치가 취해지고 있는지 알려드립니다.

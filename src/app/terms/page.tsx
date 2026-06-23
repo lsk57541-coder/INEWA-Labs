@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: '이용약관 | AI맵튜브',
+  title: '이용약관 | MAPTUBE',
 }
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
       <section className="mb-7">
         <h2 className="font-bold text-base mb-2">제1조 (목적)</h2>
         <p>
-          본 약관은 INEWA Labs(이하 &apos;회사&apos;)가 제공하는 AI맵튜브 서비스(이하 &apos;서비스&apos;)의
+          본 약관은 INEWA Labs(이하 &apos;회사&apos;)가 제공하는 MAPTUBE 서비스(이하 &apos;서비스&apos;)의
           이용과 관련하여 회사와 이용자 간의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
         </p>
       </section>

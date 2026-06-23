@@ -63,8 +63,8 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
       <div className="relative w-72 h-full bg-white shadow-2xl flex flex-col">
 
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-4 h-14 bg-black shrink-0">
-          <span className="font-bold text-white">AI맵튜브</span>
+        <div className="flex items-center justify-between px-4 h-14 shrink-0" style={{ backgroundColor: '#0F1C2E' }}>
+          <span className="font-bold text-white">MAPTUBE</span>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition"
@@ -113,7 +113,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
               </div>
               <KakaoLoginButton
                 label="카카오 1초 로그인"
-                className="w-full justify-center"
+                className="w-full justify-center mt-5 mb-1"
               />
               <button
                 onClick={onClose}
@@ -127,13 +127,15 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
 
         {/* 메뉴 항목 */}
         <div className="flex-1 overflow-y-auto">
-          <button
-            onClick={() => { onShowFavorites(); onClose() }}
-            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
-          >
-            <HeartIcon />
-            관심목록
-          </button>
+          {user && (
+            <button
+              onClick={() => { onShowFavorites(); onClose() }}
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+            >
+              <HeartIcon />
+              관심목록
+            </button>
+          )}
 
           {user?.isAdmin && (
             <Link

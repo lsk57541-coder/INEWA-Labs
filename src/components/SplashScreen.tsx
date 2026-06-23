@@ -97,7 +97,7 @@ export default function SplashScreen() {
             className="text-3xl font-bold"
             style={{ color: '#FFFFFF', letterSpacing: '0.2em' }}
           >
-            AI MAPTUBE
+            MAPTUBE
           </h1>
 
           {/* 코랄 구분선 */}
