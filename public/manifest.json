@@ -1,11 +1,11 @@
 {
-  "name": "맛튜버맵",
-  "short_name": "맛튜버맵",
-  "description": "내가 구독한 맛튜버들의 맛집 지도",
+  "name": "AI MAPTUBE",
+  "short_name": "AI MAPTUBE",
+  "description": "영상 속 장소를 지도로 — 유튜버 콘텐츠를 지도에서 발견하세요",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0000",
-  "theme_color": "#ef4444",
+  "background_color": "#0F1C2E",
+  "theme_color": "#FF5C5C",
   "orientation": "portrait",
   "icons": [
     {

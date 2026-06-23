@@ -14,13 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "맛튜버맵",
-  description: "내가 구독한 맛튜버들의 맛집 지도",
+  title: "AI MAPTUBE",
+  description: "영상 속 장소를 지도로 — 유튜버 콘텐츠를 지도에서 발견하세요",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "맛튜버맵",
+    title: "AI MAPTUBE",
   },
 };
 
