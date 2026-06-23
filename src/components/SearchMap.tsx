@@ -1205,6 +1205,18 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 </button>
               ))}
             </div>
+            <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+              <p className="text-xs text-gray-500 mb-3">
+                아직 이 지역 데이터가 부족해요.<br />
+                파트너 유튜버가 늘어날수록 더 많은 장소가 표시됩니다.
+              </p>
+              <a
+                href="/partner/apply"
+                className="inline-block text-xs font-medium text-white bg-black rounded-lg px-4 py-2 hover:bg-gray-800 transition"
+              >
+                파트너 유튜버 신청하기
+              </a>
+            </div>
           </div>
         )
       })()}
