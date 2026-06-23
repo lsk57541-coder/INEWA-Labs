@@ -3,12 +3,15 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim()
   const list = req.nextUrl.searchParams.get('list') === '1'
+  const categoryGroupCode = req.nextUrl.searchParams.get('category_group_code')?.trim()
   if (!q) return NextResponse.json({ error: 'q required' }, { status: 400 })
 
   const key = process.env.KAKAO_REST_API_KEY
   if (!key) return NextResponse.json({ error: 'no key' }, { status: 500 })
 
-  const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&size=${list ? 5 : 1}`
+  const qs = new URLSearchParams({ query: q, size: list ? '5' : '1' })
+  if (categoryGroupCode) qs.set('category_group_code', categoryGroupCode)
+  const url = `https://dapi.kakao.com/v2/local/search/keyword.json?${qs}`
   const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })
   if (!res.ok) return NextResponse.json({ error: '주소 검색 실패' }, { status: 500 })
 

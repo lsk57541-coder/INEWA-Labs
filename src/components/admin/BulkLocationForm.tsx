@@ -41,18 +41,24 @@ interface SearchModal {
   error: string | null
 }
 
-function makeRow(): PlaceRow {
+function makeRow(name = '', timestampInput = ''): PlaceRow {
   return {
     id: Math.random().toString(36).slice(2),
-    name: '',
+    name,
     address: '',
     category: '',
-    timestampInput: '',
+    timestampInput,
     lat: null,
     lng: null,
     geocoding: false,
     geocodeError: null,
   }
+}
+
+function secondsToMmss(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 function parseTimestamp(input: string): number | undefined {
@@ -72,6 +78,8 @@ export default function BulkLocationForm() {
   const [videoError, setVideoError] = useState<string | null>(null)
 
   const [places, setPlaces] = useState<PlaceRow[]>([makeRow()])
+  const [extracting, setExtracting] = useState(false)
+  const [extractError, setExtractError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<{ succeeded: number; errors: string[] } | null>(null)
 
@@ -87,6 +95,8 @@ export default function BulkLocationForm() {
     setVideoFetching(true)
     setVideoError(null)
     setVideoInfo(null)
+    setPlaces([makeRow()])
+    setExtractError(null)
     try {
       const res = await fetch(`/api/admin/video-info?url=${encodeURIComponent(videoUrl.trim())}`)
       const data = await res.json() as VideoInfo & { error?: string }
@@ -99,24 +109,37 @@ export default function BulkLocationForm() {
     }
   }, [videoUrl])
 
-  const geocodeAddress = useCallback(async (idx: number) => {
-    setPlaces(prev => {
-      const row = prev[idx]
-      if (!row.address.trim() || row.lat !== null) return prev
-      return prev.map((r, i) => i === idx ? { ...r, geocoding: true, geocodeError: null } : r)
-    })
-    setPlaces(prev => {
-      const row = prev[idx]
-      if (!row.address.trim() || row.geocoding === false) return prev
-      return prev
-    })
+  const autoExtract = useCallback(async () => {
+    if (!videoInfo) return
+    setExtracting(true)
+    setExtractError(null)
+    try {
+      const res = await fetch(`/api/admin/extract-places?videoId=${encodeURIComponent(videoInfo.videoId)}`)
+      const data = await res.json() as { places?: { name: string; timestamp_seconds: number | null }[]; error?: string }
+      if (!res.ok || !data.places) {
+        setExtractError(data.error ?? '추출 실패')
+        return
+      }
+      if (data.places.length === 0) {
+        setExtractError('영상 설명에서 상호명을 찾지 못했습니다. 직접 입력해주세요.')
+        return
+      }
+      setPlaces(data.places.map(p =>
+        makeRow(p.name, p.timestamp_seconds != null ? secondsToMmss(p.timestamp_seconds) : '')
+      ))
+    } catch {
+      setExtractError('네트워크 오류')
+    } finally {
+      setExtracting(false)
+    }
+  }, [videoInfo])
 
-    const currentRow = places[idx]
-    if (!currentRow.address.trim() || currentRow.lat !== null) return
-
+  const geocodeAddress = useCallback(async (idx: number, addressOverride?: string) => {
+    const addr = addressOverride ?? places[idx]?.address
+    if (!addr?.trim()) return
     setPlaces(prev => prev.map((r, i) => i === idx ? { ...r, geocoding: true, geocodeError: null } : r))
     try {
-      const res = await fetch(`/api/geocode?q=${encodeURIComponent(currentRow.address.trim())}&list=1`)
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(addr.trim())}&list=1`)
       const json = await res.json() as { results?: PlaceSearchResult[] }
       const first = json.results?.[0]
       if (first) {
@@ -145,13 +168,26 @@ export default function BulkLocationForm() {
     if (!query.trim()) return
     setModal(prev => prev ? { ...prev, searching: true, error: null, results: [] } : null)
     try {
-      const res = await fetch(`/api/geocode?q=${encodeURIComponent(query.trim())}&list=1`)
-      const json = await res.json() as { results?: PlaceSearchResult[] }
+      // 1차: 음식점/카페/숙박 카테고리 필터
+      const res1 = await fetch(`/api/geocode?q=${encodeURIComponent(query.trim())}&list=1&category_group_code=FD6,CE7,AD5`)
+      const json1 = await res1.json() as { results?: PlaceSearchResult[] }
+      const results1 = json1.results ?? []
+
+      if (results1.length > 0) {
+        setModal(prev => prev ? { ...prev, searching: false, results: results1 } : null)
+        return
+      }
+
+      // 폴백: 카테고리 필터 없이 재검색
+      const res2 = await fetch(`/api/geocode?q=${encodeURIComponent(query.trim())}&list=1`)
+      const json2 = await res2.json() as { results?: PlaceSearchResult[] }
+      const results2 = json2.results ?? []
+
       setModal(prev => prev ? {
         ...prev,
         searching: false,
-        results: json.results ?? [],
-        error: (json.results?.length ?? 0) === 0 ? '검색 결과가 없습니다' : null,
+        results: results2,
+        error: results2.length === 0 ? '검색 결과가 없습니다' : null,
       } : null)
     } catch {
       setModal(prev => prev ? { ...prev, searching: false, error: '검색 실패' } : null)
@@ -160,7 +196,8 @@ export default function BulkLocationForm() {
 
   const selectPlace = useCallback((result: PlaceSearchResult) => {
     if (!modal) return
-    setPlaces(prev => prev.map((r, i) => i === modal.rowIdx ? {
+    const idx = modal.rowIdx
+    setPlaces(prev => prev.map((r, i) => i === idx ? {
       ...r,
       name: result.name,
       address: result.address,
@@ -226,7 +263,7 @@ export default function BulkLocationForm() {
             <input
               type="text"
               value={videoUrl}
-              onChange={e => { setVideoUrl(e.target.value); setVideoInfo(null); setVideoError(null) }}
+              onChange={e => { setVideoUrl(e.target.value); setVideoInfo(null); setVideoError(null); setExtractError(null) }}
               onKeyDown={e => e.key === 'Enter' && fetchVideo()}
               placeholder="https://www.youtube.com/watch?v=... 또는 https://youtu.be/..."
               className="flex-1 text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -242,16 +279,28 @@ export default function BulkLocationForm() {
           {videoError && <p className="text-xs text-red-500">{videoError}</p>}
 
           {videoInfo && (
-            <div className="flex gap-3 items-start bg-gray-50 rounded-lg p-3">
-              <img
-                src={videoInfo.thumbnail}
-                alt={videoInfo.title}
-                className="w-24 h-14 object-cover rounded shrink-0"
-              />
-              <div className="min-w-0">
-                <p className="text-sm font-medium line-clamp-2">{videoInfo.title}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{videoInfo.channel}</p>
+            <div className="space-y-3">
+              <div className="flex gap-3 items-start bg-gray-50 rounded-lg p-3">
+                <img
+                  src={videoInfo.thumbnail}
+                  alt={videoInfo.title}
+                  className="w-24 h-14 object-cover rounded shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium line-clamp-2">{videoInfo.title}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{videoInfo.channel}</p>
+                </div>
               </div>
+
+              {/* Auto-extract button */}
+              <button
+                onClick={autoExtract}
+                disabled={extracting}
+                className="w-full text-sm border border-blue-600 text-blue-600 hover:bg-blue-50 disabled:opacity-40 rounded-lg py-2 transition"
+              >
+                {extracting ? 'AI가 상호명 추출 중…' : '자동 추출 — AI가 영상 설명에서 상호명 찾기'}
+              </button>
+              {extractError && <p className="text-xs text-red-500">{extractError}</p>}
             </div>
           )}
         </div>
@@ -263,7 +312,7 @@ export default function BulkLocationForm() {
 
             {places.map((row, idx) => (
               <div key={row.id} className="border rounded-lg p-4 space-y-3">
-                {/* Name + search button */}
+                {/* Name + search + remove */}
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -275,7 +324,6 @@ export default function BulkLocationForm() {
                   <button
                     onClick={() => openSearchModal(idx)}
                     className="shrink-0 text-sm border border-gray-300 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition"
-                    title="장소 검색"
                   >
                     검색
                   </button>
@@ -304,7 +352,6 @@ export default function BulkLocationForm() {
                     <span className="absolute right-3 top-2.5 text-xs text-gray-400">변환 중…</span>
                   )}
                 </div>
-
                 {row.geocodeError && <p className="text-xs text-red-500">{row.geocodeError}</p>}
                 {row.lat !== null && row.lng !== null && (
                   <p className="text-xs text-gray-400">{row.lat.toFixed(5)}, {row.lng.toFixed(5)}</p>
@@ -372,7 +419,6 @@ export default function BulkLocationForm() {
           onClick={e => { if (e.target === e.currentTarget) setModal(null) }}
         >
           <div className="bg-white rounded-lg w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
-            {/* Modal header */}
             <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
               <p className="text-sm font-medium">장소 검색</p>
               <button
@@ -384,7 +430,6 @@ export default function BulkLocationForm() {
               </button>
             </div>
 
-            {/* Search input */}
             <div className="flex gap-2 p-4 border-b shrink-0">
               <input
                 ref={modalInputRef}
@@ -404,18 +449,15 @@ export default function BulkLocationForm() {
               </button>
             </div>
 
-            {/* Results */}
             <div className="overflow-y-auto flex-1">
               {modal.error && (
                 <p className="text-sm text-gray-500 text-center py-10">{modal.error}</p>
               )}
-
               {!modal.searching && !modal.error && modal.results.length === 0 && (
                 <p className="text-sm text-gray-400 text-center py-10">
                   검색어를 입력하고 검색 버튼을 눌러주세요
                 </p>
               )}
-
               {modal.results.map((result, i) => (
                 <button
                   key={i}
@@ -424,9 +466,7 @@ export default function BulkLocationForm() {
                 >
                   <p className="text-sm font-medium text-gray-900">{result.name}</p>
                   {result.category && (
-                    <p className="text-xs text-blue-600 mt-0.5">
-                      {result.category.split('>').pop()?.trim()}
-                    </p>
+                    <p className="text-xs text-blue-600 mt-0.5">{result.category.split('>').pop()?.trim()}</p>
                   )}
                   <p className="text-xs text-gray-500 mt-0.5">{result.address}</p>
                   {result.phone && (
