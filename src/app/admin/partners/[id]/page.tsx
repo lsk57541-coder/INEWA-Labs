@@ -2,12 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import PartnerReviewForm from '@/components/admin/PartnerReviewForm'
-import { approvePartner, rejectPartner } from './actions'
+import { approvePartner, rejectPartner, resetPartnerStatus } from './actions'
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '검토 중',
   approved: '승인됨',
   rejected: '거절됨',
+  withdrawn: '파트너 해제됨',
 }
 const GRADE_LABEL: Record<string, string> = { general: '일반', premium: '프리미엄' }
 
@@ -64,7 +65,30 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           rejectAction={rejectPartner.bind(null, partner.id)}
         />
       ) : (
-        <p className="text-sm text-gray-400">이미 심사가 완료된 신청입니다.</p>
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 mb-3">관리자 상태 변경 (테스트·복구용)</p>
+          {partner.status !== 'approved' && (
+            <form action={resetPartnerStatus.bind(null, partner.id, 'approved')}>
+              <button type="submit" className="w-full text-sm bg-black text-white rounded-lg py-2.5 hover:bg-gray-800 transition">
+                승인으로 변경
+              </button>
+            </form>
+          )}
+          {partner.status !== 'withdrawn' && (
+            <form action={resetPartnerStatus.bind(null, partner.id, 'withdrawn')}>
+              <button type="submit" className="w-full text-sm border border-gray-300 text-gray-600 rounded-lg py-2.5 hover:bg-gray-50 transition">
+                해제(withdrawn)로 변경
+              </button>
+            </form>
+          )}
+          {partner.status !== 'pending' && (
+            <form action={resetPartnerStatus.bind(null, partner.id, 'pending')}>
+              <button type="submit" className="w-full text-sm border border-gray-300 text-gray-600 rounded-lg py-2.5 hover:bg-gray-50 transition">
+                심사중(pending)으로 변경
+              </button>
+            </form>
+          )}
+        </div>
       )}
     </div>
   )

@@ -84,3 +84,11 @@ export async function rejectPartner(id: string, reason: string) {
   revalidatePath('/admin/partners')
   redirect('/admin/partners')
 }
+
+export async function resetPartnerStatus(id: string, status: 'approved' | 'withdrawn' | 'pending') {
+  const supabase = await requireAdmin()
+  const { error } = await supabase.from('partners').update({ status }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/partners/${id}`)
+  revalidatePath('/admin/partners')
+}

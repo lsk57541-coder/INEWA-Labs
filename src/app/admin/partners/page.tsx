@@ -11,6 +11,7 @@ const STATUS_LABEL: Record<string, string> = {
   pending: '검토 중',
   approved: '승인됨',
   rejected: '거절됨',
+  withdrawn: '해제됨',
 }
 
 const TABS = [
@@ -18,6 +19,7 @@ const TABS = [
   { key: 'pending', label: '심사중' },
   { key: 'approved', label: '승인' },
   { key: 'rejected', label: '거절' },
+  { key: 'withdrawn', label: '해제됨' },
 ] as const
 
 export default async function AdminPartnersPage({
