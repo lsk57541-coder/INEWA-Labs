@@ -19,6 +19,7 @@ import {
 } from '@/app/actions'
 import MenuDrawer, { type MenuUser } from '@/components/MenuDrawer'
 import FavoritesOverlay from '@/components/FavoritesOverlay'
+import OnboardingOverlay from '@/components/OnboardingOverlay'
 
 const REPORT_REASONS: { key: ReportReason; label: string }[] = [
   { key: 'wrong_address', label: '주소 또는 상호명이 잘못됐어요' },
@@ -380,6 +381,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [addressSearching, setAddressSearching] = useState(false)
   const addressSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sheetDragStartY = useRef<number | null>(null)
+  const searchBarRef = useRef<HTMLDivElement>(null)
+  const hamburgerRef = useRef<HTMLButtonElement>(null)
 
   // How much of the map's height is currently covered by a bottom sheet, so
   // panTo can keep whatever point it's centering on inside the visible area
@@ -924,6 +927,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
       {/* Hamburger menu */}
       <button
+        ref={hamburgerRef}
         onClick={() => setMenuOpen(true)}
         className="absolute top-3 left-3 z-20 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-lg hover:bg-gray-50 transition"
       >
@@ -943,6 +947,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         onToggleFavorite={handleToggleFavoriteById}
         onToggleVisited={handleToggleVisited}
       />
+      <OnboardingOverlay searchBarRef={searchBarRef} hamburgerRef={hamburgerRef} />
 
       {/* Search bar — always visible single line, like Google/Kakao/Naver
           Maps. Tap the text directly to type right away; the chevron
@@ -950,6 +955,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           the bar itself (real map apps don't have a "fully hide search"
           mode, so neither do we). */}
       <div
+        ref={searchBarRef}
         className={`absolute top-16 left-3 z-10 w-72 max-w-[calc(100vw-24px)] shadow-lg ${optionsOpen ? 'rounded-2xl' : 'rounded-full'}`}
         style={{ backgroundColor: `rgba(255,255,255,${panelOpacity})` }}
       >
