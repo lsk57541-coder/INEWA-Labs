@@ -4,6 +4,7 @@ import { deleteVideo } from '@/app/actions'
 import DeleteButton from '@/components/admin/DeleteButton'
 import YouTubeSearch from '@/components/admin/YouTubeSearch'
 import Link from 'next/link'
+import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
 export default async function LocationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -44,9 +45,9 @@ export default async function LocationDetailPage({ params }: { params: Promise<{
           <ul className="space-y-2">
             {videos.map((v) => (
               <li key={v.id} className="flex items-center gap-3 border rounded-lg p-2">
-                <img src={v.thumbnail} alt={v.title} className="w-24 h-14 object-cover rounded shrink-0" />
+                <img src={v.thumbnail} alt={decodeHtmlEntities(v.title)} className="w-24 h-14 object-cover rounded shrink-0" />
                 <div className="flex-1 overflow-hidden">
-                  <p className="text-xs font-medium line-clamp-2">{v.title}</p>
+                  <p className="text-xs font-medium line-clamp-2">{decodeHtmlEntities(v.title)}</p>
                   <p className="text-xs text-gray-400 truncate">{v.channel}</p>
                 </div>
                 <DeleteButton

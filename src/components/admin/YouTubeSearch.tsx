@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { addVideo } from '@/app/actions'
+import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
 interface YTVideo {
   youtube_id: string
@@ -74,9 +75,9 @@ export default function YouTubeSearch({ locationId }: { locationId: string }) {
             const added = done.includes(v.youtube_id)
             return (
               <li key={v.youtube_id} className="flex items-center gap-3 border rounded-lg p-2">
-                <img src={v.thumbnail} alt={v.title} className="w-24 h-14 object-cover rounded shrink-0" />
+                <img src={v.thumbnail} alt={decodeHtmlEntities(v.title)} className="w-24 h-14 object-cover rounded shrink-0" />
                 <div className="flex-1 overflow-hidden">
-                  <p className="text-xs font-medium line-clamp-2">{v.title}</p>
+                  <p className="text-xs font-medium line-clamp-2">{decodeHtmlEntities(v.title)}</p>
                   <p className="text-xs text-gray-400 truncate">{v.channel}</p>
                 </div>
                 <button

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { bulkRequestPlaces, type BulkPlaceInput } from '@/app/partner/dashboard/places/actions'
+import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
 interface ChannelVideo {
   videoId: string
@@ -241,9 +242,9 @@ export default function ExtractPlacesForm() {
                   }}
                   className="flex items-center gap-3 border rounded-lg p-2 hover:bg-gray-50 transition text-left"
                 >
-                  <img src={v.thumbnail} alt={v.title} className="w-20 h-14 object-cover rounded shrink-0" />
+                  <img src={v.thumbnail} alt={decodeHtmlEntities(v.title)} className="w-20 h-14 object-cover rounded shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium line-clamp-2">{v.title}</p>
+                    <p className="text-sm font-medium line-clamp-2">{decodeHtmlEntities(v.title)}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{new Date(v.publishedAt).toLocaleDateString('ko-KR')}</p>
                   </div>
                 </button>

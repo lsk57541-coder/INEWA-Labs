@@ -1,6 +1,7 @@
 'use client'
 
 import type { Location, Video } from '@/types'
+import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
 interface VideoPanelProps {
   location: Location
@@ -40,11 +41,11 @@ export default function VideoPanel({ location, videos, onClose }: VideoPanelProp
                 >
                   <img
                     src={v.thumbnail}
-                    alt={v.title}
+                    alt={decodeHtmlEntities(v.title)}
                     className="w-28 h-16 object-cover rounded shrink-0"
                   />
                   <div className="flex flex-col gap-1 overflow-hidden">
-                    <p className="text-xs font-medium line-clamp-2 leading-snug">{v.title}</p>
+                    <p className="text-xs font-medium line-clamp-2 leading-snug">{decodeHtmlEntities(v.title)}</p>
                     <p className="text-xs text-gray-400 truncate">{v.channel}</p>
                   </div>
                 </a>

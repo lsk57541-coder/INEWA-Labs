@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getFavorites, getVisited, getPlaceDetails, type FavoriteVideo } from '@/app/actions'
+import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
 interface PlaceDetails {
   name: string
@@ -115,7 +116,7 @@ export default function FavoritesOverlay({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={v.thumbnail} alt="" className="w-20 h-12 object-cover rounded-lg shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-[11px] text-gray-400 line-clamp-1 leading-tight">{v.title}</p>
+                  <p className="text-[11px] text-gray-400 line-clamp-1 leading-tight">{decodeHtmlEntities(v.title)}</p>
                   <p className="text-base font-bold mt-1 leading-snug">
                     {d?.name || v.place_name || v.channel}
                     {d?.category && <span className="text-gray-400 font-normal text-sm"> {d.category}</span>}
