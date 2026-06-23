@@ -583,8 +583,14 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           image: groupMarkerImage(group.videos, isFavorite, isVisited),
         })
         kakao.maps.event.addListener(marker, 'click', () => {
-          setSelectedGroup(group)
-          panTo(group.lat, group.lng, 0.45)
+          if (group.videos.length === 1) {
+            setSelectedGroup(null)
+            setSelectedVideo(group.videos[0])
+            panTo(group.lat, group.lng, 0)
+          } else {
+            setSelectedGroup(group)
+            panTo(group.lat, group.lng, 0.45)
+          }
         })
         markersRef.current.push(marker)
 
