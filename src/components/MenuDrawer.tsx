@@ -17,6 +17,7 @@ interface MenuDrawerProps {
   onClose: () => void
   user: MenuUser | null
   onShowFavorites: () => void
+  onRestartOnboarding: () => void
 }
 
 function HeartIcon() {
@@ -36,6 +37,15 @@ function FlagIcon() {
   )
 }
 
+function CompassIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+    </svg>
+  )
+}
+
 function SettingsIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -45,7 +55,7 @@ function SettingsIcon() {
   )
 }
 
-export default function MenuDrawer({ open, onClose, user, onShowFavorites }: MenuDrawerProps) {
+export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRestartOnboarding }: MenuDrawerProps) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -136,6 +146,14 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites }: Men
               관심목록
             </button>
           )}
+
+          <button
+            onClick={() => { onRestartOnboarding(); onClose() }}
+            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+          >
+            <CompassIcon />
+            둘러보기
+          </button>
 
           {user?.isAdmin && (
             <Link

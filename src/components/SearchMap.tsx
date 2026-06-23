@@ -383,6 +383,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const sheetDragStartY = useRef<number | null>(null)
   const searchBarRef = useRef<HTMLDivElement>(null)
   const hamburgerRef = useRef<HTMLButtonElement>(null)
+  const [onboardingKey, setOnboardingKey] = useState(0)
+
+  const handleRestartOnboarding = useCallback(() => {
+    localStorage.removeItem('maptube_onboarded')
+    setOnboardingKey((k) => k + 1)
+  }, [])
 
   // How much of the map's height is currently covered by a bottom sheet, so
   // panTo can keep whatever point it's centering on inside the visible area
@@ -938,6 +944,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         onClose={() => setMenuOpen(false)}
         user={user}
         onShowFavorites={handleShowFavorites}
+        onRestartOnboarding={handleRestartOnboarding}
       />
       <FavoritesOverlay
         open={favoritesOverlayOpen}
@@ -947,7 +954,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         onToggleFavorite={handleToggleFavoriteById}
         onToggleVisited={handleToggleVisited}
       />
-      <OnboardingOverlay searchBarRef={searchBarRef} hamburgerRef={hamburgerRef} />
+      <OnboardingOverlay key={onboardingKey} searchBarRef={searchBarRef} hamburgerRef={hamburgerRef} />
 
       {/* Search bar — always visible single line, like Google/Kakao/Naver
           Maps. Tap the text directly to type right away; the chevron
