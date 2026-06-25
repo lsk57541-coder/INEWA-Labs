@@ -197,6 +197,20 @@ const MIN_VIDEO_SEC = 60
 
 type SearchCategory = 'food' | 'cafe' | 'date' | 'travel' | 'bar' | 'hotspot' | 'stay' | 'default'
 
+// 일반 키워드("맛집")는 초경쟁이라 니치 로컬 영상이 YouTube 랭킹에서 묻힘.
+// 콘텐츠 포맷 모디파이어를 붙인 보조 지역검색으로 recall 보강. 구체 키워드
+// (default, 예: "김치찜")은 이미 잘 잡히므로 모디파이어 없음 → quota 절약.
+const CATEGORY_MODIFIER: Record<SearchCategory, string | null> = {
+  food: '먹방',
+  cafe: '브이로그',
+  date: '브이로그',
+  travel: '브이로그',
+  bar: '먹방',
+  hotspot: '브이로그',
+  stay: '후기',
+  default: null,
+}
+
 function classifyCategory(q: string): SearchCategory {
   if (/카페|커피|브런치|디저트/.test(q)) return 'cafe'
   if (/데이트코스|데이트|커플/.test(q)) return 'date'
@@ -490,6 +504,19 @@ export async function GET(req: NextRequest) {
           publishedAfter,
         })
         unique = [...unique, ...dedupe(regionItems)]
+
+        // 일반 키워드(food/cafe 등)는 콘텐츠 포맷 모디파이어를 붙인 보조 지역검색으로
+        // 니치 로컬 영상 recall 보강 (예: "가평 맛집 먹방"). default 카테고리는 생략.
+        const modifier = CATEGORY_MODIFIER[category]
+        if (modifier) {
+          const modItems = await ytSearch(`${regionName} ${q} ${modifier}`, {
+            relevanceLanguage: 'ko',
+            regionCode: 'KR',
+            order: 'relevance',
+            publishedAfter,
+          })
+          unique = [...unique, ...dedupe(modItems)]
+        }
       }
 
       if (unique.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
