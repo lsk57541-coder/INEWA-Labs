@@ -1122,8 +1122,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
           {/* 채널 자동완성 드롭다운 */}
           {searchMode === 'channel' && !selectedChannel && (channelSearching || channelSuggestions.length > 0) && (
-            <div className="absolute z-10 top-full left-3 right-3 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-              {channelSearching && <p className="text-xs text-gray-400 px-3 py-2">검색 중…</p>}
+            <div className="absolute z-50 top-full left-3 right-3 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto divide-y">
+              {channelSearching && <p className="text-xs text-gray-400 px-4 py-3">검색 중…</p>}
               {channelSuggestions.map((c) => (
                 <button
                   key={c.channelId}
@@ -1132,10 +1132,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     setChannelQuery('')
                     setChannelSuggestions([])
                   }}
-                  className="w-full flex items-center gap-2 text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                  className="w-full flex items-center gap-3 text-left px-4 py-3 hover:bg-gray-50 transition"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={c.thumbnail} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                  <img src={c.thumbnail} alt="" className="w-8 h-8 rounded-full shrink-0" />
                   <p className="text-sm font-medium truncate">{c.title}</p>
                 </button>
               ))}
@@ -1205,52 +1205,52 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             </div>
 
             {/* 고급 설정 — advancedOpen일 때만 */}
-            <div className={`overflow-hidden transition-all duration-200 ${advancedOpen ? 'max-h-80' : 'max-h-0'}`}>
+            <div className={`overflow-hidden transition-all duration-200 ${advancedOpen ? 'max-h-[420px]' : 'max-h-0'}`}>
               <div className="px-3 pb-3 border-t pt-3 space-y-3">
                 {/* 위치 직접입력 — 키워드/채널 모두 */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <p className="text-xs text-gray-400 font-medium">📍 검색위치 직접입력</p>
-                    <button
-                      onClick={getLocation}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium transition"
-                    >
-                      🎯 현재 위치로
-                    </button>
-                  </div>
+                  <p className="text-xs text-gray-400 font-medium mb-1.5">📍 검색위치 직접입력</p>
                   <div className="relative">
-                    <div className="flex gap-1">
-                      <input
-                        type="text"
-                        value={addressInput}
-                        onChange={(e) => handleAddressInputChange(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
-                        placeholder="지역명 또는 주소 입력"
-                        className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
-                      />
-                      <button
-                        onClick={handleAddressSearch}
-                        disabled={addressLoading}
-                        className="shrink-0 text-[11px] bg-gray-100 text-gray-700 rounded-lg px-2 py-2 hover:bg-gray-200 disabled:opacity-40 transition whitespace-nowrap"
-                      >
-                        {addressLoading ? '…' : '이 위치로 설정'}
-                      </button>
-                    </div>
+                    <input
+                      type="text"
+                      value={addressInput}
+                      onChange={(e) => handleAddressInputChange(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
+                      placeholder="지역명 또는 주소 입력"
+                      className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                    />
                     {locationSuggestions.length > 0 && (
-                      <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100">
                         {locationSuggestions.map((s, i) => (
                           <button
                             key={i}
                             onClick={() => selectLocationSuggestion(s)}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50 transition"
                           >
-                            <p className="text-sm font-medium">{s.name}</p>
-                            <p className="text-xs text-gray-400">{s.address}</p>
+                            <p className="text-sm font-medium text-gray-900">{s.name}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{s.address}</p>
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
+                  {addressInput.trim() && (
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={handleAddressSearch}
+                        disabled={addressLoading}
+                        className="flex-1 text-sm bg-blue-600 text-white rounded-lg py-2 font-medium hover:bg-blue-700 disabled:opacity-40 transition"
+                      >
+                        {addressLoading ? '설정 중…' : '📍 이 위치로 설정'}
+                      </button>
+                      <button
+                        onClick={getLocation}
+                        className="shrink-0 text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-2 hover:bg-gray-50 transition"
+                      >
+                        🎯 현재 위치로
+                      </button>
+                    </div>
+                  )}
                   {posLabel !== '위치 미설정' && (
                     <p className="text-xs text-blue-600 mt-1.5 truncate font-medium">{posLabel}</p>
                   )}
