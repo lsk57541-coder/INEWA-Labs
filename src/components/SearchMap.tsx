@@ -638,6 +638,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         setIsManualLocation(false)
         setError(null)
         panTo(latitude, longitude, currentSheetFraction)
+        setAdvancedOpen(false)
       },
       () => setError('위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요.')
     )
@@ -679,6 +680,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
   const handleAddressSearch = () => {
     if (!addressInput.trim()) { setError('주소를 입력해주세요.'); return }
+    // 드롭다운에 이미 결과가 있으면 첫 번째 항목으로 바로 설정
+    if (locationSuggestions.length > 0) {
+      selectLocationSuggestion(locationSuggestions[0])
+      return
+    }
     fetchLocationSuggestions(addressInput.trim())
   }
 
@@ -687,8 +693,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     setPosLabel(s.name)
     setIsManualLocation(true)
     panTo(s.lat, s.lng, currentSheetFraction)
-    setAddressInput(s.name)
+    setAddressInput('')
     setLocationSuggestions([])
+    setAdvancedOpen(false)
   }
 
   const renderMarkers = useCallback(
