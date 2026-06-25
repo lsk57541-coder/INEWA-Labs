@@ -433,6 +433,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [selectedGroup, setSelectedGroup] = useState<MarkerGroup | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<VideoResult | null>(null)
   const [mapReady, setMapReady] = useState(false)
+  const [restoreDone, setRestoreDone] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
   const [visitedIds, setVisitedIds] = useState<Set<string>>(new Set())
@@ -550,6 +551,33 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   // Clear stale suggestions when panels collapse
   useEffect(() => { if (!advancedOpen) setLocationSuggestions([]) }, [advancedOpen])
   useEffect(() => { if (!optionsOpen) setChannelSuggestions([]) }, [optionsOpen])
+
+  // 지도 준비 후 sessionStorage에서 마지막 검색 상태 복원
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return
+    try {
+      const raw = sessionStorage.getItem('maptube_search_state')
+      if (raw) {
+        const s = JSON.parse(raw) as {
+          keyword: string
+          radius: number
+          searchMode: 'keyword' | 'channel'
+          userPos: { lat: number; lng: number }
+          posLabel: string
+        }
+        if (s.keyword) setKeyword(s.keyword)
+        if (s.radius && RADIUS_OPTIONS.includes(s.radius as Radius)) setRadius(s.radius as Radius)
+        if (s.searchMode) setSearchMode(s.searchMode)
+        if (s.userPos) {
+          setUserPos(s.userPos)
+          setPosLabel(s.posLabel)
+          mapInstanceRef.current.setCenter(new kakao.maps.LatLng(s.userPos.lat, s.userPos.lng))
+        }
+        if (s.keyword) setSearchChip(s.keyword)
+      }
+    } catch {}
+    setRestoreDone(true)
+  }, [mapReady])
 
   useEffect(() => {
     async function load() {
@@ -784,6 +812,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       setAdvancedOpen(false)
       setListOpen(true)
       setSearchChip(searchMode === 'keyword' ? effectiveKeyword.trim() : (selectedChannel?.title ?? ''))
+
+      // 메인 재진입 시 상태 복원을 위해 검색 설정 저장
+      try {
+        sessionStorage.setItem('maptube_search_state', JSON.stringify({
+          keyword: effectiveKeyword,
+          radius: effectiveRadius,
+          searchMode,
+          userPos: pos,
+          posLabel: posLabel || `현재 위치 (${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)})`,
+        }))
+      } catch {}
 
       if (videos.length === 0) {
         setLastSearchQuery(searchMode === 'keyword' ? effectiveKeyword.trim() : (selectedChannel?.title ?? ''))
@@ -1030,7 +1069,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
       {/* Map */}
       <div ref={mapRef} className="flex-1 h-full touch-none" />
-      {!mapReady && (
+      {(!mapReady || !restoreDone) && (
         <div className="absolute inset-0 z-[5] pointer-events-none bg-gray-100 flex flex-col items-center justify-center gap-2">
           <div className="animate-pulse flex flex-col items-center gap-3">
             <svg width="32" height="42" viewBox="0 0 32 42" fill="none">
