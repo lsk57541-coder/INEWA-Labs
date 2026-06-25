@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getPartnerApplications } from '@/app/actions'
 import dynamic from 'next/dynamic'
+import AdminTabNav from '@/components/admin/AdminTabNav'
 const PartnerStats = dynamic(() => import('./components/PartnerStats'), {
   loading: () => <div className="h-40 bg-gray-100 rounded-lg animate-pulse" />,
 })
@@ -47,9 +48,11 @@ export default async function AdminPartnersPage({
   const pendingCount = allPartners.filter((p) => p.status === 'pending').length
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <Link href="/admin" className="text-xs text-gray-400 hover:text-gray-600">← 관리자 메인</Link>
-      <h1 className="text-xl font-bold mt-1 mb-6">파트너 신청 관리</h1>
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="mb-3">
+        <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← 메인으로</Link>
+      </div>
+      <AdminTabNav active="파트너" />
 
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="border rounded-lg p-4 text-center">

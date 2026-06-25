@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getTargets, getTemplates, addTarget, sendOutreach, sendFollowUp, updateStatus } from './actions'
+import AdminTabNav from '@/components/admin/AdminTabNav'
 import AddOutreachTargetSlideOver from '@/components/admin/AddOutreachTargetSlideOver'
 import OutreachTargetActions from '@/components/admin/OutreachTargetActions'
 
@@ -55,21 +56,19 @@ export default async function AdminOutreachPage({
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-1">
-        <div>
-          <Link href="/admin" className="text-xs text-gray-400 hover:text-gray-600">← 관리자 메인</Link>
-          <h1 className="text-xl font-bold mt-1">콜드 아웃리치</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/admin/outreach/templates"
-            className="bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition"
-          >
-            템플릿 관리
-          </Link>
-          <AddOutreachTargetSlideOver addAction={addTarget} />
-        </div>
+    <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="mb-3">
+        <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← 메인으로</Link>
+      </div>
+      <AdminTabNav active="아웃리치" />
+      <div className="flex items-center gap-2 mb-4 justify-end">
+        <Link
+          href="/admin/outreach/templates"
+          className="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-lg hover:bg-gray-200 transition"
+        >
+          템플릿 관리
+        </Link>
+        <AddOutreachTargetSlideOver addAction={addTarget} />
       </div>
 
       <form className="flex gap-2 my-4" action="/admin/outreach">

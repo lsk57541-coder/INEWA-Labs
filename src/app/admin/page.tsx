@@ -8,6 +8,7 @@ import {
 } from '@/app/actions'
 import { PLACENAME_SOURCES } from '@/lib/placeNameSources'
 import DeleteButton from '@/components/admin/DeleteButton'
+import AdminTabNav from '@/components/admin/AdminTabNav'
 import Link from 'next/link'
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -54,44 +55,7 @@ export default async function AdminPage() {
         <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← 메인으로</Link>
       </div>
 
-      {/* 탭 네비게이션 — 가로 스크롤 */}
-      <div className="overflow-x-auto -mx-4 mb-6">
-        <div className="flex min-w-max px-4 border-b">
-          <span className="inline-flex items-center px-3 py-2 text-sm font-medium text-black border-b-2 border-black -mb-px shrink-0">
-            장소
-          </span>
-          <Link
-            href="/admin/partners"
-            className="inline-flex items-center px-3 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-gray-600 -mb-px shrink-0"
-          >
-            파트너
-          </Link>
-          <Link
-            href="/admin/places"
-            className="inline-flex items-center px-3 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-gray-600 -mb-px shrink-0"
-          >
-            검토
-          </Link>
-          <Link
-            href="/admin/outreach"
-            className="inline-flex items-center px-3 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-gray-600 -mb-px shrink-0"
-          >
-            아웃리치
-          </Link>
-          <Link
-            href="/admin/locations/new/bulk"
-            className="inline-flex items-center px-3 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-gray-600 -mb-px shrink-0"
-          >
-            영상등록
-          </Link>
-          <Link
-            href="/admin/locations/new"
-            className="inline-flex items-center px-3 py-2 text-sm font-semibold text-black border-b-2 border-transparent hover:text-gray-700 -mb-px shrink-0"
-          >
-            + 추가
-          </Link>
-        </div>
-      </div>
+      <AdminTabNav active="장소" />
 
       {/* 노출 기준 섹션 */}
       <section className="mb-6">

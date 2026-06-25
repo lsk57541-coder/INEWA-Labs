@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import AdminTabNav from '@/components/admin/AdminTabNav'
 import { redirect } from 'next/navigation'
 import PlaceReviewList from './PlaceReviewList'
 
@@ -33,13 +34,11 @@ export default async function AdminPlacesPage({
   const { data: places } = await query
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <Link href="/admin" className="text-xs text-gray-400 hover:text-gray-600">← 관리자 홈</Link>
-          <h1 className="text-xl font-bold mt-1">파트너 장소 검토</h1>
-        </div>
+    <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="mb-3">
+        <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← 메인으로</Link>
       </div>
+      <AdminTabNav active="검토" />
 
       <div className="flex gap-1.5 mb-4">
         {TABS.map(t => (
