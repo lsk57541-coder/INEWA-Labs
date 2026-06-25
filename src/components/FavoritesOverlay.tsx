@@ -164,8 +164,10 @@ export default function FavoritesOverlay({
                   onClose()
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={v.thumbnail} alt="" className="w-20 h-12 object-cover rounded-lg shrink-0" />
+                <div className="w-20 h-12 rounded-lg bg-gray-100 shrink-0 overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {v.thumbnail && <img src={v.thumbnail} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />}
+                </div>
                 <div className="flex-1 min-w-0">
                   {isLoading ? (
                     <div className="space-y-1.5">
@@ -179,7 +181,7 @@ export default function FavoritesOverlay({
                         <p className="text-sm font-bold leading-snug">{placeName}</p>
                         {d?.category && (
                           <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-medium shrink-0">
-                            {d.category}
+                            {d.category.split(' > ').at(-1)}
                           </span>
                         )}
                       </div>
