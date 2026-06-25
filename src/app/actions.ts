@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { searchPlaceInfo, reverseGeocode, type PlaceDetails } from '@/lib/geocode'
 import { PLACENAME_SOURCES, type MinConfidenceSource } from '@/lib/placeNameSources'
@@ -94,9 +95,22 @@ export async function addLocation(formData: FormData) {
 }
 
 export async function deleteLocation(locationId: string) {
-  const supabase = await requireAdmin()
-  const { error } = await supabase.from('locations').delete().eq('id', locationId)
+  await requireAdmin() // 앱 단 권한 검증 (서비스롤은 RLS 우회하므로 필수)
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) throw new Error('서버 설정 오류: 서비스 키가 없습니다.')
+  const admin = createServiceClient(url, serviceKey)
+
+  // FK에 ON DELETE CASCADE가 없을 수 있으므로 자식 videos 먼저 삭제
+  const { error: videosError } = await admin.from('videos').delete().eq('location_id', locationId)
+  if (videosError) throw new Error(videosError.message)
+
+  // .select()로 0행 삭제(존재하지 않는 id 등)를 에러로 표출
+  const { data, error } = await admin.from('locations').delete().eq('id', locationId).select('id')
   if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('삭제된 장소가 없습니다. (이미 삭제되었거나 ID 불일치)')
+
   revalidatePath('/admin')
   revalidatePath('/')
 }

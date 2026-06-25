@@ -344,6 +344,70 @@ async function fetchVideoDetails(ids: string[]): Promise<YTVideoItem[]> {
   return all.flat()
 }
 
+function extractYoutubeId(url: string): string | null {
+  if (!url) return null
+  const m = url.match(/(?:youtu\.be\/|watch\?v=|\/shorts\/|\/embed\/)([\w-]{11})/)
+  return m ? m[1] : (/^[\w-]{11}$/.test(url.trim()) ? url.trim() : null)
+}
+
+// 관리자 등록(locations+videos) + 파트너 승인 장소(places, status=active)를
+// 반경 내에서 VideoResult로 변환. RLS 우회 위해 서비스롤 사용(서버 전용).
+async function getRegisteredResults(lat: number, lng: number, radius: number): Promise<VideoResult[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) return []
+  const db = createClient(url, serviceKey)
+
+  const out: VideoResult[] = []
+
+  // 1) locations + videos
+  const { data: locations } = await db.from('locations').select('id, name, lat, lng')
+  const nearby = (locations ?? []).filter(
+    (l) => l.lat != null && l.lng != null && haversineKm(lat, lng, l.lat, l.lng) <= radius
+  )
+  if (nearby.length > 0) {
+    const { data: vids } = await db
+      .from('videos')
+      .select('youtube_id, title, thumbnail, channel, location_id')
+      .in('location_id', nearby.map((l) => l.id))
+    const locById = new Map(nearby.map((l) => [l.id, l]))
+    for (const v of vids ?? []) {
+      const loc = locById.get(v.location_id)
+      if (!loc || !v.youtube_id) continue
+      out.push({
+        videoId: v.youtube_id, title: v.title ?? loc.name, thumbnail: v.thumbnail ?? '',
+        channel: v.channel ?? '', lat: loc.lat, lng: loc.lng,
+        distanceKm: Math.round(haversineKm(lat, lng, loc.lat, loc.lng) * 10) / 10,
+        source: 'geotag', viewCount: 0, placeName: loc.name,
+        placeNameSource: 'correction', duration: '', isShort: false,
+        subscriberTier: null, subscriberCount: 0,
+      })
+    }
+  }
+
+  // 2) places (status=active)
+  const { data: places } = await db
+    .from('places')
+    .select('name, video_url, latitude, longitude, category, status')
+    .eq('status', 'active')
+  for (const p of places ?? []) {
+    if (p.latitude == null || p.longitude == null) continue
+    const dist = haversineKm(lat, lng, p.latitude, p.longitude)
+    if (dist > radius) continue
+    const vid = extractYoutubeId(p.video_url ?? '')
+    if (!vid) continue
+    out.push({
+      videoId: vid, title: p.name, thumbnail: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`,
+      channel: p.category ?? '', lat: p.latitude, lng: p.longitude,
+      distanceKm: Math.round(dist * 10) / 10,
+      source: 'geotag', viewCount: 0, placeName: p.name,
+      placeNameSource: 'correction', duration: '', isShort: false,
+      subscriberTier: null, subscriberCount: 0,
+    })
+  }
+  return out
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const q = searchParams.get('q')?.trim()
@@ -632,5 +696,11 @@ export async function GET(req: NextRequest) {
   const filtered = deduped.filter((r) => !blocked.has(r.videoId) && !myHidden.has(r.videoId))
   filtered.sort((a, b) => b.viewCount - a.viewCount)
 
-  return NextResponse.json({ results: filtered })
+  // 등록 장소(관리자/파트너)는 큐레이션된 데이터이므로 상단에 배치.
+  // YouTube 결과와 videoId 중복 시 등록본 우선.
+  const registered = await getRegisteredResults(lat, lng, radius)
+  const regSeen = new Set(registered.map((r) => r.videoId))
+  const finalResults = [...registered, ...filtered.filter((r) => !regSeen.has(r.videoId))]
+
+  return NextResponse.json({ results: finalResults })
 }
