@@ -1625,7 +1625,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         >
           <div className="relative aspect-video w-full bg-black">
             <iframe
-              src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1`}
+              src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1${selectedVideo.startSec ? `&start=${selectedVideo.startSec}` : ''}`}
               allow="autoplay; encrypted-media"
               allowFullScreen
               className="w-full h-full"
@@ -1747,7 +1747,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           >
             <div className="aspect-video w-full">
               <iframe
-                src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1`}
+                src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1${selectedVideo.startSec ? `&start=${selectedVideo.startSec}` : ''}`}
                 allow="autoplay; encrypted-media"
                 allowFullScreen
                 className="w-full h-full"

@@ -44,8 +44,26 @@ export async function getRegionName(lat: number, lng: number): Promise<string | 
   const raw = doc.region_2depth_name || doc.region_1depth_name
   if (!raw) return null
   // "가평군"→"가평", "강남구"→"강남", "안산시 단원구"→"안산". 유튜버가 제목에 쓰는 형태.
+  // 단 "서구"/"동구"처럼 접미사 제거 시 1글자만 남으면(서/동/남/북/중) 도시명이 빠져
+  // 무의미 → 풀네임("서구") 유지 (대도시 구 recall 깨짐 방지). 도시 모호성은 getCityName prefix로 별도 해소.
   const first = raw.split(' ')[0]
-  return first.replace(/(시|군|구)$/, '') || first
+  const stripped = first.replace(/(시|군|구)$/, '')
+  return stripped.length >= 2 ? stripped : first
+}
+
+// 검색 중심의 시/도명(region_1depth) → 대도시(광역시/특별시)일 때만 "광주"/"서울" 형태로 반환.
+// geocode 쿼리에서 대도시 동명 구(서구/동구/광산구…) 모호성 해소 prefix용. 도 단위(가평/강남 등은
+// region_2depth가 이미 고유)에선 '' 반환 → prefix 불필요.
+export async function getCityName(lat: number, lng: number): Promise<string> {
+  const key = process.env.KAKAO_REST_API_KEY
+  if (!key) return ''
+  const url = `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`
+  const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })
+  if (!res.ok) return ''
+  const json = await res.json() as { documents: { region_1depth_name: string }[] }
+  const r1 = json.documents?.[0]?.region_1depth_name ?? ''
+  if (!/(특별시|광역시|특별자치시)$/.test(r1)) return ''
+  return r1.replace(/(특별시|광역시|특별자치시)$/, '')
 }
 
 export interface PlaceDetails {

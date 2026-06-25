@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { haversineKm } from '@/lib/haversine'
-import { geocodeKorean, reverseGeocode, searchPlaceInfo, getRegionName } from '@/lib/geocode'
+import { geocodeKorean, reverseGeocode, searchPlaceInfo, getRegionName, getCityName } from '@/lib/geocode'
 import { buildHeuristicPlaceQueries, extractPlaceByAI, extractStatedBusinessName } from '@/lib/extractLocation'
+import { isCompilationVideo, resolveCompilationPlaces } from '@/lib/extractPlaces'
 import { extractPlaceFromComments } from '@/lib/extractFromComments'
 import { getMinConfidenceSetting } from '@/app/actions'
 
@@ -156,6 +157,7 @@ export interface VideoResult {
   isShort: boolean
   subscriberTier: SubscriberTier | null
   subscriberCount: number
+  startSec?: number // 모음영상 챕터 deep-link (해당 장소 구간부터 재생)
 }
 
 // Fire-and-forget log of how each video's place name was resolved. Upserts by
@@ -491,6 +493,10 @@ export async function GET(req: NextRequest) {
   // 검색 중심의 시/군/구 지역명 — "지역+키워드" 유튜브 검색과 비-geotag 위치 추출
   // 휴리스틱 양쪽에서 재사용. Kakao 호출(YT quota 무관)이므로 한 번만 계산.
   const regionName = await getRegionName(lat, lng)
+  // 대도시 구(서구/동구/광산구…)는 전국 동명 구가 많아 geocode 모호 → 검색 중심의 도시명을
+  // 쿼리 앞에 붙여 해소("서구 진심옥"→"광주 서구 진심옥"). 비-대도시(도 단위)는 ''. GET당 1회만 계산.
+  const cityPrefix = await getCityName(lat, lng)
+  const geoRegionPrefix = cityPrefix ? `${cityPrefix} ` : ''
   // 검색 카테고리 — 후보 풀 구성과 행정구역 재라우팅 카테고리 가드레일에서 공용.
   const category: SearchCategory = q ? classifyCategory(q) : 'default'
 
@@ -733,7 +739,9 @@ export async function GET(req: NextRequest) {
       // requireCorroboration=true(AI 폴백)면 매칭 장소 행정구역이 영상 텍스트에
       // 언급될 때만 통과 — 해외 도시명 동명 오매칭 차단.
       const tryResolveAndPush = async (place: string, requireCorroboration: boolean): Promise<boolean> => {
-        const geo2 = await geocodeKorean(place)
+        // 휴리스틱 쿼리(requireCorroboration=false)에만 도시명 prefix로 대도시 구 모호성 해소.
+        // AI 쿼리(=true)는 이미 자체 지역명을 포함하므로 prefix 안 함(중복 방지).
+        const geo2 = await geocodeKorean(requireCorroboration ? place : `${geoRegionPrefix}${place}`.trim())
         if (!geo2) return false
         const dist = haversineKm(lat, lng, geo2.lat, geo2.lng)
         if (dist > radius) return false
@@ -801,6 +809,43 @@ export async function GET(req: NextRequest) {
         return true
       }
 
+      if (isCompilationVideo(v.snippet.title, v.snippet.description ?? '')) {
+        const allowedGroups = CATEGORY_KAKAO_GROUP[category] ?? CATEGORY_KAKAO_GROUP.default
+        const resolved = await resolveCompilationPlaces({
+          videoId: v.id,
+          title: v.snippet.title,
+          description: v.snippet.description ?? '',
+          // geocode 쿼리용으로 도시명 prefix 부착(함수 본문 무수정 — regionName은 거기서 쿼리에만 쓰임)
+          regionName: `${geoRegionPrefix}${regionName ?? ''}`.trim() || null, lat, lng, radius,
+          adminDesc,            // 이 영상의 adminDesc (없으면 null)
+          allowedGroups,
+          withinAdminArea,      // 기존 route 내 함수/헬퍼 그대로 전달
+          addressCorroborated,  // 기존 route 내 함수/헬퍼 그대로 전달
+        })
+        const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
+        if (!(durationSec > 0 && durationSec < MIN_VIDEO_SEC)) {
+          const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
+          for (const r of resolved) {
+            logPlaceNameResolution(v.id, 'explicit_description', r.name)
+            results.push({
+              videoId: v.id, title: snippet.title,
+              thumbnail: snippet.thumbnails.medium.url,
+              channel: snippet.channelTitle,
+              lat: r.lat, lng: r.lng, distanceKm: r.distanceKm,
+              source: 'ai',
+              viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
+              placeName: r.name, placeNameSource: 'explicit_description',
+              duration: formatDuration(durationSec),
+              isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+              subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
+              subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
+              startSec: r.startSec,
+            })
+          }
+        }
+        return
+      }
+
       // ① 휴리스틱 우선 (지역 앵커 + 명시 업체명) — API 비용 없음
       const candidates = buildHeuristicPlaceQueries(v.snippet.title, v.snippet.description ?? '', regionName)
       let resolved = false
@@ -816,11 +861,13 @@ export async function GET(req: NextRequest) {
     }),
   ])
 
-  // Deduplicate results by videoId (race condition in parallel map), sort by viewCount desc
+  // Deduplicate results by videoId+location (race condition in parallel map; one
+  // compilation video yields multiple places), sort by viewCount desc
   const finalSeen = new Set<string>()
   const deduped = results.filter((r) => {
-    if (finalSeen.has(r.videoId)) return false
-    finalSeen.add(r.videoId)
+    const key = `${r.videoId}:${r.lat.toFixed(3)}:${r.lng.toFixed(3)}`
+    if (finalSeen.has(key)) return false
+    finalSeen.add(key)
     return true
   })
   const [blocked, myHidden] = await Promise.all([getBlockedVideoIds(), getMyHiddenVideoIds()])
