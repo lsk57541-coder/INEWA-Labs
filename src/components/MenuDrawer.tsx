@@ -112,18 +112,18 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
             <div>
               <p className="text-xs text-gray-500 mb-3">로그인하면 이런 게 가능해요</p>
               <div className="space-y-2 mb-4">
-                <div className="flex items-center gap-2 text-xs text-gray-600">
+                <div className="flex items-center gap-2 text-sm text-gray-700">
                   <span className="flex-shrink-0"><HeartIcon /></span>
                   관심 장소 저장
                 </div>
-                <div className="flex items-center gap-2 text-xs text-gray-600">
+                <div className="flex items-center gap-2 text-sm text-gray-700">
                   <span className="flex-shrink-0"><FlagIcon /></span>
                   가본 곳 기록
                 </div>
               </div>
               <KakaoLoginButton
                 label="카카오 1초 로그인"
-                className="w-full justify-center mt-6 mb-1"
+                className="w-full justify-center mt-3 mb-1"
               />
               <button
                 onClick={onClose}
@@ -152,7 +152,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
             className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
           >
             <CompassIcon />
-            둘러보기
+            앱 소개 다시보기
           </button>
 
           {user?.isAdmin && (
