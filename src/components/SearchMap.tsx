@@ -402,6 +402,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [radius, setRadius] = useState<Radius>(1)
   const [searchMode, setSearchMode] = useState<'keyword' | 'channel'>('keyword')
   const [optionsOpen, setOptionsOpen] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [searchChip, setSearchChip] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(true)
   const [panelOpacity, setPanelOpacity] = useState(0.95)
   const [addressInput, setAddressInput] = useState('')
@@ -735,7 +737,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       // so the list is visible right away — the search bar itself (with the
       // query still showing) stays visible, it just isn't expanded anymore.
       setOptionsOpen(false)
+      setAdvancedOpen(false)
       setListOpen(true)
+      setSearchChip(searchMode === 'keyword' ? effectiveKeyword.trim() : (selectedChannel?.title ?? ''))
 
       if (videos.length === 0) {
         setLastSearchQuery(searchMode === 'keyword' ? effectiveKeyword.trim() : (selectedChannel?.title ?? ''))
@@ -1037,33 +1041,60 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       />
       <OnboardingOverlay key={onboardingKey} searchBarRef={searchBarRef} hamburgerRef={hamburgerRef} />
 
-      {/* Search bar — always visible single line, like Google/Kakao/Naver
-          Maps. Tap the text directly to type right away; the chevron
-          expands mode/location/radius options below it instead of hiding
-          the bar itself (real map apps don't have a "fully hide search"
-          mode, so neither do we). */}
+      {/* Search panel / chip — ref always mounted for OnboardingOverlay */}
       <div
         ref={searchBarRef}
-        className={`absolute top-16 left-3 z-10 w-72 max-w-[calc(100vw-24px)] shadow-lg ${optionsOpen ? 'rounded-2xl' : 'rounded-full'}`}
-        style={{ backgroundColor: `rgba(255,255,255,${panelOpacity})` }}
+        className="absolute top-16 left-3 z-10"
       >
-        <div className="relative flex items-center gap-2 h-11 px-3">
-          <span className="shrink-0 text-base">{searchMode === 'channel' ? '🎙' : '🔎'}</span>
-
+        {searchChip ? (
+          /* 검색 완료 후 칩 모드 */
+          <div className="flex items-center gap-1 bg-white shadow-lg rounded-full pl-3 pr-2 py-2 max-w-[calc(100vw-24px)]">
+            <span className="text-sm shrink-0">🔍</span>
+            <button
+              onClick={() => { setSearchChip(null); setOptionsOpen(true) }}
+              className="text-sm font-medium truncate max-w-[180px] text-left"
+            >
+              {searchChip}
+            </button>
+            <button
+              onClick={() => {
+                setSearchChip(null)
+                setKeyword('')
+                setSelectedChannel(null)
+                setChannelQuery('')
+                setOptionsOpen(true)
+              }}
+              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition text-xs ml-0.5"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+        /* 패널 모드 */
+        <div
+          className="w-72 max-w-[calc(100vw-24px)] shadow-lg rounded-2xl"
+          style={{ backgroundColor: `rgba(255,255,255,${panelOpacity})` }}
+        >
+        {/* 입력창 — 항상 표시, 포커스 시 패널 확장 */}
+        <div className="relative px-3 py-3">
           {searchMode === 'keyword' ? (
             <input
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              onFocus={() => setOptionsOpen(true)}
               placeholder="키워드 검색 (예: 한강 카페, 제주 맛집)"
-              className="flex-1 min-w-0 text-sm outline-none bg-transparent placeholder-gray-400"
+              className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
             />
           ) : selectedChannel ? (
-            <div className="flex-1 min-w-0 flex items-center gap-1.5 text-xs font-medium text-blue-700">
+            <div
+              className="flex items-center gap-1.5 text-xs font-medium text-blue-700 border rounded-lg px-3 py-2 bg-white min-w-0 cursor-pointer"
+              onClick={() => setOptionsOpen(true)}
+            >
               <span className="flex-1 truncate">{selectedChannel.title} 채널만 검색</span>
               <button
-                onClick={() => { setSelectedChannel(null); setChannelQuery('') }}
+                onClick={(e) => { e.stopPropagation(); setSelectedChannel(null); setChannelQuery('') }}
                 className="shrink-0 text-blue-400 hover:text-blue-600"
                 title="채널 선택 해제"
               >
@@ -1075,23 +1106,15 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               type="text"
               value={channelQuery}
               onChange={(e) => handleChannelQueryChange(e.target.value)}
+              onFocus={() => setOptionsOpen(true)}
               placeholder="유튜버 채널명으로 검색"
-              className="flex-1 min-w-0 text-sm outline-none bg-transparent placeholder-gray-400"
+              className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
             />
           )}
 
-          <button
-            onClick={() => setOptionsOpen((o) => !o)}
-            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
-            title={optionsOpen ? '검색 옵션 닫기' : '검색 옵션 (모드·위치·반경)'}
-          >
-            {optionsOpen ? '▲' : '▾'}
-          </button>
-
-          {/* Channel suggestions overlay this bar regardless of whether the
-              options section below is expanded. */}
+          {/* 채널 자동완성 드롭다운 */}
           {searchMode === 'channel' && !selectedChannel && (channelSearching || channelSuggestions.length > 0) && (
-            <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+            <div className="absolute z-10 top-full left-3 right-3 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
               {channelSearching && <p className="text-xs text-gray-400 px-3 py-2">검색 중…</p>}
               {channelSuggestions.map((c) => (
                 <button
@@ -1112,21 +1135,18 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           )}
         </div>
 
-        {/* Validation/search errors must stay visible even while the
-            options below are collapsed, since Enter in the bar above can
-            trigger handleSearch directly. */}
+        {/* 에러 */}
         {error && <p className="px-3 pb-2 text-xs text-red-500">{error}</p>}
 
-        <div className={`overflow-hidden transition-all duration-200 ${optionsOpen ? 'max-h-[min(28rem,calc(100dvh-140px))] overflow-y-auto' : 'max-h-0'}`}>
-          <div className="px-3 pt-2 pb-3 border-t space-y-3">
-            {/* Search mode */}
-            <div className="flex gap-1">
+        {/* 확장 섹션 — 입력창 클릭(포커스) 시 펼쳐짐, 검색 완료 후 닫힘 */}
+        <div className={`overflow-hidden transition-all duration-200 ${optionsOpen ? 'max-h-[500px]' : 'max-h-0'}`}>
+          <div className="border-t">
+            {/* 탭 */}
+            <div className="flex gap-1 px-3 pt-3">
               <button
                 onClick={() => setSearchMode('keyword')}
                 className={`flex-1 text-xs py-1.5 rounded-full font-medium transition ${
-                  searchMode === 'keyword'
-                    ? 'bg-accent text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  searchMode === 'keyword' ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 🔎 키워드 검색
@@ -1134,67 +1154,15 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               <button
                 onClick={() => setSearchMode('channel')}
                 className={`flex-1 text-xs py-1.5 rounded-full font-medium transition ${
-                  searchMode === 'channel'
-                    ? 'bg-accent text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  searchMode === 'channel' ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                🎙 유튜브 채널 검색
+                🎙 채널 검색
               </button>
             </div>
 
-            {/* Search location: direct address input, plus a shortcut back to GPS */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-xs text-gray-400 font-medium">📍 검색위치 직접입력</p>
-                <button
-                  onClick={getLocation}
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium transition"
-                >
-                  🎯 현재 위치로
-                </button>
-              </div>
-              <div className="relative">
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={addressInput}
-                    onChange={(e) => handleAddressInputChange(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
-                    placeholder="지역명 또는 주소 입력"
-                    className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
-                  />
-                  <button
-                    onClick={handleAddressSearch}
-                    disabled={addressLoading}
-                    className="shrink-0 text-xs bg-gray-100 text-gray-700 rounded-lg px-3 py-2 hover:bg-gray-200 disabled:opacity-40 transition"
-                  >
-                    {addressLoading ? '…' : '검색'}
-                  </button>
-                </div>
-                {locationSuggestions.length > 0 && (
-                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {locationSuggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        onClick={() => selectLocationSuggestion(s)}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
-                      >
-                        <p className="text-sm font-medium">{s.name}</p>
-                        <p className="text-xs text-gray-400">{s.address}</p>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {posLabel !== '위치 미설정' && (
-                <p className="text-xs text-blue-600 mt-1.5 truncate font-medium">{posLabel}</p>
-              )}
-            </div>
-
-            {/* Radius */}
-            <div className="flex gap-1.5">
+            {/* 반경 — 키워드/채널 모두 */}
+            <div className="flex gap-1.5 px-3 pt-2">
               {RADIUS_OPTIONS.map((r) => (
                 <button
                   key={r}
@@ -1210,33 +1178,96 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               ))}
             </div>
 
-            {/* Panel opacity — only worth controlling once the panel is
-                tall enough to meaningfully block the map underneath. */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 shrink-0">투명도</span>
-              <input
-                type="range"
-                min={0.3}
-                max={1}
-                step={0.05}
-                value={panelOpacity}
-                onChange={(e) => setPanelOpacity(parseFloat(e.target.value))}
-                className="flex-1 accent-blue-600"
-                title="검색창 투명도"
-              />
+            {/* 고급 설정 토글 + 검색하기 버튼 */}
+            <div className="flex items-center gap-2 px-3 pt-2 pb-3">
+              <button
+                onClick={() => setAdvancedOpen((o) => !o)}
+                className="text-xs text-gray-400 hover:text-gray-600 transition whitespace-nowrap"
+              >
+                고급 설정 {advancedOpen ? '▲' : '▼'}
+              </button>
+              <button
+                onClick={() => handleSearch()}
+                disabled={loading || !mapReady}
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 disabled:opacity-40 transition"
+              >
+                {loading && <Spinner />}
+                {loading ? '검색 중…' : '검색하기'}
+              </button>
             </div>
 
-            {/* Search button */}
-            <button
-              onClick={() => handleSearch()}
-              disabled={loading || !mapReady}
-              className="w-full flex items-center justify-center gap-1.5 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 disabled:opacity-40 transition"
-            >
-              {loading && <Spinner />}
-              {loading ? '검색 중…' : '검색'}
-            </button>
+            {/* 고급 설정 — advancedOpen일 때만 */}
+            <div className={`overflow-hidden transition-all duration-200 ${advancedOpen ? 'max-h-80' : 'max-h-0'}`}>
+              <div className="px-3 pb-3 border-t pt-3 space-y-3">
+                {/* 위치 직접입력 — 키워드/채널 모두 */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs text-gray-400 font-medium">📍 검색위치 직접입력</p>
+                    <button
+                      onClick={getLocation}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium transition"
+                    >
+                      🎯 현재 위치로
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={addressInput}
+                        onChange={(e) => handleAddressInputChange(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
+                        placeholder="지역명 또는 주소 입력"
+                        className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                      />
+                      <button
+                        onClick={handleAddressSearch}
+                        disabled={addressLoading}
+                        className="shrink-0 text-[11px] bg-gray-100 text-gray-700 rounded-lg px-2 py-2 hover:bg-gray-200 disabled:opacity-40 transition whitespace-nowrap"
+                      >
+                        {addressLoading ? '…' : '이 위치로 설정'}
+                      </button>
+                    </div>
+                    {locationSuggestions.length > 0 && (
+                      <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {locationSuggestions.map((s, i) => (
+                          <button
+                            key={i}
+                            onClick={() => selectLocationSuggestion(s)}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                          >
+                            <p className="text-sm font-medium">{s.name}</p>
+                            <p className="text-xs text-gray-400">{s.address}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {posLabel !== '위치 미설정' && (
+                    <p className="text-xs text-blue-600 mt-1.5 truncate font-medium">{posLabel}</p>
+                  )}
+                </div>
+
+                {/* 지도 밝기 슬라이더 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 shrink-0">지도 밝기</span>
+                  <input
+                    type="range"
+                    min={0.3}
+                    max={1}
+                    step={0.05}
+                    value={panelOpacity}
+                    onChange={(e) => setPanelOpacity(parseFloat(e.target.value))}
+                    className="flex-1 accent-blue-600"
+                    title="검색창 투명도"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+        </div>
+        )}
       </div>
 
       {/* Search loading skeleton */}
@@ -1255,6 +1286,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           ))}
         </div>
       )}
+      {/* No results — backdrop: tap map to dismiss */}
+      {noResults && !selectedGroup && (
+        <div className="absolute inset-0 z-[9]" onClick={() => setLastSearchQuery(null)} />
+      )}
+
       {/* No results state */}
       {noResults && !selectedGroup && (() => {
         const q = (lastSearchQuery ?? '').toLowerCase()
@@ -1270,6 +1306,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         }
         return (
           <div className="absolute top-[140px] left-1/2 -translate-x-1/2 z-10 w-72 max-w-[calc(100vw-24px)] bg-white rounded-2xl shadow-xl px-4 py-4">
+            <button
+              onClick={() => setLastSearchQuery(null)}
+              className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition text-xs"
+            >
+              ✕
+            </button>
             <p className="text-sm font-semibold text-gray-800 mb-1 text-center">
               이 지역에서 &lsquo;{lastSearchQuery}&rsquo; 결과가 없어요
             </p>
