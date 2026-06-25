@@ -707,6 +707,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             panTo(group.lat, group.lng, 0)
           } else {
             setSelectedGroup(group)
+            setSelectedVideo(group.videos[0])
             panTo(group.lat, group.lng, 0.45)
           }
         })
@@ -1007,11 +1008,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   // Keep the locate-me button clear of whichever bottom sheet is currently
   // showing (results list or a marker group's video list), instead of
   // floating on top of it.
-  const locateButtonBottomClass = selectedGroup
-    ? 'bottom-[calc(45dvh+12px)]'
-    : allResults.length > 0 || noResults
-      ? listOpen ? 'bottom-[calc(50dvh+12px)]' : 'bottom-16'
-      : 'bottom-6'
+  const locateButtonBottomClass = (selectedGroup && selectedVideo)
+    ? 'bottom-[calc(45dvh+56.25vw+60px)]'
+    : selectedGroup
+      ? 'bottom-[calc(45dvh+12px)]'
+      : allResults.length > 0 || noResults
+        ? listOpen ? 'bottom-[calc(50dvh+12px)]' : 'bottom-16'
+        : 'bottom-6'
 
   return (
     <div className="flex flex-1 overflow-hidden relative">
@@ -1541,8 +1544,31 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       )}
 
+      {/* Compact video player — shown above group list when multi-video marker auto-plays */}
+      {selectedGroup && selectedVideo && (
+        <div
+          className="absolute left-0 right-0 z-20 shadow-2xl"
+          style={{ bottom: 'calc(45dvh + 6px)' }}
+        >
+          <div className="relative aspect-video w-full bg-black">
+            <iframe
+              src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1`}
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+              className="w-full h-full"
+            />
+            <button
+              onClick={() => setSelectedVideo(null)}
+              className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Video list — bottom sheet capped under half the screen, shown when a map marker is clicked */}
-      {selectedGroup && !selectedVideo && (
+      {selectedGroup && (
         <div
           className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl flex flex-col"
           style={{ maxHeight: '45dvh' }}
@@ -1566,7 +1592,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             {selectedGroup.videos.map((v) => (
               <div
                 key={v.videoId}
-                className="flex gap-3 px-3 py-3.5 hover:bg-gray-50 transition border-b last:border-0 group"
+                className={`flex gap-3 px-3 py-3.5 transition border-b last:border-0 group ${
+                  selectedVideo?.videoId === v.videoId
+                    ? 'border-l-4 border-blue-500 bg-blue-50'
+                    : 'hover:bg-gray-50'
+                }`}
               >
                 {/* Thumbnail — click to play */}
                 <div
@@ -1632,8 +1662,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       )}
 
-      {/* Video player modal */}
-      {selectedVideo && (
+      {/* Video player modal — single-video marker only (multi-video uses compact player above) */}
+      {!selectedGroup && selectedVideo && (
         <div
           className="absolute inset-0 z-20 flex items-center justify-center bg-black/60"
           onClick={() => setSelectedVideo(null)}
