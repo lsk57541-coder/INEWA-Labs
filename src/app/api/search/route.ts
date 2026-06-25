@@ -387,6 +387,31 @@ function isAdministrativeArea(desc: string | undefined): boolean {
   )
 }
 
+// 행정구역 재라우팅 가드레일 (b): 검색 카테고리별 허용 Kakao 카테고리 그룹.
+// FD6=음식점, CE7=카페, AD5=숙박, AT4=관광명소, CT1=문화시설.
+const CATEGORY_KAKAO_GROUP: Record<SearchCategory, string[]> = {
+  food: ['FD6'],
+  bar: ['FD6'],
+  cafe: ['CE7'],
+  date: ['FD6', 'CE7', 'AT4', 'CT1'],
+  stay: ['AD5'],
+  travel: ['AT4', 'CT1'],
+  hotspot: ['AT4', 'CT1', 'FD6', 'CE7'],
+  default: ['FD6', 'CE7'],
+}
+
+// 행정구역 재라우팅 가드레일 (a): adminDesc(원 geotag 행정구역 라벨)의 시/도·시/군/구
+// 토큰이 재geocode된 주소에 모두 포함되는지. "광주광역시"→광주 내면 통과,
+// "광주 동구"→광주+동구 둘 다 포함해야 통과.
+function withinAdminArea(adminDesc: string, address: string): boolean {
+  const tokens = adminDesc
+    .trim()
+    .split(/\s+/)
+    .map((t) => t.replace(/특별자치도|특별자치시|특별시|광역시/g, '').replace(/^(.+?)도$/, '$1'))
+    .filter((t) => t.length >= 2)
+  return tokens.length > 0 && tokens.every((t) => address.includes(t))
+}
+
 function extractYoutubeId(url: string): string | null {
   if (!url) return null
   const m = url.match(/(?:youtu\.be\/|watch\?v=|\/shorts\/|\/embed\/)([\w-]{11})/)
@@ -466,6 +491,8 @@ export async function GET(req: NextRequest) {
   // 검색 중심의 시/군/구 지역명 — "지역+키워드" 유튜브 검색과 비-geotag 위치 추출
   // 휴리스틱 양쪽에서 재사용. Kakao 호출(YT quota 무관)이므로 한 번만 계산.
   const regionName = await getRegionName(lat, lng)
+  // 검색 카테고리 — 후보 풀 구성과 행정구역 재라우팅 카테고리 가드레일에서 공용.
+  const category: SearchCategory = q ? classifyCategory(q) : 'default'
 
   // Fallback searches ("broad KR", then "여행") only fire when the cheaper
   // search before them didn't return enough candidates, to keep quota usage
@@ -496,7 +523,6 @@ export async function GET(req: NextRequest) {
       const channelItems = await ytSearch('', { channelId, order: 'date' })
       unique = dedupe(channelItems)
     } else {
-      const category = classifyCategory(q!)
       const { enrichedQ, publishedAfter, order: catOrder } = buildCategoryParams(q!, category)
 
       const geoItems = await ytSearch(enrichedQ, {
@@ -562,17 +588,22 @@ export async function GET(req: NextRequest) {
 
   const results: VideoResult[] = []
 
-  // Separate geo-tagged and non-geotagged for AI extraction limit
-  const noGeo = details.filter((v) => !v.recordingDetails?.location?.latitude)
+  // 영상 3분할:
+  // - geoValid: 좌표 있고 (보정 있음 OR 비-행정구역) → geotag 직접 사용
+  // - adminGeo: 좌표 있으나 순수 행정구역(중심점) + 보정없음 → 추출 재라우팅(가드레일)
+  // - noGeo: 좌표 없음 → 추출
+  const hasGeo = (v: YTVideoItem) => Boolean(v.recordingDetails?.location?.latitude)
+  const isAdminGeo = (v: YTVideoItem) =>
+    hasGeo(v) && !corrections.get(v.id) && isAdministrativeArea(v.recordingDetails?.locationDescription)
+  const geoValid = details.filter((v) => hasGeo(v) && !isAdminGeo(v))
+  const adminGeo = details.filter(isAdminGeo)
+  const noGeo = details.filter((v) => !hasGeo(v))
 
   await Promise.all([
     // Geo-tagged: fast path
-    ...details
-      .filter((v) => v.recordingDetails?.location?.latitude)
+    ...geoValid
       .map(async (v) => {
         const correction = corrections.get(v.id)
-        // 보정 위치가 없고 geotag가 순수 행정구역(시/군 중심점)이면 제외 — 정확한 위치 아님.
-        if (!correction && isAdministrativeArea(v.recordingDetails?.locationDescription)) return
         const original = v.recordingDetails!.location!
         const pointLat = correction?.lat ?? original.latitude
         const pointLng = correction?.lng ?? original.longitude
@@ -638,8 +669,12 @@ export async function GET(req: NextRequest) {
         }
       }),
 
-    // Non-geotagged: AI extraction (limit to first 40 to keep response time reasonable)
-    ...noGeo.slice(0, 40).map(async (v) => {
+    // 비-geotag 추출(첫 40개) + 행정구역 geotag 재라우팅(adminDesc 있으면 가드레일 적용).
+    // adminGeo는 centroid 좌표를 버리고 제목 추출로 실제 장소를 재산출한다.
+    ...[
+      ...noGeo.slice(0, 40).map((v) => ({ v, adminDesc: null as string | null })),
+      ...adminGeo.map((v) => ({ v, adminDesc: v.recordingDetails?.locationDescription?.trim() ?? null })),
+    ].map(async ({ v, adminDesc }) => {
       const correction = corrections.get(v.id)
       if (correction) {
         const dist = haversineKm(lat, lng, correction.lat, correction.lng)
@@ -706,6 +741,13 @@ export async function GET(req: NextRequest) {
         if (requireCorroboration) {
           const videoText = `${v.snippet.title} ${v.snippet.description ?? ''}`
           if (!addressCorroborated(geo2.address, videoText)) return false
+        }
+
+        // 행정구역 재라우팅 가드레일: centroid 버리고 재geocode한 결과가
+        // (a) 원 행정구역 내 + (b) 검색 카테고리와 일치할 때만 채택. 하나라도 실패→제외.
+        if (adminDesc) {
+          if (!withinAdminArea(adminDesc, geo2.address)) return false
+          if (!CATEGORY_KAKAO_GROUP[category].includes(geo2.categoryGroup)) return false
         }
 
         const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet

@@ -400,7 +400,7 @@ function VideoActionRow({
 
 export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [keyword, setKeyword] = useState('')
-  const [radius, setRadius] = useState<Radius>(1)
+  const [radius, setRadius] = useState<Radius>(3)
   const [searchMode, setSearchMode] = useState<'keyword' | 'channel'>('keyword')
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
