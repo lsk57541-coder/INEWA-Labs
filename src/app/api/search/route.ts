@@ -381,7 +381,10 @@ function isAdministrativeArea(desc: string | undefined): boolean {
   if (!desc) return false
   const tokens = desc.trim().split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return false
-  return tokens.every((t) => /(특별자치도|특별자치시|특별시|광역시|도|시|군|구|읍|면|동|리)$/.test(t))
+  return tokens.every((t) =>
+    /(특별자치도|특별자치시|특별시|광역시|도|시|군|구|읍|면|동|리)$/.test(t) ||
+    /-(dong|gu|si|gun|eup|myeon|ri|do)$/i.test(t)
+  )
 }
 
 function extractYoutubeId(url: string): string | null {
@@ -577,11 +580,17 @@ export async function GET(req: NextRequest) {
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
           const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
+          // 창작자가 geotag에 단 위치 라벨 — 비-행정구역이면 그대로 상호명("창억떡집 중흥본점")
+          const locDesc = v.recordingDetails?.locationDescription?.trim()
+          const usableLocDesc = locDesc && !isAdministrativeArea(locDesc) ? locDesc : null
           let placeName: string | undefined
           let placeNameSource: PlaceNameSource
           if (correction?.placeName) {
             placeName = correction.placeName
             placeNameSource = 'correction'
+          } else if (usableLocDesc) {
+            placeName = usableLocDesc
+            placeNameSource = 'explicit_description'
           } else if (statedName) {
             placeName = statedName
             placeNameSource = 'explicit_description'
@@ -706,6 +715,11 @@ export async function GET(req: NextRequest) {
         if (statedName) {
           resolvedName = statedName
           placeNameSource = 'explicit_description'
+        } else if (geo2.name) {
+          // geocodeKorean이 휴리스틱/AI 쿼리로 이미 매칭한 장소명을 그대로 사용.
+          // (address_match처럼 주소로 재검색하지 않으므로 무관 업체 오매칭 없음)
+          resolvedName = geo2.name
+          placeNameSource = 'title_match'
         } else {
           const titleMatch = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
           // address_match fallback 미사용(동일 주소 무관 업체 오매칭 방지).
