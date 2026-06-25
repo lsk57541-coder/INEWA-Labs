@@ -80,7 +80,7 @@ export async function extractPlaceByAI(videoId: string, title: string, descripti
       messages: [
         {
           role: 'user',
-          content: `다음 YouTube 영상 제목/설명에서 음식점·카페·장소의 '업체명'과 '지역명'을 추출해. 반드시 JSON만 출력하고 다른 말은 하지 마: {"business": string|null, "region": string|null}. 모르면 null.\n\n${text}`,
+          content: `다음 YouTube 영상 제목/설명에서 영상에서 실제 방문한 '국내(한국)' 장소의 '업체명'과 '지역명'을 추출해.\n주의:\n- 도시명/음식종류와 실제 방문 가게를 구분할 것. 예) '이스탄불'은 도시명이지만 '이스탄불그릴'은 가게명일 수 있음.\n- 영상에서 실제 방문한 국내(한국) 장소만 추출.\n- 해외 지명이거나 위치가 불명확하면 반드시 둘 다 null.\n반드시 JSON만 출력하고 다른 말은 하지 마: {"business": string|null, "region": string|null}\n\n${text}`,
         },
       ],
     })

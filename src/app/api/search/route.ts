@@ -344,6 +344,23 @@ async function fetchVideoDetails(ids: string[]): Promise<YTVideoItem[]> {
   return all.flat()
 }
 
+// 지리 대조: 매칭된 장소의 행정구역(시/도·시/군/구·동)이 영상 텍스트에 언급되는지.
+// AI 폴백이 해외 도시명("이스탄불")을 동명 국내 식당으로 오매칭하는 것을 차단.
+// 예) "서울 마포구 공덕동 476" → ["서울","마포","공덕"] 중 하나라도 텍스트에 있으면 통과.
+function addressCorroborated(address: string, text: string): boolean {
+  const parts = (address ?? '').split(/\s+/).slice(0, 3)
+  const tokens = new Set<string>()
+  for (const p of parts) {
+    if (p && p.length >= 2) tokens.add(p)
+    const stripped = p.replace(/(특별자치시|특별자치도|특별시|광역시|도|시|군|구|읍|면|동|리|가)$/, '')
+    if (stripped.length >= 2 && stripped !== p) tokens.add(stripped)
+  }
+  for (const t of tokens) {
+    if (text.includes(t)) return true
+  }
+  return false
+}
+
 function extractYoutubeId(url: string): string | null {
   if (!url) return null
   const m = url.match(/(?:youtu\.be\/|watch\?v=|\/shorts\/|\/embed\/)([\w-]{11})/)
@@ -643,11 +660,18 @@ export async function GET(req: NextRequest) {
       }
 
       // 지역 앵커 휴리스틱으로 좌표를 찾고, 반경 내면 결과로 추가. 성공 시 true.
-      const tryResolveAndPush = async (place: string): Promise<boolean> => {
+      // requireCorroboration=true(AI 폴백)면 매칭 장소 행정구역이 영상 텍스트에
+      // 언급될 때만 통과 — 해외 도시명 동명 오매칭 차단.
+      const tryResolveAndPush = async (place: string, requireCorroboration: boolean): Promise<boolean> => {
         const geo2 = await geocodeKorean(place)
         if (!geo2) return false
         const dist = haversineKm(lat, lng, geo2.lat, geo2.lng)
         if (dist > radius) return false
+
+        if (requireCorroboration) {
+          const videoText = `${v.snippet.title} ${v.snippet.description ?? ''}`
+          if (!addressCorroborated(geo2.address, videoText)) return false
+        }
 
         const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
         const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
@@ -703,12 +727,13 @@ export async function GET(req: NextRequest) {
       const candidates = buildHeuristicPlaceQueries(v.snippet.title, v.snippet.description ?? '', regionName)
       let resolved = false
       for (const place of candidates) {
-        if (await tryResolveAndPush(place)) { resolved = true; break }
+        if (await tryResolveAndPush(place, false)) { resolved = true; break }
       }
       // ② 휴리스틱 실패 시에만 AI 폴백 (videoId 캐시로 반복 호출 차단)
+      // AI 결과는 지리 대조(requireCorroboration=true) 통과 시에만 채택.
       if (!resolved) {
         const aiQuery = await extractPlaceByAI(v.id, v.snippet.title, v.snippet.description ?? '')
-        if (aiQuery) await tryResolveAndPush(aiQuery)
+        if (aiQuery) await tryResolveAndPush(aiQuery, true)
       }
     }),
   ])
