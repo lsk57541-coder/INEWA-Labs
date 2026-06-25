@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Script from 'next/script'
 import type { VideoResult, SubscriberTier } from '@/app/api/search/route'
 import type { ChannelSuggestion } from '@/app/api/channel-search/route'
@@ -410,6 +411,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [addressLoading, setAddressLoading] = useState(false)
   const [locationSuggestions, setLocationSuggestions] = useState<AddressSuggestion[]>([])
   const locationSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const addressInputRef = useRef<HTMLInputElement>(null)
+  const [locationDropdownPos, setLocationDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null)
   const [posLabel, setPosLabel] = useState<string>('위치 미설정')
   // True once the user has set their search point via the address input
@@ -507,6 +510,46 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     })
     centerOverlayRef.current.setMap(mapInstanceRef.current)
   }, [mapReady, userPos])
+
+  // Track address input position so the portal dropdown can align to it
+  useEffect(() => {
+    if (locationSuggestions.length > 0 && addressInputRef.current) {
+      const r = addressInputRef.current.getBoundingClientRect()
+      setLocationDropdownPos({ top: r.bottom + 4, left: r.left, width: r.width })
+    } else {
+      setLocationDropdownPos(null)
+    }
+  }, [locationSuggestions])
+
+  // Close location portal dropdown when clicking outside it or the address input
+  useEffect(() => {
+    if (!locationDropdownPos) return
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Element
+      if (!addressInputRef.current?.contains(t) && !t.closest('[data-location-dd]')) {
+        setLocationSuggestions([])
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [locationDropdownPos])
+
+  // Close channel suggestions when document is clicked outside panel
+  useEffect(() => {
+    if (channelSuggestions.length === 0) return
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Element
+      if (!t.closest('[data-channel-dd]') && !t.closest('[data-channel-input]')) {
+        setChannelSuggestions([])
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [channelSuggestions.length])
+
+  // Clear stale suggestions when panels collapse
+  useEffect(() => { if (!advancedOpen) setLocationSuggestions([]) }, [advancedOpen])
+  useEffect(() => { if (!optionsOpen) setChannelSuggestions([]) }, [optionsOpen])
 
   useEffect(() => {
     async function load() {
@@ -1111,10 +1154,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             </div>
           ) : (
             <input
+              data-channel-input
               type="text"
               value={channelQuery}
               onChange={(e) => handleChannelQueryChange(e.target.value)}
-              onFocus={() => setOptionsOpen(true)}
+              onFocus={() => { setOptionsOpen(true); setLocationSuggestions([]) }}
               placeholder="유튜버 채널명으로 검색"
               className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
             />
@@ -1122,7 +1166,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
           {/* 채널 자동완성 드롭다운 */}
           {searchMode === 'channel' && !selectedChannel && (channelSearching || channelSuggestions.length > 0) && (
-            <div className="absolute z-50 top-full left-3 right-3 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto divide-y">
+            <div data-channel-dd className="absolute z-50 top-full left-3 right-3 mt-1 bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100">
               {channelSearching && <p className="text-xs text-gray-400 px-4 py-3">검색 중…</p>}
               {channelSuggestions.map((c) => (
                 <button
@@ -1135,8 +1179,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   className="w-full flex items-center gap-3 text-left px-4 py-3 hover:bg-gray-50 transition"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={c.thumbnail} alt="" className="w-8 h-8 rounded-full shrink-0" />
-                  <p className="text-sm font-medium truncate">{c.title}</p>
+                  <img src={c.thumbnail} alt="" className="w-10 h-10 rounded-full shrink-0 object-cover" />
+                  <p className="text-sm font-medium text-gray-900 line-clamp-2">{c.title}</p>
                 </button>
               ))}
             </div>
@@ -1210,30 +1254,16 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 {/* 위치 직접입력 — 키워드/채널 모두 */}
                 <div>
                   <p className="text-xs text-gray-400 font-medium mb-1.5">📍 검색위치 직접입력</p>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={addressInput}
-                      onChange={(e) => handleAddressInputChange(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
-                      placeholder="지역명 또는 주소 입력"
-                      className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
-                    />
-                    {locationSuggestions.length > 0 && (
-                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100">
-                        {locationSuggestions.map((s, i) => (
-                          <button
-                            key={i}
-                            onClick={() => selectLocationSuggestion(s)}
-                            className="w-full text-left px-4 py-3 hover:bg-gray-50 transition"
-                          >
-                            <p className="text-sm font-medium text-gray-900">{s.name}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{s.address}</p>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <input
+                    ref={addressInputRef}
+                    type="text"
+                    value={addressInput}
+                    onChange={(e) => handleAddressInputChange(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
+                    onFocus={() => setChannelSuggestions([])}
+                    placeholder="지역명 또는 주소 입력"
+                    className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                  />
                   {addressInput.trim() && (
                     <div className="flex gap-2 mt-2">
                       <button
@@ -1277,6 +1307,33 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
         )}
       </div>
+
+      {/* Location dropdown portal — escapes overflow:hidden parents */}
+      {locationDropdownPos && locationSuggestions.length > 0 && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: locationDropdownPos.top,
+            left: locationDropdownPos.left,
+            width: locationDropdownPos.width,
+            zIndex: 9999,
+          }}
+          data-location-dd
+          className="bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100"
+        >
+          {locationSuggestions.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => selectLocationSuggestion(s)}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50 transition"
+            >
+              <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
+              <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{s.address}</p>
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
 
       {/* Search loading skeleton */}
       {loading && allResults.length === 0 && (
