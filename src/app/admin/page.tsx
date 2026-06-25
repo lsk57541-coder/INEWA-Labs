@@ -48,113 +48,125 @@ export default async function AdminPage() {
   const estimatedAccuracy = totalShown > 0 ? (1 - reportedShown / totalShown) * 100 : null
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← 메인으로</Link>
-          <h1 className="text-xl font-bold mt-1">장소 관리</h1>
-        </div>
-        <div className="flex gap-2">
+    <div className="max-w-2xl mx-auto px-4 py-6">
+      {/* 뒤로 가기 */}
+      <div className="mb-3">
+        <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← 메인으로</Link>
+      </div>
+
+      {/* 탭 네비게이션 — 가로 스크롤 */}
+      <div className="overflow-x-auto -mx-4 mb-6">
+        <div className="flex min-w-max px-4 border-b">
+          <span className="inline-flex items-center px-3 py-2 text-sm font-medium text-black border-b-2 border-black -mb-px shrink-0">
+            장소
+          </span>
           <Link
             href="/admin/partners"
-            className="bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition"
+            className="inline-flex items-center px-3 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-gray-600 -mb-px shrink-0"
           >
-            파트너 신청 관리
+            파트너
           </Link>
           <Link
             href="/admin/places"
-            className="bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition"
+            className="inline-flex items-center px-3 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-gray-600 -mb-px shrink-0"
           >
-            파트너 장소 검토
+            검토
           </Link>
           <Link
             href="/admin/outreach"
-            className="bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition"
+            className="inline-flex items-center px-3 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-gray-600 -mb-px shrink-0"
           >
-            콜드 아웃리치
+            아웃리치
           </Link>
           <Link
             href="/admin/locations/new/bulk"
-            className="bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition"
+            className="inline-flex items-center px-3 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-gray-600 -mb-px shrink-0"
           >
-            영상으로 일괄 등록
+            영상등록
           </Link>
           <Link
             href="/admin/locations/new"
-            className="bg-black text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+            className="inline-flex items-center px-3 py-2 text-sm font-semibold text-black border-b-2 border-transparent hover:text-gray-700 -mb-px shrink-0"
           >
-            + 장소 추가
+            + 추가
           </Link>
         </div>
       </div>
 
-      <div className="mb-8 border rounded-lg overflow-hidden">
-        <p className="text-sm font-bold px-4 py-2 bg-gray-50 border-b">노출 기준 (정확도 관리)</p>
-        <form action={setMinConfidenceSetting} className="flex items-center gap-2 px-4 py-3 border-b">
-          <label className="text-xs text-gray-500 shrink-0">최소 노출 기준</label>
-          <select
-            name="source"
-            defaultValue={minConfidence}
-            className="flex-1 text-sm border rounded-lg px-2 py-1.5 bg-white"
-          >
-            {PLACENAME_SOURCES.map((s) => (
-              <option key={s} value={s}>{SOURCE_LABEL[s] ?? s}</option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition"
-          >
-            저장
-          </button>
-        </form>
-        <div className="px-4 py-3 text-xs text-gray-500 flex gap-4">
-          <p>
-            노출률{' '}
-            <span className="font-medium text-gray-700">
-              {exposureRate !== null ? `${exposureRate.toFixed(1)}%` : '-'}
-            </span>
-          </p>
-          <p>
-            추정 정확도{' '}
-            <span className="font-medium text-gray-700">
-              {estimatedAccuracy !== null ? `${estimatedAccuracy.toFixed(1)}%` : '-'}
-            </span>
-          </p>
-        </div>
-        <p className="px-4 pb-3 text-xs text-gray-400">
-          기준보다 신뢰도 낮은 영상은 검색결과에서 숨겨집니다. 추정 정확도가 80~90% 이상이 될 때까지 기준을 올려보세요.
-        </p>
-      </div>
-
-      {accuracyStats.length > 0 && (
-        <div className="mb-8 border rounded-lg overflow-hidden">
-          <p className="text-sm font-bold px-4 py-2 bg-gray-50 border-b">장소명 정확도 (방식별 신고율)</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-400 text-left">
-                <th className="px-4 py-2">해석 방식</th>
-                <th className="px-4 py-2 text-right">건수</th>
-                <th className="px-4 py-2 text-right">신고됨</th>
-                <th className="px-4 py-2 text-right">신고율</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accuracyStats.map((s) => (
-                <tr key={s.source} className="border-t">
-                  <td className="px-4 py-2">{SOURCE_LABEL[s.source] ?? s.source}</td>
-                  <td className="px-4 py-2 text-right">{s.total}</td>
-                  <td className="px-4 py-2 text-right">{s.reported}</td>
-                  <td className="px-4 py-2 text-right font-medium">
-                    {s.total > 0 ? `${((s.reported / s.total) * 100).toFixed(1)}%` : '-'}
-                  </td>
-                </tr>
+      {/* 노출 기준 섹션 */}
+      <section className="mb-6">
+        <h2 className="text-sm font-bold mb-3 pl-3 border-l-4 border-[#0F1C2E]">노출 기준 (정확도 관리)</h2>
+        <div className="border rounded-lg overflow-hidden">
+          <form action={setMinConfidenceSetting} className="flex items-center gap-2 px-4 py-3 border-b">
+            <label className="text-xs text-gray-500 shrink-0">최소 노출 기준</label>
+            <select
+              name="source"
+              defaultValue={minConfidence}
+              className="flex-1 text-sm border rounded-lg px-2 py-1.5 bg-white"
+            >
+              {PLACENAME_SOURCES.map((s) => (
+                <option key={s} value={s}>{SOURCE_LABEL[s] ?? s}</option>
               ))}
-            </tbody>
-          </table>
+            </select>
+            <button
+              type="submit"
+              className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition"
+            >
+              저장
+            </button>
+          </form>
+          <div className="px-4 py-3 text-xs text-gray-500 flex gap-4">
+            <p>
+              노출률{' '}
+              <span className="font-medium text-gray-700">
+                {exposureRate !== null ? `${exposureRate.toFixed(1)}%` : '-'}
+              </span>
+            </p>
+            <p>
+              추정 정확도{' '}
+              <span className="font-medium text-gray-700">
+                {estimatedAccuracy !== null ? `${estimatedAccuracy.toFixed(1)}%` : '-'}
+              </span>
+            </p>
+          </div>
+          <p className="px-4 pb-3 text-xs text-gray-400">
+            기준보다 신뢰도 낮은 영상은 검색결과에서 숨겨집니다. 추정 정확도가 80~90% 이상이 될 때까지 기준을 올려보세요.
+          </p>
         </div>
+      </section>
+
+      {/* 정확도 통계 섹션 */}
+      {accuracyStats.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-sm font-bold mb-3 pl-3 border-l-4 border-[#0F1C2E]">장소명 정확도 (방식별 신고율)</h2>
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-gray-400 text-left">
+                  <th className="px-4 py-2">해석 방식</th>
+                  <th className="px-4 py-2 text-right">건수</th>
+                  <th className="px-4 py-2 text-right">신고됨</th>
+                  <th className="px-4 py-2 text-right">신고율</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accuracyStats.map((s) => (
+                  <tr key={s.source} className="border-t">
+                    <td className="px-4 py-2">{SOURCE_LABEL[s.source] ?? s.source}</td>
+                    <td className="px-4 py-2 text-right">{s.total}</td>
+                    <td className="px-4 py-2 text-right">{s.reported}</td>
+                    <td className="px-4 py-2 text-right font-medium">
+                      {s.total > 0 ? `${((s.reported / s.total) * 100).toFixed(1)}%` : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
+      {/* 장소 목록 */}
       {!locations || locations.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <p>등록된 장소가 없습니다</p>
@@ -169,9 +181,7 @@ export default async function AdminPage() {
                 <div>
                   <p className="font-medium text-sm">{loc.name}</p>
                   <p className="text-xs text-gray-400">{loc.address}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    위도 {loc.lat} · 경도 {loc.lng} · 영상 {videoCount}개
-                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">영상 {videoCount}개</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-4">
                   <Link
