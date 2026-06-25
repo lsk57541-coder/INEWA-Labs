@@ -1041,6 +1041,14 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       />
       <OnboardingOverlay key={onboardingKey} searchBarRef={searchBarRef} hamburgerRef={hamburgerRef} />
 
+      {/* Panel backdrop — tap map to collapse expanded panel */}
+      {optionsOpen && (
+        <div
+          className="absolute inset-0 z-[9]"
+          onClick={() => setOptionsOpen(false)}
+        />
+      )}
+
       {/* Search panel / chip — ref always mounted for OnboardingOverlay */}
       <div
         ref={searchBarRef}
