@@ -31,6 +31,28 @@ function stripNoise(tokens: string[], region: string): string[] {
   })
 }
 
+// 음식/카테고리 일반 서술어 — 상호명이 아니라 업종/콘텐츠 설명이므로 상호명 추출 시 제외.
+const CATEGORY_DESC_RE = /카페|맛집|곰탕|국밥|국수|칼국수|냉면|커피|디저트|브런치|베이커리|빵집|술집|포차|포장마차|식당|분식|치킨|피자|초밥|스시|오마카세|고기|삼겹|한식|양식|일식|중식|감성|핫플|여행|투어|코스|리뷰|먹방/
+
+// geotag 영상의 placeName용: 창작자가 제목/설명에 '명시한' 상호명만 정밀 추출.
+// ① "상호명: ○○" 패턴 → ② 제목의 "지역(동/읍/면/리) 상호" 패턴 ∧ 그 상호가 해시태그로도
+//    존재 ∧ 일반 서술어/노이즈 아님 (이중 게이트로 정밀도 확보). 못 찾으면 null.
+export function extractStatedBusinessName(title: string, description: string): string | null {
+  const explicit = extractExplicitBusinessName(description)
+  if (explicit) return explicit
+
+  const tags = new Set(
+    [...`${title} ${description}`.matchAll(/#([가-힣A-Za-z0-9]+)/g)].map((m) => m[1])
+  )
+  for (const m of title.matchAll(/[가-힣]{1,4}(?:동|읍|면|리)\s+([가-힣A-Za-z0-9]{2,6})/g)) {
+    const name = m[1]
+    if (tags.has(name) && !CATEGORY_DESC_RE.test(name) && !NOISE_WORDS.some((n) => name.includes(n))) {
+      return name
+    }
+  }
+  return null
+}
+
 // 휴리스틱 우선: 검색 지역명(getRegionName 결과)을 앵커로 "지역 + 업체명" 후보 쿼리들을
 // 우선순위 순으로 생성. API 호출 없음(순수 문자열 처리). 정규식 오탐(번역→역 등)을
 // 피하기 위해 KOREAN_PLACE_RE 대신 지역 앵커 + 명시 업체명 방식을 사용.

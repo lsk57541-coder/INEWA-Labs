@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { haversineKm } from '@/lib/haversine'
 import { geocodeKorean, reverseGeocode, searchPlaceInfo, getRegionName } from '@/lib/geocode'
-import { buildHeuristicPlaceQueries, extractPlaceByAI, extractExplicitBusinessName } from '@/lib/extractLocation'
+import { buildHeuristicPlaceQueries, extractPlaceByAI, extractStatedBusinessName } from '@/lib/extractLocation'
 import { extractPlaceFromComments } from '@/lib/extractFromComments'
 import { getMinConfidenceSetting } from '@/app/actions'
 
@@ -576,42 +576,34 @@ export async function GET(req: NextRequest) {
         const dist = haversineKm(lat, lng, pointLat, pointLng)
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
-          const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
+          const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
           let placeName: string | undefined
           let placeNameSource: PlaceNameSource
           if (correction?.placeName) {
             placeName = correction.placeName
             placeNameSource = 'correction'
-          } else if (explicitName) {
-            placeName = explicitName
+          } else if (statedName) {
+            placeName = statedName
             placeNameSource = 'explicit_description'
           } else {
             const [address, titleMatch] = await Promise.all([
               correction?.address ? Promise.resolve(correction.address) : reverseGeocode(pointLat, pointLng),
               searchPlaceInfo(snippet.title, pointLat, pointLng),
             ])
-            // Video title rarely contains the registered business name verbatim,
-            // so fall back to searching by the address itself before giving up
-            // and showing the bare address.
-            const addressMatch = !titleMatch?.name && address
-              ? await searchPlaceInfo(address, pointLat, pointLng)
-              : null
-            // Both title and address matching failed — check whether
-            // viewers/the creator named the place in the comments before
-            // giving up and showing only the bare address.
-            const commentMatch = !titleMatch?.name && !addressMatch?.name
+            // 주소 문자열로 Kakao 검색하면 동일 주소의 무관한 업체(법률사무소 등)가 잡혀
+            // 오명을 만들므로 address_match fallback은 사용하지 않음. 제목 매칭 실패 시
+            // 댓글로 상호명을 찾고, 그래도 없으면 맨 주소(address_fallback)를 노출.
+            const commentMatch = !titleMatch?.name
               ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
                   candidate ? searchPlaceInfo(candidate, pointLat, pointLng) : null
                 )
               : null
-            placeName = titleMatch?.name || addressMatch?.name || commentMatch?.name || address || undefined
+            placeName = titleMatch?.name || commentMatch?.name || address || undefined
             placeNameSource = titleMatch?.name
               ? 'title_match'
-              : addressMatch?.name
-                ? 'address_match'
-                : commentMatch?.name
-                  ? 'comment_match'
-                  : 'address_fallback'
+              : commentMatch?.name
+                ? 'comment_match'
+                : 'address_fallback'
           }
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (!meetsConfidence(placeNameSource, minConfidence)) return
@@ -644,33 +636,29 @@ export async function GET(req: NextRequest) {
         const dist = haversineKm(lat, lng, correction.lat, correction.lng)
         if (dist <= radius) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
-          const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
+          const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
           let placeName: string | undefined
           let placeNameSource: PlaceNameSource
           if (correction.placeName) {
             placeName = correction.placeName
             placeNameSource = 'correction'
-          } else if (explicitName) {
-            placeName = explicitName
+          } else if (statedName) {
+            placeName = statedName
             placeNameSource = 'explicit_description'
           } else {
             const titleMatch = await searchPlaceInfo(snippet.title, correction.lat, correction.lng)
-            const addressMatch = !titleMatch?.name && correction.address
-              ? await searchPlaceInfo(correction.address, correction.lat, correction.lng)
-              : null
-            const commentMatch = !titleMatch?.name && !addressMatch?.name
+            // address_match fallback 미사용(동일 주소 무관 업체 오매칭 방지).
+            const commentMatch = !titleMatch?.name
               ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
                   candidate ? searchPlaceInfo(candidate, correction.lat, correction.lng) : null
                 )
               : null
-            placeName = titleMatch?.name || addressMatch?.name || commentMatch?.name || correction.address || undefined
+            placeName = titleMatch?.name || commentMatch?.name || correction.address || undefined
             placeNameSource = titleMatch?.name
               ? 'title_match'
-              : addressMatch?.name
-                ? 'address_match'
-                : commentMatch?.name
-                  ? 'comment_match'
-                  : 'address_fallback'
+              : commentMatch?.name
+                ? 'comment_match'
+                : 'address_fallback'
           }
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (meetsConfidence(placeNameSource, minConfidence)) {
@@ -712,30 +700,26 @@ export async function GET(req: NextRequest) {
         }
 
         const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
-        const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
+        const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
         let resolvedName: string
         let placeNameSource: PlaceNameSource
-        if (explicitName) {
-          resolvedName = explicitName
+        if (statedName) {
+          resolvedName = statedName
           placeNameSource = 'explicit_description'
         } else {
           const titleMatch = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
-          const addressMatch = !titleMatch?.name
-            ? await searchPlaceInfo(geo2.address, geo2.lat, geo2.lng)
-            : null
-          const commentMatch = !titleMatch?.name && !addressMatch?.name
+          // address_match fallback 미사용(동일 주소 무관 업체 오매칭 방지).
+          const commentMatch = !titleMatch?.name
             ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
                 candidate ? searchPlaceInfo(candidate, geo2.lat, geo2.lng) : null
               )
             : null
-          resolvedName = titleMatch?.name || addressMatch?.name || commentMatch?.name || geo2.address
+          resolvedName = titleMatch?.name || commentMatch?.name || geo2.address
           placeNameSource = titleMatch?.name
             ? 'title_match'
-            : addressMatch?.name
-              ? 'address_match'
-              : commentMatch?.name
-                ? 'comment_match'
-                : 'address_fallback'
+            : commentMatch?.name
+              ? 'comment_match'
+              : 'address_fallback'
         }
         logPlaceNameResolution(v.id, placeNameSource, resolvedName)
         if (!meetsConfidence(placeNameSource, minConfidence)) return false
