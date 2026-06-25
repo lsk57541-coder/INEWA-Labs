@@ -272,7 +272,7 @@ interface YTVideoItem {
     channelId: string
     thumbnails: { medium: { url: string } }
   }
-  recordingDetails?: { location?: { latitude: number; longitude: number } }
+  recordingDetails?: { location?: { latitude: number; longitude: number }; locationDescription?: string }
   statistics?: { viewCount?: string }
   contentDetails?: { duration: string }
 }
@@ -373,6 +373,15 @@ function addressCorroborated(address: string, text: string): boolean {
     if (text.includes(t)) return true
   }
   return false
+}
+
+// locationDescription이 순수 행정구역명(모든 토큰이 행정 접미사로 끝남)이면
+// geotag 좌표가 시/군 중심점 → 정확한 위치 아님 → 제외 대상.
+function isAdministrativeArea(desc: string | undefined): boolean {
+  if (!desc) return false
+  const tokens = desc.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return false
+  return tokens.every((t) => /(특별자치도|특별자치시|특별시|광역시|도|시|군|구|읍|면|동|리)$/.test(t))
 }
 
 function extractYoutubeId(url: string): string | null {
@@ -559,6 +568,8 @@ export async function GET(req: NextRequest) {
       .filter((v) => v.recordingDetails?.location?.latitude)
       .map(async (v) => {
         const correction = corrections.get(v.id)
+        // 보정 위치가 없고 geotag가 순수 행정구역(시/군 중심점)이면 제외 — 정확한 위치 아님.
+        if (!correction && isAdministrativeArea(v.recordingDetails?.locationDescription)) return
         const original = v.recordingDetails!.location!
         const pointLat = correction?.lat ?? original.latitude
         const pointLng = correction?.lng ?? original.longitude

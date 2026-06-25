@@ -90,7 +90,8 @@ export async function extractPlaceByAI(videoId: string, title: string, descripti
     const parsed = JSON.parse(m[0]) as { business?: string | null; region?: string | null }
     const business = parsed.business?.trim() || null
     const aiRegion = parsed.region?.trim() || null
-    const query = business && aiRegion ? `${aiRegion} ${business}` : business || aiRegion || null
+    // 지역명만 있으면(업체명 null) 정확한 위치 불가 → null. region+business일 때만 쿼리.
+    const query = business ? (aiRegion ? `${aiRegion} ${business}` : business) : null
     aiQueryCache.set(videoId, query)
     return query
   } catch {
