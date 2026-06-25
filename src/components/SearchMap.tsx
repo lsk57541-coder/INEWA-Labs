@@ -1311,6 +1311,33 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         )}
       </div>
 
+      {/* Quick search chips — shown below search bar in initial empty state */}
+      {!searchChip && !optionsOpen && !loading && allResults.length === 0 && !selectedGroup && !selectedVideo && (
+        <div className="absolute top-[130px] left-3 z-10" style={{ maxWidth: 'calc(100vw - 24px)' }}>
+          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            {([
+              { emoji: '🍽', label: '맛집' },
+              { emoji: '☕', label: '카페' },
+              { emoji: '✈️', label: '여행' },
+              { emoji: '💑', label: '데이트' },
+              { emoji: '🏨', label: '숙소' },
+            ] as const).map(({ emoji, label }) => (
+              <button
+                key={label}
+                onClick={() => {
+                  setKeyword(label)
+                  setSearchMode('keyword')
+                  handleSearch({ keywordOverride: label })
+                }}
+                className="shrink-0 bg-white shadow-sm rounded-full px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-50 transition"
+              >
+                {emoji} {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Location dropdown portal — escapes overflow:hidden parents */}
       {locationDropdownPos && locationSuggestions.length > 0 && createPortal(
         <div
