@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { haversineKm } from '@/lib/haversine'
-import { geocodeKorean, reverseGeocode, searchPlaceInfo } from '@/lib/geocode'
-import { extractLocations, extractExplicitBusinessName } from '@/lib/extractLocation'
+import { geocodeKorean, reverseGeocode, searchPlaceInfo, getRegionName } from '@/lib/geocode'
+import { buildHeuristicPlaceQueries, extractPlaceByAI, extractExplicitBusinessName } from '@/lib/extractLocation'
 import { extractPlaceFromComments } from '@/lib/extractFromComments'
 import { getMinConfidenceSetting } from '@/app/actions'
 
@@ -420,6 +420,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'q (or channelId), lat, lng are required' }, { status: 400 })
   }
 
+  // 검색 중심의 시/군/구 지역명 — "지역+키워드" 유튜브 검색과 비-geotag 위치 추출
+  // 휴리스틱 양쪽에서 재사용. Kakao 호출(YT quota 무관)이므로 한 번만 계산.
+  const regionName = await getRegionName(lat, lng)
+
   // Fallback searches ("broad KR", then "여행") only fire when the cheaper
   // search before them didn't return enough candidates, to keep quota usage
   // down without hurting coverage for popular keywords.
@@ -458,6 +462,18 @@ export async function GET(req: NextRequest) {
         publishedAfter,
       })
       unique = dedupe(geoItems)
+
+      // 지역명 + 키워드 텍스트 검색 — geotag 없는 로컬 영상을 후보 풀에 포함.
+      // location 파라미터를 빼야 비-geotag 영상도 반환됨(YouTube 동작). 항상 실행.
+      if (regionName) {
+        const regionItems = await ytSearch(`${regionName} ${q}`, {
+          relevanceLanguage: 'ko',
+          regionCode: 'KR',
+          order: 'relevance',
+          publishedAfter,
+        })
+        unique = [...unique, ...dedupe(regionItems)]
+      }
 
       if (unique.length < MIN_CANDIDATES_BEFORE_FALLBACK) {
         const broadItems = await ytSearch(enrichedQ, {
@@ -626,61 +642,73 @@ export async function GET(req: NextRequest) {
         return
       }
 
-      const places = await extractLocations(v.snippet.title, v.snippet.description ?? '')
-      for (const place of places) {
+      // 지역 앵커 휴리스틱으로 좌표를 찾고, 반경 내면 결과로 추가. 성공 시 true.
+      const tryResolveAndPush = async (place: string): Promise<boolean> => {
         const geo2 = await geocodeKorean(place)
-        if (!geo2) continue
+        if (!geo2) return false
         const dist = haversineKm(lat, lng, geo2.lat, geo2.lng)
-        if (dist <= radius) {
-          const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
-          const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
-          let resolvedName: string
-          let placeNameSource: PlaceNameSource
-          if (explicitName) {
-            resolvedName = explicitName
-            placeNameSource = 'explicit_description'
-          } else {
-            const titleMatch = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
-            const addressMatch = !titleMatch?.name
-              ? await searchPlaceInfo(geo2.address, geo2.lat, geo2.lng)
-              : null
-            const commentMatch = !titleMatch?.name && !addressMatch?.name
-              ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
-                  candidate ? searchPlaceInfo(candidate, geo2.lat, geo2.lng) : null
-                )
-              : null
-            resolvedName = titleMatch?.name || addressMatch?.name || commentMatch?.name || geo2.address
-            placeNameSource = titleMatch?.name
-              ? 'title_match'
-              : addressMatch?.name
-                ? 'address_match'
-                : commentMatch?.name
-                  ? 'comment_match'
-                  : 'address_fallback'
-          }
-          logPlaceNameResolution(v.id, placeNameSource, resolvedName)
-          if (!meetsConfidence(placeNameSource, minConfidence)) break
-          const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
-          if (durationSec > 0 && durationSec < MIN_VIDEO_SEC) break
-          results.push({
-            videoId: v.id,
-            title: snippet.title,
-            thumbnail: snippet.thumbnails.medium.url,
-            channel: snippet.channelTitle,
-            lat: geo2.lat,
-            lng: geo2.lng,
-            distanceKm: Math.round(dist * 10) / 10,
-            source: 'ai',
-            viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
-            placeName: resolvedName,
-            placeNameSource,
-            duration: formatDuration(durationSec),
-            isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
-            subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
-            subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
-          })
-          break
+        if (dist > radius) return false
+
+        const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
+        const explicitName = extractExplicitBusinessName(v.snippet.description ?? '')
+        let resolvedName: string
+        let placeNameSource: PlaceNameSource
+        if (explicitName) {
+          resolvedName = explicitName
+          placeNameSource = 'explicit_description'
+        } else {
+          const titleMatch = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
+          const addressMatch = !titleMatch?.name
+            ? await searchPlaceInfo(geo2.address, geo2.lat, geo2.lng)
+            : null
+          const commentMatch = !titleMatch?.name && !addressMatch?.name
+            ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
+                candidate ? searchPlaceInfo(candidate, geo2.lat, geo2.lng) : null
+              )
+            : null
+          resolvedName = titleMatch?.name || addressMatch?.name || commentMatch?.name || geo2.address
+          placeNameSource = titleMatch?.name
+            ? 'title_match'
+            : addressMatch?.name
+              ? 'address_match'
+              : commentMatch?.name
+                ? 'comment_match'
+                : 'address_fallback'
         }
+        logPlaceNameResolution(v.id, placeNameSource, resolvedName)
+        if (!meetsConfidence(placeNameSource, minConfidence)) return false
+        const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
+        if (durationSec > 0 && durationSec < MIN_VIDEO_SEC) return false
+        results.push({
+          videoId: v.id,
+          title: snippet.title,
+          thumbnail: snippet.thumbnails.medium.url,
+          channel: snippet.channelTitle,
+          lat: geo2.lat,
+          lng: geo2.lng,
+          distanceKm: Math.round(dist * 10) / 10,
+          source: 'ai',
+          viewCount: parseInt(v.statistics?.viewCount ?? '0', 10),
+          placeName: resolvedName,
+          placeNameSource,
+          duration: formatDuration(durationSec),
+          isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+          subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
+          subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
+        })
+        return true
+      }
+
+      // ① 휴리스틱 우선 (지역 앵커 + 명시 업체명) — API 비용 없음
+      const candidates = buildHeuristicPlaceQueries(v.snippet.title, v.snippet.description ?? '', regionName)
+      let resolved = false
+      for (const place of candidates) {
+        if (await tryResolveAndPush(place)) { resolved = true; break }
+      }
+      // ② 휴리스틱 실패 시에만 AI 폴백 (videoId 캐시로 반복 호출 차단)
+      if (!resolved) {
+        const aiQuery = await extractPlaceByAI(v.id, v.snippet.title, v.snippet.description ?? '')
+        if (aiQuery) await tryResolveAndPush(aiQuery)
       }
     }),
   ])

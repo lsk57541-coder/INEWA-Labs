@@ -23,6 +23,29 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string |
   return doc.road_address?.address_name ?? doc.address?.address_name ?? null
 }
 
+// 좌표 → 시/군/구 지역명 (접미사 제거). "지역명 + 키워드" 유튜브 검색용.
+// reverseGeocode는 전체 주소를 주지만, 이건 coord2regioncode로 깔끔한 행정구역명만 추출.
+export async function getRegionName(lat: number, lng: number): Promise<string | null> {
+  const key = process.env.KAKAO_REST_API_KEY
+  if (!key) return null
+
+  const url = `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`
+  const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })
+  if (!res.ok) return null
+
+  const json = await res.json() as {
+    documents: { region_1depth_name: string; region_2depth_name: string }[]
+  }
+  const doc = json.documents?.[0]
+  if (!doc) return null
+
+  const raw = doc.region_2depth_name || doc.region_1depth_name
+  if (!raw) return null
+  // "가평군"→"가평", "강남구"→"강남", "안산시 단원구"→"안산". 유튜버가 제목에 쓰는 형태.
+  const first = raw.split(' ')[0]
+  return first.replace(/(시|군|구)$/, '') || first
+}
+
 export interface PlaceDetails {
   name: string
   category: string
