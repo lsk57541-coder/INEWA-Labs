@@ -22,6 +22,7 @@ interface PlaceRow {
   lng: number | null
   geocoding: boolean
   geocodeError: string | null
+  autoFilled: boolean
 }
 
 interface PlaceSearchResult {
@@ -52,8 +53,26 @@ function makeRow(name = '', timestampInput = ''): PlaceRow {
     lng: null,
     geocoding: false,
     geocodeError: null,
+    autoFilled: false,
   }
 }
+
+// 제목에서 지역 힌트 추정(자동 좌표 보조용 prefix + 오매칭 가드). 못 찾으면 빈 문자열.
+const REGION_TOKENS = ['제주', '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', '수원', '성남', '용인', '고양', '가평', '강릉', '속초', '여수', '전주', '경주', '포항', '춘천', '통영', '거제', '김포', '파주', '양양', '강원', '경기', '충북', '충남', '전북', '전남', '경북', '경남']
+function regionHintFromTitle(title: string): string {
+  return REGION_TOKENS.find(t => title.includes(t)) ?? ''
+}
+function normName(s: string): string {
+  return s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()
+}
+// Kakao 결과 상호명이 추출 가게명과 매칭되는지(부분 포함). 동명 타업소 오매칭 방지용.
+function namesMatch(a: string, b: string): boolean {
+  const x = normName(a), y = normName(b)
+  return x.length >= 2 && y.length >= 2 && (x.includes(y) || y.includes(x))
+}
+// 장소류 카테고리 허용(음식점/카페/관광/숙박/문화 등). "법률사무소" 같은 동명 타업종 오매칭 차단.
+// ※Kakao keyword search는 category_group_code 다중코드를 거부하므로 결과 category 문자열로 후처리.
+const PLACE_CATEGORY_RE = /(음식점|카페|음식|디저트|베이커리|주점|관광|명소|숙박|호텔|펜션|게스트|리조트|문화)/
 
 function secondsToMmss(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -80,6 +99,9 @@ export default function BulkLocationForm() {
   const [places, setPlaces] = useState<PlaceRow[]>([makeRow()])
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState<string | null>(null)
+  const [extractedCount, setExtractedCount] = useState<number | null>(null)
+  const [region, setRegion] = useState('')
+  const [autoGeocoding, setAutoGeocoding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<{ succeeded: number; errors: string[] } | null>(null)
 
@@ -97,17 +119,53 @@ export default function BulkLocationForm() {
     setVideoInfo(null)
     setPlaces([makeRow()])
     setExtractError(null)
+    setExtractedCount(null)
+    setRegion('')
     try {
       const res = await fetch(`/api/admin/video-info?url=${encodeURIComponent(videoUrl.trim())}`)
       const data = await res.json() as VideoInfo & { error?: string }
       if (!res.ok) { setVideoError(data.error ?? '영상 조회 실패'); return }
       setVideoInfo(data)
+      setRegion(regionHintFromTitle(data.title)) // 제목에서 지역 자동 추정(편집 가능)
     } catch {
       setVideoError('네트워크 오류')
     } finally {
       setVideoFetching(false)
     }
   }, [videoUrl])
+
+  // 추출 가게명 1건을 "지역 + 가게명"으로 Kakao 자동 조회. 오매칭 방지 3중 가드:
+  // ①카테고리(음식점/카페/숙박) ②결과 주소가 지역 포함 ③Kakao 상호명이 추출명과 매칭.
+  // 셋 다 통과해야 좌표 채움(autoFilled). 아니면 null → 빈칸 유지(수동 [검색]).
+  const geocodeByName = useCallback(async (rgn: string, name: string): Promise<Partial<PlaceRow> | null> => {
+    if (!name.trim()) return null
+    try {
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(`${rgn} ${name}`)}&list=1`)
+      const json = await res.json() as { results?: PlaceSearchResult[] }
+      const hit = (json.results ?? []).find(r =>
+        (!rgn || (r.address ?? '').includes(rgn)) &&   // 지역 가드
+        namesMatch(name, r.name) &&                     // 상호명 매칭 가드
+        (!r.category || PLACE_CATEGORY_RE.test(r.category)) // 카테고리 가드(후처리)
+      )
+      if (!hit) return null
+      return {
+        lat: hit.lat, lng: hit.lng, address: hit.address,
+        category: hit.category ? hit.category.split('>').pop()?.trim() ?? '' : '',
+        autoFilled: true, geocodeError: null,
+      }
+    } catch { return null }
+  }, [])
+
+  // 추출 직후 전체 행을 병렬 자동 geocode. 가드 통과분만 좌표 채움.
+  const autoGeocodeRows = useCallback(async (rows: PlaceRow[], rgn: string) => {
+    setAutoGeocoding(true)
+    const filled = await Promise.all(rows.map(async (r) => {
+      const hit = await geocodeByName(rgn, r.name)
+      return hit ? { ...r, ...hit } : r
+    }))
+    setPlaces(filled)
+    setAutoGeocoding(false)
+  }, [geocodeByName])
 
   const autoExtract = useCallback(async () => {
     if (!videoInfo) return
@@ -124,15 +182,18 @@ export default function BulkLocationForm() {
         setExtractError('영상 설명에서 상호명을 찾지 못했습니다. 직접 입력해주세요.')
         return
       }
-      setPlaces(data.places.map(p =>
+      const rows = data.places.map(p =>
         makeRow(p.name, p.timestamp_seconds != null ? secondsToMmss(p.timestamp_seconds) : '')
-      ))
+      )
+      setPlaces(rows)
+      setExtractedCount(data.places.length)
+      if (region.trim()) void autoGeocodeRows(rows, region.trim()) // 지역 있으면 좌표 자동 시도
     } catch {
       setExtractError('네트워크 오류')
     } finally {
       setExtracting(false)
     }
-  }, [videoInfo])
+  }, [videoInfo, region, autoGeocodeRows])
 
   const geocodeAddress = useCallback(async (idx: number, addressOverride?: string) => {
     const addr = addressOverride ?? places[idx]?.address
@@ -205,6 +266,7 @@ export default function BulkLocationForm() {
       lat: result.lat,
       lng: result.lng,
       geocodeError: null,
+      autoFilled: false,
     } : r))
     setModal(null)
   }, [modal])
@@ -253,6 +315,12 @@ export default function BulkLocationForm() {
     }
   }
 
+  // 저장은 name+좌표 모두 있는 행만 들어감(handleSubmit의 valid 필터와 동일 기준).
+  // 좌표 없는 행이 조용히 누락되는 함정을 저장 전에 미리 보여주기 위한 카운트.
+  const namedCount = places.filter(r => r.name.trim()).length
+  const validCount = places.filter(r => r.name.trim() && r.lat !== null && r.lng !== null).length
+  const missingCoords = namedCount - validCount
+
   return (
     <>
       <div className="space-y-6">
@@ -292,15 +360,33 @@ export default function BulkLocationForm() {
                 </div>
               </div>
 
+              {/* 지역(자동 좌표 보조) — 제목에서 자동 추정, 편집 가능. "지역 + 가게명"으로 Kakao 조회 + 오매칭 가드 */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-500 shrink-0">지역(자동 좌표)</label>
+                <input
+                  type="text"
+                  value={region}
+                  onChange={e => setRegion(e.target.value)}
+                  placeholder="예: 제주 (비우면 자동 좌표 끔)"
+                  className="flex-1 text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
               {/* Auto-extract button */}
               <button
                 onClick={autoExtract}
                 disabled={extracting}
                 className="w-full text-sm border border-blue-600 text-blue-600 hover:bg-blue-50 disabled:opacity-40 rounded-lg py-2 transition"
               >
-                {extracting ? 'AI가 상호명 추출 중…' : '자동 추출 — AI가 영상 설명에서 상호명 찾기'}
+                {extracting ? '설명에서 가게명 추출 중…' : '자동 추출 — 설명 가게명 + 지역으로 좌표까지'}
               </button>
               {extractError && <p className="text-xs text-red-500">{extractError}</p>}
+              {extractedCount !== null && (
+                <p className="text-xs text-blue-600 font-medium">
+                  추출된 장소: {extractedCount}개
+                  {autoGeocoding && <span className="text-gray-400"> · 좌표 자동 채우는 중…</span>}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -343,7 +429,7 @@ export default function BulkLocationForm() {
                   <input
                     type="text"
                     value={row.address}
-                    onChange={e => updateRow(idx, { address: e.target.value, lat: null, lng: null, geocodeError: null })}
+                    onChange={e => updateRow(idx, { address: e.target.value, lat: null, lng: null, geocodeError: null, autoFilled: false })}
                     onBlur={() => geocodeAddress(idx)}
                     placeholder="주소 (입력 후 포커스 이동 시 자동 좌표 변환)"
                     className="w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -354,7 +440,10 @@ export default function BulkLocationForm() {
                 </div>
                 {row.geocodeError && <p className="text-xs text-red-500">{row.geocodeError}</p>}
                 {row.lat !== null && row.lng !== null && (
-                  <p className="text-xs text-gray-400">{row.lat.toFixed(5)}, {row.lng.toFixed(5)}</p>
+                  <p className="text-xs text-gray-400">
+                    {row.autoFilled && <span className="text-green-600 font-medium">✓ 자동 — 주소 확인 </span>}
+                    {row.lat.toFixed(5)}, {row.lng.toFixed(5)}
+                  </p>
                 )}
 
                 {/* Category + timestamp */}
@@ -400,13 +489,20 @@ export default function BulkLocationForm() {
 
         {/* Submit */}
         {videoInfo && (
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs">
+              <span className="text-gray-600">유효 장소(좌표 있음): </span>
+              <span className="font-semibold text-gray-900">{validCount}개</span>
+              {missingCoords > 0 && (
+                <span className="text-amber-600"> · 좌표 없는 {missingCoords}개는 저장 제외</span>
+              )}
+            </p>
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="text-sm bg-black text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 disabled:opacity-40 transition"
+              className="shrink-0 text-sm bg-black text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 disabled:opacity-40 transition"
             >
-              {saving ? '저장 중…' : `일괄 저장 (${places.filter(r => r.name.trim()).length}개)`}
+              {saving ? '저장 중…' : `일괄 저장 (${validCount}개)`}
             </button>
           </div>
         )}

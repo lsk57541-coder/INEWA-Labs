@@ -7,7 +7,7 @@ export interface ExtractedPlace {
   timestamp_seconds: number | null
   lat?: number // 좌표 내장 라인(0순위)일 때만
   lng?: number
-  source?: 'coords' | 'timestamp' | 'ai'
+  source?: 'coords' | 'timestamp' | 'ai' | 'list'
 }
 
 export interface YouTubeSnippet {
@@ -43,7 +43,24 @@ function cleanName(raw: string): string {
 
 const SKIP_KEYWORDS = ['인트로', '아침', '점심', '저녁', '출발', '이동', '도착', '일기', 'outro', 'intro', 'ending']
 
-export function extractFromTimestamps(description: string): ExtractedPlace[] {
+// 모음영상 설명란의 비-장소 보일러플레이트(구독 유도/문의/광고/타임스탬프 안내 등) 차단.
+const NON_PLACE_RE = /(구독|좋아요|알림|문의|협찬|광고|제휴|비즈니스|인스타|채널|구독자|쿠폰|할인|예약|이벤트|댓글|목차|타임스탬프|챕터|편집|렌트카|파트너스|수수료|가입|bgm|sns|youtu)/i
+// 영상 제목성 헤더("베스트 20", "맛집 TOP10" 등) 차단.
+const HEADER_RE = /(베스트|best|top|순위|모음|총정리|리스트|랭킹)\s*\d*/i
+
+// 추출된 한 줄이 "실제 가게명"으로 보이는지 — false positive(구독유도·문의·헤더·문장형·주소명·이메일) 차단.
+function isLikelyPlaceName(name: string): boolean {
+  if (!name || name.length < 2 || name.length > 25) return false
+  if (name.includes('@')) return false                          // 이메일 줄
+  if (SKIP_KEYWORDS.some(kw => name.toLowerCase().includes(kw))) return false
+  if (NON_PLACE_RE.test(name)) return false                     // 비-장소 보일러플레이트
+  if (HEADER_RE.test(name)) return false                        // 제목성 헤더
+  if (/^[가-힣]{2,4}(시|군|구|동|읍|면)$/.test(name)) return false  // 순수 행정구역명
+  if (/(요|니다|세요|해요|부탁|드립니다|습니다)$/.test(name)) return false  // 문장형
+  return true
+}
+
+export function extractFromTimestamps(description: string, limit = 15): ExtractedPlace[] {
   const results: ExtractedPlace[] = []
   const lines = description.split('\n')
 
@@ -53,16 +70,55 @@ export function extractFromTimestamps(description: string): ExtractedPlace[] {
 
     const [, ts, rawName] = match
     const name = cleanName(rawName)
-    if (!name || name.length < 2) continue
-
-    const lower = name.toLowerCase()
-    if (SKIP_KEYWORDS.some(kw => lower.includes(kw))) continue
-    if (/^[가-힣]{2,4}(시|군|구|동|읍|면)$/.test(name)) continue
+    if (!isLikelyPlaceName(name)) continue
 
     results.push({ name, timestamp_seconds: mmssToSeconds(ts), source: 'timestamp' })
   }
 
-  return results.slice(0, 15)
+  return results.slice(0, limit)
+}
+
+// 가게명 나열 리스트 파서 — "📍/●/•/▶/①~⑳/1./1)/1위/- 가게명" 등 마커 + 가게명.
+// extractFromTimestamps(타임스탬프 줄)와 상보적. 타 영상 링크/이메일 줄은 선제 제외하고,
+// isLikelyPlaceName으로 비-장소(구독/문의/헤더/문장형)를 거른다. 정밀도 우선(가짜 핀 0 목표).
+const MARKER_RE = /^(?:📍|▶️?|●|○|◦|•|·|‣|–|\*|\+|[①-⑳]|\d{1,2}\s*[.)위])\s*(.+)$/u
+export function extractFromMarkerList(description: string): ExtractedPlace[] {
+  const results: ExtractedPlace[] = []
+  for (const raw of description.split('\n')) {
+    const line = raw.trim()
+    if (/youtu\.?be|youtube\.com|@/i.test(line)) continue   // 타 영상 링크/이메일 줄 제외
+    const m = line.match(MARKER_RE)
+    if (!m) continue
+    const name = cleanName(m[1])
+    if (!isLikelyPlaceName(name)) continue
+    if (results.some(r => normalizeForMatch(r.name) === normalizeForMatch(name))) continue // 중복
+    results.push({ name, timestamp_seconds: null, source: 'list' })
+  }
+  return results.slice(0, 40)
+}
+
+// 동기 통합 추출(AI 없음): 가게명 리스트(완전) + 타임스탬프 챕터(startSec)를 정규화 이름으로 머지.
+// 리스트 기준으로 같은 이름 챕터의 등장시간을 붙이고, 챕터에만 있는 곳도 보강. admin 추출 라우트 전용.
+export function extractPlaceList(_title: string, description: string): ExtractedPlace[] {
+  const list = extractFromMarkerList(description)
+  const chapters = extractFromTimestamps(description, 40)
+  if (list.length === 0) return chapters
+
+  const tsByName = new Map<string, number>()
+  for (const c of chapters) {
+    if (c.timestamp_seconds == null) continue
+    const k = normalizeForMatch(c.name)
+    if (!tsByName.has(k)) tsByName.set(k, c.timestamp_seconds)
+  }
+  const merged: ExtractedPlace[] = list.map(p => ({
+    ...p,
+    timestamp_seconds: tsByName.get(normalizeForMatch(p.name)) ?? null,
+  }))
+  for (const c of chapters) {
+    const k = normalizeForMatch(c.name)
+    if (!merged.some(m => normalizeForMatch(m.name) === k)) merged.push(c)
+  }
+  return merged.slice(0, 40)
 }
 
 // 0순위: 좌표 내장 라인 파싱 (일부 모음영상은 "(lat, lng) // 상호명" 형태로
@@ -160,7 +216,7 @@ ${text}`,
         timestamp_seconds: p.timestamp ? mmssToSeconds(p.timestamp) : null,
       }))
       .filter(p => p.name.length >= 2)
-      .slice(0, 15)
+      .slice(0, 40)
   } catch {
     return []
   }

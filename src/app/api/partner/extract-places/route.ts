@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getVideoSnippet, extractFromTimestamps, extractWithClaude } from '@/lib/extractPlaces'
+import { getVideoSnippet, extractPlaceList, extractWithClaude } from '@/lib/extractPlaces'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '본인 채널 영상만 등록할 수 있습니다' }, { status: 403 })
   }
 
-  let places = extractFromTimestamps(snippet.description)
+  let places = extractPlaceList(snippet.title, snippet.description)
   if (places.length === 0) {
     places = await extractWithClaude(snippet.title, snippet.description)
   }
