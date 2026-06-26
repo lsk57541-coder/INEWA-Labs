@@ -9,6 +9,7 @@ interface VideoInfo {
   thumbnail: string
   channel: string
   publishedAt: string
+  registeredCount?: number // 이미 등록된 장소 수(조회 시점 중복 미리알림)
 }
 
 interface PlaceRow {
@@ -406,6 +407,11 @@ export default function BulkLocationForm() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium line-clamp-2">{videoInfo.title}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{videoInfo.channel}</p>
+                  {!!videoInfo.registeredCount && (
+                    <p className="text-xs text-amber-700 font-medium mt-1">
+                      ⚠️ 이미 등록된 영상입니다 (장소 {videoInfo.registeredCount}개 등록됨) — 저장 시 덮어쓰기 확인이 뜹니다
+                    </p>
+                  )}
                 </div>
               </div>
 

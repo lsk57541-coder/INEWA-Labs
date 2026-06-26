@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 function extractVideoId(url: string): string | null {
   try {
@@ -48,11 +49,23 @@ export async function GET(request: NextRequest) {
   const item = json.items?.[0]
   if (!item) return NextResponse.json({ error: '영상을 찾을 수 없습니다' }, { status: 404 })
 
+  // 이미 등록된 영상인지 미리 알림용 — 저장 차단(bulkAddLocations)과 동일 기준(youtube_id 카운트).
+  // DB 조회라 YouTube quota 무관. 서비스롤로 RLS 무관하게 정확 카운트.
+  let registeredCount = 0
+  const sUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (sUrl && sKey) {
+    const admin = createServiceClient(sUrl, sKey)
+    const { count } = await admin.from('videos').select('id', { count: 'exact', head: true }).eq('youtube_id', videoId)
+    registeredCount = count ?? 0
+  }
+
   return NextResponse.json({
     videoId,
     title: item.snippet.title,
     thumbnail: item.snippet.thumbnails.medium?.url ?? item.snippet.thumbnails.default?.url ?? '',
     channel: item.snippet.channelTitle,
     publishedAt: item.snippet.publishedAt,
+    registeredCount,
   })
 }
