@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { bulkAddLocations } from '@/app/actions'
 
 interface VideoInfo {
@@ -90,7 +89,6 @@ function parseTimestamp(input: string): number | undefined {
 }
 
 export default function BulkLocationForm() {
-  const router = useRouter()
   const [videoUrl, setVideoUrl] = useState('')
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null)
   const [videoFetching, setVideoFetching] = useState(false)
@@ -105,6 +103,7 @@ export default function BulkLocationForm() {
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<{ succeeded: number; errors: string[] } | null>(null)
   const [duplicate, setDuplicate] = useState<{ existingPlaces: number } | null>(null)
+  const [lastSaved, setLastSaved] = useState<{ count: number } | null>(null)
 
   const [modal, setModal] = useState<SearchModal | null>(null)
   const modalInputRef = useRef<HTMLInputElement>(null)
@@ -122,6 +121,7 @@ export default function BulkLocationForm() {
     setExtractError(null)
     setExtractedCount(null)
     setRegion('')
+    setLastSaved(null)
     try {
       const res = await fetch(`/api/admin/video-info?url=${encodeURIComponent(videoUrl.trim())}`)
       const data = await res.json() as VideoInfo & { error?: string }
@@ -306,9 +306,17 @@ export default function BulkLocationForm() {
         return
       }
       setDuplicate(null)
-      setSaveResult(result)
       if (result.errors.length === 0) {
-        router.push('/admin')
+        // 연속 입력: /admin으로 이동하지 않고 폼 초기화 + 완료 배너 → 바로 다음 영상 입력.
+        setLastSaved({ count: result.succeeded })
+        setVideoUrl('')
+        setVideoInfo(null)
+        setPlaces([makeRow()])
+        setExtractedCount(null)
+        setRegion('')
+        setSaveResult(null)
+      } else {
+        setSaveResult(result) // 일부 실패 → 폼 유지하고 에러 표시(수정 후 재저장)
       }
     } finally {
       setSaving(false)
@@ -335,6 +343,20 @@ export default function BulkLocationForm() {
   return (
     <>
       <div className="space-y-6">
+        {/* 저장 완료 — 연속 입력용. 다음 영상 조회 시 자동 사라짐. */}
+        {lastSaved && (
+          <div className="border border-green-300 bg-green-50 rounded-lg p-3 flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-green-800">✓ {lastSaved.count}개 저장 완료 — 다음 영상 URL을 입력하세요</p>
+            <button
+              onClick={() => setLastSaved(null)}
+              className="shrink-0 text-green-700 hover:text-green-900 text-sm"
+              aria-label="닫기"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* YouTube URL */}
         <div className="border rounded-lg p-4 space-y-3">
           <p className="text-sm font-medium">YouTube 영상 URL</p>
