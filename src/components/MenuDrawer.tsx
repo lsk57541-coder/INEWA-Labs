@@ -84,12 +84,12 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
         </div>
 
         {/* 서비스 소개 — 헤더와 이어지는 영역 */}
-        <div className="px-4 py-3 border-b border-gray-200" style={{ backgroundColor: '#0F1C2E' }}>
+        <div className="px-4 py-3 border-b border-border" style={{ backgroundColor: '#0F1C2E' }}>
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>유튜버가 다녀온 그곳, 지도에서 바로 찾아보세요</p>
         </div>
 
         {/* 유저 섹션 */}
-        <div className="px-4 py-4 border-b border-gray-200">
+        <div className="px-4 py-4 border-b border-border">
           {user ? (
             <div className="flex items-center gap-3">
               {user.avatarUrl ? (
@@ -168,7 +168,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
         </div>
 
         {/* 푸터 */}
-        <div className="border-t shrink-0 px-4 py-3 space-y-2">
+        <div className="border-t border-border shrink-0 px-4 py-3 space-y-2">
           {user?.isApprovedPartner ? (
             <Link
               href="/partner/dashboard"

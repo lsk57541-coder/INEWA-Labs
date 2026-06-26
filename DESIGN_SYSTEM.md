@@ -38,6 +38,6 @@
 2. ✅ 검색모드 탭/반경 칩/정렬 칩/즐겨찾기 탭: `rounded-lg` → `rounded-full`로 통일, 선택 색은 `bg-accent`로 통일
 3. ✅ 결과 카드 찜(♥)/신고(🚩) 아이콘이 둘 다 `red-500`이라 색만으론 구분 안 되던 문제 → 찜은 `text-favorite`, 신고는 `text-danger`로 분리 (당초 즐겨찾기 *탭* 활성색은 "찜" 의미가 아니라 범용 선택 표시였음이 확인되어 `favorite` 대신 `accent`로 정정 적용)
 
-남은 항목 (아직 미적용):
-4. 테두리 색이 암묵적으로 기본값에 의존하던 곳들 → `border-border`로 명시
-5. admin/partner 화면 — 우선순위상 가장 마지막
+남은 항목:
+4. ✅ 테두리 색이 암묵적으로 기본값에 의존하던 곳들 → `border-border`로 명시. 소비자 3개 화면(`SearchMap.tsx`/`FavoritesOverlay.tsx`/`MenuDrawer.tsx`) 총 28곳 통일. Tailwind v4부터 색 없는 `border`의 기본값이 `gray-200`이 아니라 `currentColor`라, 색 없이 쓰던 `border`들이 텍스트색으로 진하게 렌더링되던 걸 `border-border`(gray-200)로 정상화한 것(단순 토큰화가 아니라 실제 톤 개선). 의도적으로 다른 회색(`gray-100`/`300`/`800`), 의미색(`border-accent`/`black`/`blue-500`, 탭 언더라인), 모양용 border(재생삼각형/마커 SVG)는 제외.
+5. admin/partner 화면 — 우선순위상 가장 마지막 (미착수)

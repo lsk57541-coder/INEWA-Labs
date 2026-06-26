@@ -1185,11 +1185,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               onFocus={() => setOptionsOpen(true)}
               placeholder="키워드 검색 (예: 한강 카페, 제주 맛집)"
-              className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
+              className="w-full text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
             />
           ) : selectedChannel ? (
             <div
-              className="flex items-center gap-1.5 text-xs font-medium text-blue-700 border rounded-lg px-3 py-2 bg-white min-w-0 cursor-pointer"
+              className="flex items-center gap-1.5 text-xs font-medium text-blue-700 border border-border rounded-lg px-3 py-2 bg-white min-w-0 cursor-pointer"
               onClick={() => setOptionsOpen(true)}
             >
               <span className="flex-1 truncate">{selectedChannel.title} 채널만 검색</span>
@@ -1209,13 +1209,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               onChange={(e) => handleChannelQueryChange(e.target.value)}
               onFocus={() => { setOptionsOpen(true); setLocationSuggestions([]) }}
               placeholder="유튜버 채널명으로 검색"
-              className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
+              className="w-full text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
             />
           )}
 
           {/* 채널 자동완성 드롭다운 */}
           {searchMode === 'channel' && !selectedChannel && (channelSearching || channelSuggestions.length > 0) && (
-            <div data-channel-dd className="absolute z-50 top-full left-3 right-3 mt-1 bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100">
+            <div data-channel-dd className="absolute z-50 top-full left-3 right-3 mt-1 bg-white border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100">
               {channelSearching && <p className="text-xs text-gray-400 px-4 py-3">검색 중…</p>}
               {channelSuggestions.map((c) => (
                 <button
@@ -1241,7 +1241,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
         {/* 확장 섹션 — 입력창 클릭(포커스) 시 펼쳐짐, 검색 완료 후 닫힘 */}
         <div className={`overflow-hidden transition-all duration-200 ${optionsOpen ? 'max-h-[500px]' : 'max-h-0'}`}>
-          <div className="border-t">
+          <div className="border-t border-border">
             {/* 탭 */}
             <div className="flex gap-1 px-3 pt-3">
               <button
@@ -1271,7 +1271,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   className={`flex-1 text-xs rounded-full py-1.5 border transition font-medium ${
                     radius === r
                       ? 'bg-accent text-white border-accent'
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      : 'bg-white text-gray-600 border-border hover:bg-gray-50'
                   }`}
                 >
                   {r}km
@@ -1299,7 +1299,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
             {/* 고급 설정 — advancedOpen일 때만 */}
             <div className={`overflow-hidden transition-all duration-200 ${advancedOpen ? 'max-h-[420px]' : 'max-h-0'}`}>
-              <div className="px-3 pb-3 border-t pt-3 space-y-3">
+              <div className="px-3 pb-3 border-t border-border pt-3 space-y-3">
                 {/* 위치 직접입력 — 키워드/채널 모두 */}
                 <div>
                   <p className="text-xs text-gray-400 font-medium mb-1.5">📍 검색위치 직접입력</p>
@@ -1311,7 +1311,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
                     onFocus={() => setChannelSuggestions([])}
                     placeholder="지역명 또는 주소 입력"
-                    className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                    className="w-full text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
                   />
                   {addressInput.trim() && (
                     <div className="flex gap-2 mt-2">
@@ -1395,7 +1395,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             zIndex: 9999,
           }}
           data-location-dd
-          className="bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100"
+          className="bg-white border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100"
         >
           {locationSuggestions.map((s, i) => (
             <button
@@ -1416,7 +1416,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         <div className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl px-3 pb-4 pt-3">
           <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-3" />
           {[0, 1, 2].map((i) => (
-            <div key={i} className="flex gap-2 py-2.5 border-b last:border-0 animate-pulse">
+            <div key={i} className="flex gap-2 py-2.5 border-b border-border last:border-0 animate-pulse">
               <div className="w-14 h-8 bg-gray-200 rounded shrink-0" />
               <div className="flex-1 space-y-1.5">
                 <div className="h-2.5 bg-gray-200 rounded w-full" />
@@ -1498,7 +1498,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mt-2 mb-1.5" />
             <button
               onClick={() => setListOpen((o) => !o)}
-              className="w-full flex items-center justify-between px-4 pb-3 text-xs text-gray-500 font-medium border-b"
+              className="w-full flex items-center justify-between px-4 pb-3 text-xs text-gray-500 font-medium border-b border-border"
             >
               <span className="truncate">
                 {searchMode === 'channel' && selectedChannel ? `🎙 ${selectedChannel.title}` : `"${keyword}"`} 검색결과 {filteredResults.length}개
@@ -1506,7 +1506,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               <span className="shrink-0 ml-2">{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
             </button>
           </div>
-          <div className="flex gap-1.5 px-3 py-2 border-b shrink-0">
+          <div className="flex gap-1.5 px-3 py-2 border-b border-border shrink-0">
             {([['all', '전체'] as const, ['long', null] as const, ['short', null] as const]).map(([key, label]) => (
               <button
                 key={key}
@@ -1515,7 +1515,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 className={`flex-1 flex items-center justify-center gap-1 text-xs rounded-lg py-1.5 border transition font-medium ${
                   videoFilter === key
                     ? 'bg-black text-white border-black'
-                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    : 'bg-white text-gray-600 border-border hover:bg-gray-50'
                 }`}
               >
                 {key === 'long' ? (
@@ -1528,7 +1528,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </button>
             ))}
           </div>
-          <div className="flex gap-1.5 px-3 py-2 border-b shrink-0">
+          <div className="flex gap-1.5 px-3 py-2 border-b border-border shrink-0">
             {([['views', '조회수'], ['duration', '영상길이'], ['distance', '거리(가까운)']] as const).map(([key, label]) => (
               <button
                 key={key}
@@ -1536,7 +1536,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 className={`flex-1 text-xs rounded-full py-1.5 border transition font-medium ${
                   sortBy === key
                     ? 'bg-accent text-white border-accent'
-                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    : 'bg-white text-gray-600 border-border hover:bg-gray-50'
                 }`}
               >
                 {label}
@@ -1564,7 +1564,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             {filteredResults.map((v) => (
               <div
                 key={v.videoId}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition border-b last:border-0"
+                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition border-b border-border last:border-0"
               >
                 <div className="relative shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
                   <img src={v.thumbnail} alt="" className="w-14 h-8 object-cover rounded" />
@@ -1649,7 +1649,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           <div className="pt-2 pb-0 flex justify-center shrink-0">
             <div className="w-10 h-1.5 bg-gray-200 rounded-full" />
           </div>
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50 shrink-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-gray-50 shrink-0">
             <div>
               <p className="text-sm font-bold">이 위치의 영상</p>
               <p className="text-xs text-gray-400 mt-0.5">{selectedGroup.videos.length}개 · 조회수순</p>
@@ -1665,7 +1665,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             {selectedGroup.videos.map((v) => (
               <div
                 key={v.videoId}
-                className={`flex gap-3 px-3 py-3.5 transition border-b last:border-0 group ${
+                className={`flex gap-3 px-3 py-3.5 transition border-b border-border last:border-0 group ${
                   selectedVideo?.videoId === v.videoId
                     ? 'border-l-4 border-blue-500 bg-blue-50'
                     : 'hover:bg-gray-50'
@@ -1854,13 +1854,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     value={reportSelected ? `${reportSelected.name} (${reportSelected.address})` : reportQuery}
                     onChange={(e) => handleReportQueryChange(e.target.value)}
                     placeholder="정확한 장소명이나 주소를 검색해보세요 (예: 엄마네돼지찌개)"
-                    className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                    className="w-full text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
                   />
                   {addressSearching && (
                     <p className="text-xs text-gray-400 mt-1">검색 중…</p>
                   )}
                   {addressSuggestions.length > 0 && (
-                    <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
                       {addressSuggestions.map((s, i) => (
                         <button
                           key={i}
@@ -1868,7 +1868,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                             setReportSelected(s)
                             setAddressSuggestions([])
                           }}
-                          className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-0 transition"
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-border last:border-0 transition"
                         >
                           <p className="text-sm font-medium">{s.name}</p>
                           <p className="text-xs text-gray-400">{s.address}</p>

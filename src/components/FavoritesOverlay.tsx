@@ -122,13 +122,13 @@ export default function FavoritesOverlay({
   return (
     <div className="absolute inset-0 z-30 bg-white flex flex-col">
       {/* 헤더 */}
-      <div className="flex items-center gap-3 px-4 h-14 border-b shrink-0">
+      <div className="flex items-center gap-3 px-4 h-14 border-b border-border shrink-0">
         <button onClick={onClose} className="text-2xl text-gray-600 px-1">‹</button>
         <span className="font-bold">관심 목록</span>
       </div>
 
       {/* 언더라인 탭 */}
-      <div className="flex border-b shrink-0">
+      <div className="flex border-b border-border shrink-0">
         {TABS.map(({ key, label }) => (
           <button
             key={key}
@@ -155,7 +155,7 @@ export default function FavoritesOverlay({
           const isLoading = !(v.video_id in details)
           const placeName = resolvePlaceName(d?.name, v.place_name, v.channel)
           return (
-            <div key={v.video_id} className="mx-3 mb-3 rounded-xl border bg-white shadow-sm overflow-hidden">
+            <div key={v.video_id} className="mx-3 mb-3 rounded-xl border border-border bg-white shadow-sm overflow-hidden">
               {/* 카드 본문 — 클릭 시 지도로 이동 */}
               <button
                 className="flex items-start gap-3 w-full p-3 text-left hover:bg-gray-50 transition"
@@ -195,7 +195,7 @@ export default function FavoritesOverlay({
               </button>
 
               {/* 액션 버튼 영역 */}
-              <div className="border-t bg-gray-50 px-3 pt-2 pb-2">
+              <div className="border-t border-border bg-gray-50 px-3 pt-2 pb-2">
                 {/* 영상 제목 */}
                 <p className="text-xs text-gray-400 truncate mb-2 leading-tight">
                   {decodeHtmlEntities(v.title)}
