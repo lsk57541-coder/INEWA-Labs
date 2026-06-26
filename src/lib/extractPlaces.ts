@@ -7,6 +7,7 @@ export interface ExtractedPlace {
   timestamp_seconds: number | null
   lat?: number // 좌표 내장 라인(0순위)일 때만
   lng?: number
+  address?: string // "가게명 + 📍주소" 페어 형식에서 추출된 명시 주소(좌표를 이 주소로 geocode)
   source?: 'coords' | 'timestamp' | 'ai' | 'list'
 }
 
@@ -52,6 +53,7 @@ const HEADER_RE = /(베스트|best|top|순위|모음|총정리|리스트|랭킹)
 function isLikelyPlaceName(name: string): boolean {
   if (!name || name.length < 2 || name.length > 25) return false
   if (name.includes('@')) return false                          // 이메일 줄
+  if (/[?？]$/.test(name)) return false                          // 질문형("그녀들의 1픽은?")
   if (SKIP_KEYWORDS.some(kw => name.toLowerCase().includes(kw))) return false
   if (NON_PLACE_RE.test(name)) return false                     // 비-장소 보일러플레이트
   if (HEADER_RE.test(name)) return false                        // 제목성 헤더
@@ -97,28 +99,65 @@ export function extractFromMarkerList(description: string): ExtractedPlace[] {
   return results.slice(0, 40)
 }
 
-// 동기 통합 추출(AI 없음): 가게명 리스트(완전) + 타임스탬프 챕터(startSec)를 정규화 이름으로 머지.
-// 리스트 기준으로 같은 이름 챕터의 등장시간을 붙이고, 챕터에만 있는 곳도 보강. admin 추출 라우트 전용.
-export function extractPlaceList(_title: string, description: string): ExtractedPlace[] {
-  const list = extractFromMarkerList(description)
-  const chapters = extractFromTimestamps(description, 40)
-  if (list.length === 0) return chapters
+// 한국 주소 신호(강한 것만) — 마커 내용이 "가게명"인지 "주소"인지 판별. 약한 동/리 규칙은
+// "야키토리"(…리)류를 주소로 오판하므로 제외. 애매하면 false(=이름) 쪽으로.
+const ADDRESS_RE = /(특별자치도|특별자치시|특별시|광역시)|[가-힣]{2,}(시|군|구)\s+\S|[가-힣]+(로|길)\s*\d/
+function looksLikeAddress(s: string): boolean {
+  return ADDRESS_RE.test(s)
+}
 
-  const tsByName = new Map<string, number>()
-  for (const c of chapters) {
-    if (c.timestamp_seconds == null) continue
-    const k = normalizeForMatch(c.name)
-    if (!tsByName.has(k)) tsByName.set(k, c.timestamp_seconds)
+// 가게명 정리 — ★cleanName(괄호·URL 제거) 먼저, 그 다음 설명 구분자 분리.
+// 순서 중요: "왕고모네국수 ( https://naver.me/.. )"의 URL 안 ':'에서 잘리는 걸 방지.
+// "봉성식당 : 고사리 삼겹살 맛집" → "봉성식당".
+const NAME_SPLIT_RE = /\s*[:|｜ㅣ]\s*|\s+[-–]\s+/
+function cleanPlaceName(s: string): string {
+  return cleanName(cleanName(s).split(NAME_SPLIT_RE)[0])
+}
+
+// 동기 통합 추출(AI 없음) — admin 추출 라우트 전용. 두 형식 모두 처리:
+//  ① "가게명 나열"(📍/번호 + 가게명) ② "가게명 줄(타임스탬프 + 가게명 : 설명) + 📍주소 줄" 페어.
+// 줄 순서대로 1패스: 챕터/이름 마커 → place(이름), 주소형 📍마커 → 직전 "주소 없는 place"에 주소 부착.
+// (📍 마커가 영상마다 가게명/주소로 의미가 달라 looksLikeAddress로 분기.) 이름 dedup.
+export function extractPlaceList(_title: string, description: string): ExtractedPlace[] {
+  const places: ExtractedPlace[] = []
+  const byName = new Map<string, ExtractedPlace>()
+  const pushName = (name: string): ExtractedPlace => {
+    const k = normalizeForMatch(name)
+    const existing = byName.get(k)
+    if (existing) return existing
+    const p: ExtractedPlace = { name, timestamp_seconds: null, source: 'list' }
+    places.push(p)
+    byName.set(k, p)
+    return p
   }
-  const merged: ExtractedPlace[] = list.map(p => ({
-    ...p,
-    timestamp_seconds: tsByName.get(normalizeForMatch(p.name)) ?? null,
-  }))
-  for (const c of chapters) {
-    const k = normalizeForMatch(c.name)
-    if (!merged.some(m => normalizeForMatch(m.name) === k)) merged.push(c)
+  let pending: ExtractedPlace | null = null
+
+  for (const raw of description.split('\n')) {
+    const line = raw.trim()
+    const cm = line.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)$/)
+    if (cm) {
+      const name = cleanPlaceName(cm[2])
+      if (isLikelyPlaceName(name)) {
+        const p = pushName(name)
+        if (p.timestamp_seconds == null) p.timestamp_seconds = mmssToSeconds(cm[1])
+        pending = p
+      }
+      continue
+    }
+    if (/youtu\.?be|youtube\.com|@/i.test(line)) continue
+    const mm = line.match(MARKER_RE)
+    if (!mm) continue
+    const cleaned = cleanName(mm[1])
+    if (looksLikeAddress(cleaned)) {
+      // 주소 → 직전 "주소 없는 place"에 부착(없으면 스킵 = 괄호 곁다리 주소 자동 제외).
+      const target = (pending && !pending.address) ? pending : places.find((p) => !p.address)
+      if (target) target.address = cleaned
+    } else {
+      const name = cleanPlaceName(mm[1])
+      if (isLikelyPlaceName(name)) pending = pushName(name)
+    }
   }
-  return merged.slice(0, 40)
+  return places.slice(0, 40)
 }
 
 // 0순위: 좌표 내장 라인 파싱 (일부 모음영상은 "(lat, lng) // 상호명" 형태로

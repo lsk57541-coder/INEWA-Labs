@@ -157,16 +157,29 @@ export default function BulkLocationForm() {
     } catch { return null }
   }, [])
 
-  // 추출 직후 전체 행을 병렬 자동 geocode. 가드 통과분만 좌표 채움.
+  // "가게명 + 📍주소" 페어 형식: 명시 주소가 있으면 그 주소로 직접 geocode(가게명 검색보다 정확).
+  // 첫 결과 좌표를 채우고, 표시 주소는 창작자 제공 주소(row.address) 유지.
+  const geocodeByAddress = useCallback(async (address: string): Promise<Partial<PlaceRow> | null> => {
+    if (!address.trim()) return null
+    try {
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(address.trim())}&list=1`)
+      const json = await res.json() as { results?: PlaceSearchResult[] }
+      const hit = (json.results ?? [])[0]
+      if (!hit) return null
+      return { lat: hit.lat, lng: hit.lng, autoFilled: true, geocodeError: null }
+    } catch { return null }
+  }, [])
+
+  // 추출 직후 전체 행을 병렬 자동 geocode. 주소 있으면 주소 기반(정확), 없으면 "지역+가게명"(가드 통과분만).
   const autoGeocodeRows = useCallback(async (rows: PlaceRow[], rgn: string) => {
     setAutoGeocoding(true)
     const filled = await Promise.all(rows.map(async (r) => {
-      const hit = await geocodeByName(rgn, r.name)
+      const hit = r.address.trim() ? await geocodeByAddress(r.address) : await geocodeByName(rgn, r.name)
       return hit ? { ...r, ...hit } : r
     }))
     setPlaces(filled)
     setAutoGeocoding(false)
-  }, [geocodeByName])
+  }, [geocodeByName, geocodeByAddress])
 
   const autoExtract = useCallback(async () => {
     if (!videoInfo) return
@@ -174,7 +187,7 @@ export default function BulkLocationForm() {
     setExtractError(null)
     try {
       const res = await fetch(`/api/admin/extract-places?videoId=${encodeURIComponent(videoInfo.videoId)}`)
-      const data = await res.json() as { places?: { name: string; timestamp_seconds: number | null }[]; error?: string }
+      const data = await res.json() as { places?: { name: string; timestamp_seconds: number | null; address?: string }[]; error?: string }
       if (!res.ok || !data.places) {
         setExtractError(data.error ?? '추출 실패')
         return
@@ -183,12 +196,15 @@ export default function BulkLocationForm() {
         setExtractError('영상 설명에서 상호명을 찾지 못했습니다. 직접 입력해주세요.')
         return
       }
-      const rows = data.places.map(p =>
-        makeRow(p.name, p.timestamp_seconds != null ? secondsToMmss(p.timestamp_seconds) : '')
-      )
+      const rows = data.places.map(p => {
+        const row = makeRow(p.name, p.timestamp_seconds != null ? secondsToMmss(p.timestamp_seconds) : '')
+        row.address = p.address ?? '' // "가게명 + 📍주소" 페어 형식에서 추출된 주소 프리필
+        return row
+      })
       setPlaces(rows)
       setExtractedCount(data.places.length)
-      if (region.trim()) void autoGeocodeRows(rows, region.trim()) // 지역 있으면 좌표 자동 시도
+      // 주소 있는 행은 주소 기반, 없는 행은 지역+가게명으로 자동 좌표(주소 형식이면 지역 없어도 동작).
+      void autoGeocodeRows(rows, region.trim())
     } catch {
       setExtractError('네트워크 오류')
     } finally {
