@@ -28,3 +28,15 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* 세로 영상 플레이어 높이 상한. --ph는 PlayerFrame이 주입(예: 50, 65).
+   vh를 기본 폴백으로 두고(보편 지원), dvh 지원 브라우저에서만 dvh로 향상
+   (모바일 주소창 접힘/펼침 대응). 미지원 인앱브라우저에서도 안 깨짐. */
+.player-portrait {
+  height: calc(var(--ph) * 1vh);
+}
+@supports (height: 1dvh) {
+  .player-portrait {
+    height: calc(var(--ph) * 1dvh);
+  }
+}

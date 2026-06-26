@@ -155,6 +155,7 @@ export interface VideoResult {
   placeNameSource: PlaceNameSource
   duration: string
   isShort: boolean
+  aspectRatio?: number // 영상 가로/세로 비율(w/h). player 치수 없으면 undefined → 클라가 16:9 폴백
   subscriberTier: SubscriberTier | null
   subscriberCount: number
   startSec?: number // 모음영상 챕터 deep-link (해당 장소 구간부터 재생)
@@ -277,6 +278,7 @@ interface YTVideoItem {
   recordingDetails?: { location?: { latitude: number; longitude: number }; locationDescription?: string }
   statistics?: { viewCount?: string }
   contentDetails?: { duration: string }
+  player?: { embedWidth?: number; embedHeight?: number }
 }
 
 // YouTube's official Creator Award thresholds. Channels under 100,000
@@ -347,8 +349,9 @@ async function fetchVideoDetails(ids: string[]): Promise<YTVideoItem[]> {
   const all = await Promise.all(
     chunks.map(async (chunk) => {
       const params = new URLSearchParams({
-        part: 'snippet,recordingDetails,statistics,contentDetails',
+        part: 'snippet,recordingDetails,statistics,contentDetails,player',
         id: chunk.join(','),
+        maxWidth: '720', // player.embedWidth/embedHeight를 반환받기 위한 필수 조건. 비율 산출용.
         key,
       })
       const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params}`, { next: { revalidate: 300 } })
@@ -358,6 +361,15 @@ async function fetchVideoDetails(ids: string[]): Promise<YTVideoItem[]> {
     })
   )
   return all.flat()
+}
+
+// player.embedWidth/embedHeight(maxWidth 지정 시 반환)로 실제 영상 비율(w/h) 산출.
+// 세로 영상이면 <1 (쇼츠·세로롱폼 ≈0.56), 가로면 ≈1.78. isShort(길이)와 독립적이라
+// 세로로 찍은 롱폼도 정확히 잡는다. 치수 없으면 undefined → 클라이언트가 16:9로 폴백.
+function aspectRatioOf(v: YTVideoItem): number | undefined {
+  const w = v.player?.embedWidth
+  const h = v.player?.embedHeight
+  return w && h && h > 0 ? w / h : undefined
 }
 
 // 지리 대조: 매칭된 장소의 행정구역(시/도·시/군/구·동)이 영상 텍스트에 언급되는지.
@@ -669,6 +681,7 @@ export async function GET(req: NextRequest) {
             placeNameSource,
             duration: formatDuration(durationSec),
             isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+            aspectRatio: aspectRatioOf(v),
             subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
             subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
           })
@@ -727,6 +740,7 @@ export async function GET(req: NextRequest) {
               placeNameSource,
               duration: formatDuration(durationSec),
               isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+              aspectRatio: aspectRatioOf(v),
               subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
               subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
             })
@@ -803,6 +817,7 @@ export async function GET(req: NextRequest) {
           placeNameSource,
           duration: formatDuration(durationSec),
           isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+          aspectRatio: aspectRatioOf(v),
           subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
           subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
         })
@@ -837,6 +852,7 @@ export async function GET(req: NextRequest) {
               placeName: r.name, placeNameSource: 'explicit_description',
               duration: formatDuration(durationSec),
               isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
+              aspectRatio: aspectRatioOf(v),
               subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
               subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
               startSec: r.startSec,

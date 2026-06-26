@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import Script from 'next/script'
 import type { VideoResult, SubscriberTier } from '@/app/api/search/route'
@@ -154,6 +155,38 @@ function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
+  )
+}
+
+// 영상 실제 비율(aspectRatio = w/h)에 맞춰 플레이어를 적응시킨다.
+// - 가로(ratio≥1): width:100% + aspect-ratio → 16:9 영상은 현행 aspect-video와 동일.
+// - 세로(ratio<1): 높이를 portraitMaxVh(dvh/vh)로 고정, 너비는 비율로 자동 산출하여
+//   검은 부모 안에 가운데 정렬(좌우 여백). flex 부모 안 auto-width 아이템이라
+//   height+aspect-ratio로 너비가 결정됨. maxWidth:100%로 초소형 화면 가드(무크롭).
+// - aspectRatio 없음(등록장소·구캐시) → 16:9 폴백(현행과 동일 렌더).
+// dvh 폴백은 globals.css .player-portrait(vh 기본 + @supports dvh 향상)로 처리.
+function PlayerFrame({ video, portraitMaxVh }: { video: VideoResult; portraitMaxVh: number }) {
+  const ratio = video.aspectRatio && video.aspectRatio > 0 ? video.aspectRatio : 16 / 9
+  const portrait = ratio < 1
+  const src = `https://www.youtube.com/embed/${video.videoId}?autoplay=1${video.startSec ? `&start=${video.startSec}` : ''}`
+  return (
+    <div className="relative w-full bg-black flex justify-center items-center">
+      <div
+        className={portrait ? 'relative player-portrait' : 'relative w-full'}
+        style={
+          portrait
+            ? ({ '--ph': portraitMaxVh, aspectRatio: ratio, maxWidth: '100%' } as CSSProperties)
+            : { aspectRatio: ratio }
+        }
+      >
+        <iframe
+          src={src}
+          allow="autoplay; encrypted-media"
+          allowFullScreen
+          className="absolute inset-0 w-full h-full"
+        />
+      </div>
+    </div>
   )
 }
 
@@ -1623,13 +1656,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           className="absolute left-0 right-0 z-20 shadow-2xl"
           style={{ bottom: 'calc(45dvh + 6px)' }}
         >
-          <div className="relative aspect-video w-full bg-black">
-            <iframe
-              src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1${selectedVideo.startSec ? `&start=${selectedVideo.startSec}` : ''}`}
-              allow="autoplay; encrypted-media"
-              allowFullScreen
-              className="w-full h-full"
-            />
+          <div className="relative">
+            <PlayerFrame video={selectedVideo} portraitMaxVh={50} />
             <button
               onClick={() => setSelectedVideo(null)}
               className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition text-xs"
@@ -1742,17 +1770,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           onClick={() => setSelectedVideo(null)}
         >
           <div
-            className="relative bg-white rounded-2xl overflow-hidden shadow-2xl w-full max-w-lg mx-4"
+            className="relative bg-white rounded-2xl overflow-hidden shadow-2xl w-full max-w-lg mx-4 max-h-[90dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="aspect-video w-full">
-              <iframe
-                src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1${selectedVideo.startSec ? `&start=${selectedVideo.startSec}` : ''}`}
-                allow="autoplay; encrypted-media"
-                allowFullScreen
-                className="w-full h-full"
-              />
-            </div>
+            <PlayerFrame video={selectedVideo} portraitMaxVh={65} />
             <div className="flex items-start justify-between p-3 gap-3">
               <div className="flex-1 overflow-hidden">
                 <p className="text-sm font-semibold line-clamp-2">{decodeHtmlEntities(selectedVideo.title)}</p>
