@@ -104,6 +104,7 @@ export default function BulkLocationForm() {
   const [autoGeocoding, setAutoGeocoding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<{ succeeded: number; errors: string[] } | null>(null)
+  const [duplicate, setDuplicate] = useState<{ existingPlaces: number } | null>(null)
 
   const [modal, setModal] = useState<SearchModal | null>(null)
   const modalInputRef = useRef<HTMLInputElement>(null)
@@ -271,15 +272,8 @@ export default function BulkLocationForm() {
     setModal(null)
   }, [modal])
 
-  const handleSubmit = async () => {
+  const doSave = async (replace: boolean) => {
     if (!videoInfo) return
-
-    const needGeocode = places.filter(r => r.address.trim() && r.lat === null)
-    if (needGeocode.length > 0) {
-      await Promise.all(places.map((_, i) => geocodeAddress(i)))
-      return
-    }
-
     const valid = places.filter(r => r.name.trim() && r.lat !== null && r.lng !== null)
     if (valid.length === 0) {
       alert('장소명과 주소(좌표)를 모두 입력해주세요')
@@ -304,8 +298,14 @@ export default function BulkLocationForm() {
           lat: r.lat!,
           lng: r.lng!,
           timestamp_sec: parseTimestamp(r.timestampInput),
-        }))
+        })),
+        { replace }
       )
+      if (result.duplicate) {
+        setDuplicate(result.duplicate) // 이미 등록된 videoId → 덮어쓰기 확인 배너
+        return
+      }
+      setDuplicate(null)
       setSaveResult(result)
       if (result.errors.length === 0) {
         router.push('/admin')
@@ -313,6 +313,17 @@ export default function BulkLocationForm() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSubmit = async () => {
+    if (!videoInfo) return
+    const needGeocode = places.filter(r => r.address.trim() && r.lat === null)
+    if (needGeocode.length > 0) {
+      await Promise.all(places.map((_, i) => geocodeAddress(i)))
+      return
+    }
+    setDuplicate(null)
+    await doSave(false)
   }
 
   // 저장은 name+좌표 모두 있는 행만 들어감(handleSubmit의 valid 필터와 동일 기준).
@@ -487,8 +498,33 @@ export default function BulkLocationForm() {
           </div>
         )}
 
+        {/* 중복 영상 — 덮어쓰기 확인 */}
+        {duplicate && (
+          <div className="border border-amber-300 bg-amber-50 rounded-lg p-4 space-y-2">
+            <p className="text-sm text-amber-800">
+              이미 등록된 영상입니다 (장소 {duplicate.existingPlaces}개). 덮어쓰기하면 기존 {duplicate.existingPlaces}개를 지우고 이번 입력으로 새로 저장합니다.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => doSave(true)}
+                disabled={saving}
+                className="text-sm bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-40 transition"
+              >
+                {saving ? '덮어쓰는 중…' : '덮어쓰기 (재등록)'}
+              </button>
+              <button
+                onClick={() => setDuplicate(null)}
+                disabled={saving}
+                className="text-sm border border-gray-300 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Submit */}
-        {videoInfo && (
+        {videoInfo && !duplicate && (
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs">
               <span className="text-gray-600">유효 장소(좌표 있음): </span>

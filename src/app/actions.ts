@@ -139,9 +139,29 @@ export async function deleteVideo(videoId: string, locationId: string) {
 
 export async function bulkAddLocations(
   video: { youtube_id: string; title: string; thumbnail: string; channel: string; published_at: string },
-  places: { name: string; address: string; category?: string; lat: number; lng: number; timestamp_sec?: number }[]
-): Promise<{ succeeded: number; errors: string[] }> {
+  places: { name: string; address: string; category?: string; lat: number; lng: number; timestamp_sec?: number }[],
+  opts?: { replace?: boolean }
+): Promise<{ succeeded: number; errors: string[]; duplicate?: { existingPlaces: number } }> {
   const supabase = await requireAdmin()
+
+  // 서비스롤 — videoId 중복 검사 + 교체 삭제용 (locations RLS DELETE 정책 부재 대비).
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) throw new Error('서버 설정 오류: 서비스 키가 없습니다.')
+  const admin = createServiceClient(url, serviceKey)
+
+  // 같은 videoId가 이미 등록됐는지 (앱 레벨 — youtube_id는 모음영상에서 정상적으로 복수 행이라 DB unique 불가).
+  const { data: existing } = await admin
+    .from('videos')
+    .select('location_id')
+    .eq('youtube_id', video.youtube_id)
+  const oldLocationIds = [...new Set((existing ?? []).map((v) => v.location_id).filter(Boolean))]
+
+  // 차단(기본): 덮어쓰기 확인 전까지 아무것도 안 건드림.
+  if (existing && existing.length > 0 && !opts?.replace) {
+    return { succeeded: 0, errors: [], duplicate: { existingPlaces: existing.length } }
+  }
+
   const errors: string[] = []
   let succeeded = 0
 
@@ -182,6 +202,23 @@ export async function bulkAddLocations(
     }
 
     succeeded++
+  }
+
+  // 교체(덮어쓰기): 신규 INSERT가 하나라도 성공한 뒤에만 기존 정리(삭제→실패 시 유실 방지).
+  // 전부 실패면 기존 데이터 무손상으로 유지.
+  if (opts?.replace && oldLocationIds.length > 0 && succeeded > 0) {
+    // ⓐ 기존 location들에 붙은 '이 영상'의 video 행만 삭제. (새 video는 새 location_id라 미포함 → 안전)
+    await admin.from('videos').delete().in('location_id', oldLocationIds).eq('youtube_id', video.youtube_id)
+    // ⓑ 그 중 잔여 video가 0인(고아) location만 삭제. 수동 addVideo로 다른 영상이 붙은 공유 location은 보존.
+    const { data: stillUsed } = await admin
+      .from('videos')
+      .select('location_id')
+      .in('location_id', oldLocationIds)
+    const usedSet = new Set((stillUsed ?? []).map((v) => v.location_id))
+    const orphanIds = oldLocationIds.filter((id) => !usedSet.has(id))
+    if (orphanIds.length > 0) {
+      await admin.from('locations').delete().in('id', orphanIds)
+    }
   }
 
   revalidatePath('/admin')
