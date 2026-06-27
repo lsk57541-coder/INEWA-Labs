@@ -692,16 +692,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     )
   }
 
-  // The floating locate-me button: if the user has set a manual search
-  // address, it re-centers on that (their actual GPS position usually isn't
-  // where they're trying to browse), otherwise it falls back to real GPS.
-  const handleLocateButtonClick = () => {
-    if (isManualLocation && userPos) {
-      panTo(userPos.lat, userPos.lng, currentSheetFraction)
-      return
-    }
-    getLocation()
-  }
+  // 플로팅 위치 버튼: 지정위치가 있든 없든 항상 실제 GPS로 이동 + 지정 해제
+  // (getLocation이 isManualLocation=false로 되돌리고 현재위치로 panTo).
+  const handleLocateButtonClick = () => { getLocation() }
 
   const fetchLocationSuggestions = async (value: string) => {
     setAddressLoading(true)
@@ -1380,7 +1373,16 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     </div>
                   )}
                   {posLabel !== '위치 미설정' && (
-                    <p className="text-xs text-blue-600 mt-1.5 truncate font-medium">{posLabel}</p>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <p className="text-xs text-blue-600 truncate font-medium flex-1 min-w-0">{posLabel}</p>
+                      {isManualLocation && (
+                        <button
+                          onClick={getLocation}
+                          title="지정 위치 해제하고 현재 위치로"
+                          className="shrink-0 text-xs text-gray-500 hover:text-gray-700 border border-border rounded-full px-2 py-0.5 transition"
+                        >✕ 현재 위치로</button>
+                      )}
+                    </div>
                   )}
                 </div>
 
