@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import KakaoLoginButton from '@/components/auth/KakaoLoginButton'
+import { PinPlayIcon } from '@/components/BrandLogo'
 
 export default async function LoginPage({
   searchParams,
@@ -16,10 +17,13 @@ export default async function LoginPage({
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-white">
       <div className="w-full max-w-sm">
 
-        {/* 브랜드 */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold mb-2">MAPTUBE</h1>
-          <p className="text-sm text-muted">유튜버가 다녀온 그곳, 지도에서 바로 찾아보세요</p>
+        {/* 브랜드 — OG/메뉴와 통일: 핀 → MAPTUBE → 코랄선 → 슬로건 */}
+        <div className="flex flex-col items-center mb-8">
+          <PinPlayIcon size={48} />
+          <h1 className="text-2xl font-bold mt-3 tracking-wide">MAPTUBE</h1>
+          <div className="my-3" style={{ width: 28, height: 2, backgroundColor: '#FF5C5C', borderRadius: 1 }} />
+          <p className="text-sm font-medium text-gray-800">영상 속 장소를 지도로</p>
+          <p className="text-xs text-muted mt-1">유튜버가 다녀온 그곳, 지도에서 바로 찾아보세요</p>
         </div>
 
         {/* 에러 메시지 */}
