@@ -15,7 +15,7 @@ export default async function Home() {
 
   return (
     <div className="flex flex-col h-screen">
-      <main className="flex flex-1 overflow-hidden md:bg-gray-100">
+      <main className="flex flex-1 overflow-hidden">
         <SearchMap
           user={
             user

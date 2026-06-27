@@ -1112,7 +1112,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         : 'bottom-6'
 
   return (
-    <div className="flex flex-1 overflow-hidden relative md:max-w-[480px] md:mx-auto md:shadow-xl">
+    <div className="flex flex-1 overflow-hidden relative">
       <Script
         src={`//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY}&autoload=false&libraries=drawing`}
         strategy="afterInteractive"
@@ -1673,7 +1673,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Compact video player — shown above group list when multi-video marker auto-plays */}
       {selectedGroup && selectedVideo && (
         <div
-          className="absolute left-0 right-0 z-20 shadow-2xl"
+          className="absolute left-0 right-0 z-20 shadow-2xl md:max-w-2xl md:mx-auto"
           style={{ bottom: 'calc(45dvh + 6px)' }}
         >
           <div className="relative">
@@ -1790,7 +1790,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           onClick={() => setSelectedVideo(null)}
         >
           <div
-            className="relative bg-white rounded-2xl overflow-hidden shadow-2xl w-full max-w-lg mx-4 max-h-[90dvh] flex flex-col"
+            className="relative bg-white rounded-2xl overflow-hidden shadow-2xl w-full max-w-lg md:max-w-2xl mx-4 max-h-[90dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <PlayerFrame video={selectedVideo} portraitMaxVh={65} />
