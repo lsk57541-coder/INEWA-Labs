@@ -1112,7 +1112,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         : 'bottom-6'
 
   return (
-    <div className="flex flex-1 overflow-hidden relative">
+    <div className="flex flex-1 overflow-hidden relative md:max-w-[480px] md:mx-auto md:shadow-xl">
       <Script
         src={`//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY}&autoload=false&libraries=drawing`}
         strategy="afterInteractive"
