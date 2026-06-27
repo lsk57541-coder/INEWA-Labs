@@ -487,7 +487,16 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
       subscriberTier: null, subscriberCount: 0,
     })
   }
-  return out
+
+  // 같은 videoId+좌표 중복(같은 영상을 두 번 임포트한 경우) 제거 — 지도엔 1번만.
+  // 다른 좌표(같은 영상의 다른 장소)로 등장하는 건 좌표가 달라 유지됨.
+  const seen = new Set<string>()
+  return out.filter((r) => {
+    const k = `${r.videoId}:${r.lat.toFixed(4)}:${r.lng.toFixed(4)}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
 }
 
 export async function GET(req: NextRequest) {
@@ -552,8 +561,12 @@ export async function GET(req: NextRequest) {
 
       // 지역명 + 키워드 텍스트 검색 — geotag 없는 로컬 영상을 후보 풀에 포함.
       // location 파라미터를 빼야 비-geotag 영상도 반환됨(YouTube 동작). 항상 실행.
-      if (regionName) {
-        const regionItems = await ytSearch(`${regionName} ${q}`, {
+      // 앵커는 도시명 prefix를 붙인 searchRegion(예: "광주 동구"). 대도시 구(동구/서구/남구/북구/중구…)는
+      // 전국 동명이라 regionName만으론 모호("동구 맛집"→전국 동구 긁어옴→거리필터 전멸). geoRegionPrefix는
+      // 위에서 이미 계산됨(대도시면 "광주 ", 도 단위면 ''). 도 단위는 regionName이 고유 시/군명이라 그대로.
+      const searchRegion = `${geoRegionPrefix}${regionName ?? ''}`.trim()
+      if (searchRegion) {
+        const regionItems = await ytSearch(`${searchRegion} ${q}`, {
           relevanceLanguage: 'ko',
           regionCode: 'KR',
           order: 'relevance',
@@ -565,7 +578,7 @@ export async function GET(req: NextRequest) {
         // 니치 로컬 영상 recall 보강 (예: "가평 맛집 먹방"). default 카테고리는 생략.
         const modifier = CATEGORY_MODIFIER[category]
         if (modifier) {
-          const modItems = await ytSearch(`${regionName} ${q} ${modifier}`, {
+          const modItems = await ytSearch(`${searchRegion} ${q} ${modifier}`, {
             relevanceLanguage: 'ko',
             regionCode: 'KR',
             order: 'relevance',
