@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="92" viewBox="0 0 80 92" fill="none">
+  <path d="M40 4C23.4 4 10 17.4 10 34C10 53.5 40 88 40 88C40 88 70 53.5 70 34C70 17.4 56.6 4 40 4Z" fill="#FF5C5C"/>
+  <circle cx="40" cy="34" r="19" fill="rgba(0,0,0,0.18)"/>
+  <ellipse cx="33" cy="23" rx="7" ry="4.5" fill="rgba(255,255,255,0.18)"/>
+  <polygon points="34,24 34,44 54,34" fill="white"/>
+</svg>
