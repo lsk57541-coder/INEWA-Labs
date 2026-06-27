@@ -24,6 +24,10 @@ import FavoritesOverlay from '@/components/FavoritesOverlay'
 import OnboardingOverlay from '@/components/OnboardingOverlay'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
+// 검색 로딩 중 순차로 보여주는 단계 라벨(가짜 — /api/search는 단일 JSON 응답이라 실제 단계 진행은
+// 받을 수 없음). 실제 파이프라인 순서(YT 검색 → geocode/추출 → dedupe/정렬)에 맞춰 체감만 개선.
+const LOADING_STAGES = ['영상 찾는 중…', '위치 분석 중…', '결과 정리 중…'] as const
+
 const REPORT_REASONS: { key: ReportReason; label: string }[] = [
   { key: 'wrong_address', label: '주소 또는 상호명이 잘못됐어요' },
   { key: 'unrelated', label: '주소와 상관없는 영상이에요' },
@@ -461,6 +465,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [selectedChannel, setSelectedChannel] = useState<ChannelSuggestion | null>(null)
   const channelSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingStage, setLoadingStage] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null)
   const [selectedGroup, setSelectedGroup] = useState<MarkerGroup | null>(null)
@@ -584,6 +589,16 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   // Clear stale suggestions when panels collapse
   useEffect(() => { if (!advancedOpen) setLocationSuggestions([]) }, [advancedOpen])
   useEffect(() => { if (!optionsOpen) setChannelSuggestions([]) }, [optionsOpen])
+
+  // 로딩 중 단계 라벨 전진(가짜 타이머). 마지막 단계에서 멈추고 '완료'는 표시하지 않음.
+  // 검색이 빨리 끝나면(캐시) stage 0만 스쳐감 — 정상.
+  useEffect(() => {
+    if (!loading) { setLoadingStage(0); return }
+    setLoadingStage(0)
+    const t1 = setTimeout(() => setLoadingStage(1), 700)
+    const t2 = setTimeout(() => setLoadingStage(2), 1800)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [loading])
 
   // 지도 준비 후 sessionStorage에서 마지막 검색 상태 복원
   useEffect(() => {
@@ -799,6 +814,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   )
 
   const handleSearch = async (opts?: { radiusOverride?: number; keywordOverride?: string }) => {
+    if (loading) return   // 중복 검색 방지 — Enter 연타/중복 트리거 가드(버튼·칩·Enter 모든 진입점 커버)
     const effectiveKeyword = opts?.keywordOverride ?? keyword
     if (searchMode === 'keyword' && !effectiveKeyword.trim()) { setError('검색어를 입력해주세요.'); return }
     if (searchMode === 'channel' && !selectedChannel) { setError('유튜버 채널을 선택해주세요.'); return }
@@ -1326,7 +1342,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 className="flex-1 flex items-center justify-center gap-1.5 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 disabled:opacity-40 transition"
               >
                 {loading && <Spinner />}
-                {loading ? '검색 중…' : '검색하기'}
+                {loading ? LOADING_STAGES[loadingStage] : '검색하기'}
               </button>
             </div>
 
@@ -1448,6 +1464,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {loading && allResults.length === 0 && (
         <div className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl px-3 pb-4 pt-3">
           <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-3" />
+          <div className="flex items-center justify-center gap-1.5 mb-2">
+            <Spinner />
+            <span className="text-xs font-medium text-gray-500">{LOADING_STAGES[loadingStage]}</span>
+          </div>
           {[0, 1, 2].map((i) => (
             <div key={i} className="flex gap-2 py-2.5 border-b border-border last:border-0 animate-pulse">
               <div className="w-14 h-8 bg-gray-200 rounded shrink-0" />
