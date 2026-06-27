@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import KakaoLoginButton from '@/components/auth/KakaoLoginButton'
+import { PinPlayIcon } from '@/components/BrandLogo'
 
 export interface MenuUser {
   nickname: string
@@ -74,7 +75,10 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
 
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 h-14 shrink-0" style={{ backgroundColor: '#0F1C2E' }}>
-          <span className="font-bold text-white">MAPTUBE</span>
+          <div className="flex items-center gap-2">
+            <PinPlayIcon size={20} />
+            <span className="font-bold text-white tracking-wide">MAPTUBE</span>
+          </div>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition"
@@ -83,9 +87,12 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
           </button>
         </div>
 
-        {/* 서비스 소개 — 헤더와 이어지는 영역 */}
-        <div className="px-4 py-3 border-b border-border" style={{ backgroundColor: '#0F1C2E' }}>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>유튜버가 다녀온 그곳, 지도에서 바로 찾아보세요</p>
+        {/* 서비스 소개 — OG 카드처럼 코랄 짧은 구분선(2px 솔리드 → DPR 무관, 모바일/웹 동일) + 두 줄 슬로건.
+            각 줄이 한 덩어리라 "바/로" 같은 단어 중간 끊김 없음. */}
+        <div className="px-4 pt-2 pb-3" style={{ backgroundColor: '#0F1C2E' }}>
+          <div className="mb-2.5" style={{ width: 28, height: 2, backgroundColor: '#FF5C5C', borderRadius: 1 }} />
+          <p className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.88)' }}>영상 속 장소를 지도로</p>
+          <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.45)' }}>유튜버가 다녀온 그곳, 바로 찾아보세요</p>
         </div>
 
         {/* 유저 섹션 */}
