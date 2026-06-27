@@ -7,6 +7,13 @@ declare namespace kakao {
       setLevel(level: number): void
       getLevel(): number
       getProjection(): MapProjection
+      setBounds(bounds: LatLngBounds, paddingTop?: number, paddingRight?: number, paddingBottom?: number, paddingLeft?: number): void
+    }
+
+    class LatLngBounds {
+      constructor()
+      extend(latlng: LatLng): void
+      isEmpty(): boolean
     }
 
     interface MapProjection {

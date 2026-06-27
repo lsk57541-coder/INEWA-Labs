@@ -745,7 +745,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       center: { lat: number; lng: number },
       favIds: Set<string>,
       visitedIdSet: Set<string>,
-      sheetFraction = 0
+      sheetFraction = 0,
+      // 채널 모드: 반경 개념이 없으므로 Circle 생략 + 전국 마커가 다 보이게 fitBounds 줌.
+      fitAll = false
     ) => {
       if (!mapInstanceRef.current) return
       lastCenterRef.current = center
@@ -756,16 +758,18 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       overlaysRef.current = []
       if (circleRef.current) circleRef.current.setMap(null)
 
-      circleRef.current = new kakao.maps.Circle({
-        center: new kakao.maps.LatLng(center.lat, center.lng),
-        radius: radius * 1000,
-        strokeWeight: 2,
-        strokeColor: '#3b82f6',
-        strokeOpacity: 0.6,
-        fillColor: '#3b82f6',
-        fillOpacity: 0.05,
-      })
-      circleRef.current.setMap(mapInstanceRef.current)
+      if (!fitAll) {
+        circleRef.current = new kakao.maps.Circle({
+          center: new kakao.maps.LatLng(center.lat, center.lng),
+          radius: radius * 1000,
+          strokeWeight: 2,
+          strokeColor: '#3b82f6',
+          strokeOpacity: 0.6,
+          fillColor: '#3b82f6',
+          fillOpacity: 0.05,
+        })
+        circleRef.current.setMap(mapInstanceRef.current)
+      }
 
       groups.forEach((group) => {
         const pos = new kakao.maps.LatLng(group.lat, group.lng)
@@ -801,7 +805,16 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         }
       })
 
-      panTo(center.lat, center.lng, sheetFraction)
+      // 채널 전국 모드: 모든 마커가 보이게 자동 줌(2개 이상일 때). 하단 결과시트가 가리므로
+      // 아래쪽 패딩을 화면 절반만큼 크게 줌. 1개 이하면 일반 panTo로 폴백(과도 줌인 방지).
+      if (fitAll && groups.length >= 2) {
+        const bounds = new kakao.maps.LatLngBounds()
+        groups.forEach((g) => bounds.extend(new kakao.maps.LatLng(g.lat, g.lng)))
+        const h = mapRef.current?.clientHeight ?? 0
+        mapInstanceRef.current.setBounds(bounds, 60, 40, Math.round(h * 0.5), 40)
+      } else {
+        panTo(center.lat, center.lng, sheetFraction)
+      }
     },
     [radius, panTo]
   )
@@ -852,7 +865,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       const videos = json.results ?? []
       setAllResults(videos)
       setVideoFilter('all')
-      renderMarkers(groupByLocation(videos, clusterThresholdKm(radius)), pos, favoriteIds, visitedIds, 0.5)
+      renderMarkers(groupByLocation(videos, clusterThresholdKm(radius)), pos, favoriteIds, visitedIds, 0.5, searchMode === 'channel')
 
       // Collapse the options panel out of the way and open the results sheet
       // so the list is visible right away — the search bar itself (with the
@@ -1304,22 +1317,24 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </button>
             </div>
 
-            {/* 반경 — 키워드/채널 모두 */}
-            <div className="flex gap-1.5 px-3 pt-2">
-              {RADIUS_OPTIONS.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setRadius(r)}
-                  className={`flex-1 text-xs rounded-full py-1.5 border transition font-medium ${
-                    radius === r
-                      ? 'bg-accent text-white border-accent'
-                      : 'bg-white text-gray-600 border-border hover:bg-gray-50'
-                  }`}
-                >
-                  {r}km
-                </button>
-              ))}
-            </div>
+            {/* 반경 — 키워드 모드만 (채널은 전국 표시라 반경 무의미) */}
+            {searchMode === 'keyword' && (
+              <div className="flex gap-1.5 px-3 pt-2">
+                {RADIUS_OPTIONS.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRadius(r)}
+                    className={`flex-1 text-xs rounded-full py-1.5 border transition font-medium ${
+                      radius === r
+                        ? 'bg-accent text-white border-accent'
+                        : 'bg-white text-gray-600 border-border hover:bg-gray-50'
+                    }`}
+                  >
+                    {r}km
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* 고급 설정 토글 + 검색하기 버튼 */}
             <div className="flex items-center gap-2 px-3 pt-2 pb-3">
@@ -1342,7 +1357,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             {/* 고급 설정 — advancedOpen일 때만 */}
             <div className={`overflow-hidden transition-all duration-200 ${advancedOpen ? 'max-h-[420px]' : 'max-h-0'}`}>
               <div className="px-3 pb-3 border-t border-border pt-3 space-y-3">
-                {/* 위치 직접입력 — 키워드/채널 모두 */}
+                {/* 위치 직접입력 — 키워드 모드만 (채널은 위치무관, 전국 표시) */}
+                {searchMode === 'keyword' && (
                 <div>
                   <p className="text-xs text-gray-400 font-medium mb-1.5">📍 검색위치 직접입력</p>
                   <input
@@ -1385,6 +1401,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* 지도 밝기 슬라이더 */}
                 <div className="flex items-center gap-2">

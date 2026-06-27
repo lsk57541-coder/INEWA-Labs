@@ -81,14 +81,19 @@ async function getLocationCorrections(): Promise<Map<string, LocationCorrection>
 // changing the radius slider — reuse the same YouTube results instead of
 // re-querying. videos.list/channels.list aren't cached since they're cheap.
 const SEARCH_CACHE_TTL_MS = 20 * 60 * 1000
+// 채널 결과는 업로드 카탈로그라 자주 안 바뀜 → 길게 캐싱(재검색 quota 0). 채널당 최대 영상 수 상한.
+const CHANNEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const MAX_CHANNEL_VIDEOS = 200
 
 function searchCacheKey(q: string | undefined, channelId: string | undefined, lat: number, lng: number): string {
+  // 채널 후보 풀은 위치 무관(전국, 거리는 다운스트림 계산) → lat/lng 빼서 위치 불문 캐시 재사용.
+  if (channelId) return `ch:${channelId}`
   const latR = Math.round(lat * 100) / 100
   const lngR = Math.round(lng * 100) / 100
-  return channelId ? `ch:${channelId}:${latR}:${lngR}` : `q:${(q ?? '').toLowerCase().trim()}:${latR}:${lngR}`
+  return `q:${(q ?? '').toLowerCase().trim()}:${latR}:${lngR}`
 }
 
-async function getCachedSearchItems(key: string): Promise<YTSearchItem[] | null> {
+async function getCachedSearchItems(key: string, ttlMs = SEARCH_CACHE_TTL_MS): Promise<YTSearchItem[] | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) return null
@@ -96,7 +101,7 @@ async function getCachedSearchItems(key: string): Promise<YTSearchItem[] | null>
   const supabase = createClient(url, anonKey)
   const { data } = await supabase.from('search_cache').select('payload, created_at').eq('key', key).maybeSingle()
   if (!data) return null
-  if (Date.now() - new Date(data.created_at).getTime() > SEARCH_CACHE_TTL_MS) return null
+  if (Date.now() - new Date(data.created_at).getTime() > ttlMs) return null
   return data.payload as YTSearchItem[]
 }
 
@@ -338,6 +343,65 @@ async function ytSearch(
   return json.items ?? []
 }
 
+interface YTPlaylistItem {
+  snippet?: {
+    title?: string
+    channelTitle?: string
+    channelId?: string
+    videoOwnerChannelId?: string
+    videoOwnerChannelTitle?: string
+    resourceId?: { videoId?: string }
+    thumbnails?: { medium?: { url?: string } }
+  }
+}
+
+// 채널의 전국 영상을 quota 싸게 가져온다: search.list(100유닛/50개) 대신 업로드 재생목록을
+// playlistItems.list(1유닛/50개)로 페이지네이션. 결과를 YTSearchItem 모양으로 매핑해
+// 기존 캐시/파이프라인과 그대로 호환. order=date의 최근 50개 쏠림 문제 해소.
+async function ytChannelUploads(channelId: string, cap = MAX_CHANNEL_VIDEOS): Promise<YTSearchItem[]> {
+  const key = process.env.YOUTUBE_API_KEY
+  if (!key) return []
+
+  // 업로드 재생목록 id (channels.list contentDetails = 1유닛, 결정적)
+  const chParams = new URLSearchParams({ part: 'contentDetails', id: channelId, key })
+  const chRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?${chParams}`, { next: { revalidate: 3600 } })
+  if (!chRes.ok) return []
+  const chJson = await chRes.json() as {
+    items?: { contentDetails?: { relatedPlaylists?: { uploads?: string } } }[]
+  }
+  const uploads = chJson.items?.[0]?.contentDetails?.relatedPlaylists?.uploads
+  if (!uploads) return []
+
+  const out: YTSearchItem[] = []
+  let pageToken: string | undefined
+  // 페이지당 1유닛. cap 도달 또는 nextPageToken 없을 때까지.
+  while (out.length < cap) {
+    const params = new URLSearchParams({
+      part: 'snippet', playlistId: uploads, maxResults: '50', key,
+      ...(pageToken ? { pageToken } : {}),
+    })
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?${params}`, { next: { revalidate: 3600 } })
+    if (!res.ok) break
+    const json = await res.json() as { items?: YTPlaylistItem[]; nextPageToken?: string }
+    for (const it of json.items ?? []) {
+      const videoId = it.snippet?.resourceId?.videoId
+      if (!videoId) continue
+      out.push({
+        id: { videoId },
+        snippet: {
+          title: it.snippet?.title ?? '',
+          channelTitle: it.snippet?.videoOwnerChannelTitle ?? it.snippet?.channelTitle ?? '',
+          channelId: it.snippet?.videoOwnerChannelId ?? it.snippet?.channelId ?? channelId,
+          thumbnails: { medium: { url: it.snippet?.thumbnails?.medium?.url ?? '' } },
+        },
+      })
+    }
+    if (!json.nextPageToken) break
+    pageToken = json.nextPageToken
+  }
+  return out.slice(0, cap)
+}
+
 async function fetchVideoDetails(ids: string[]): Promise<YTVideoItem[]> {
   const key = process.env.YOUTUBE_API_KEY
   if (!key || ids.length === 0) return []
@@ -506,6 +570,9 @@ export async function GET(req: NextRequest) {
   const lat = parseFloat(searchParams.get('lat') ?? '')
   const lng = parseFloat(searchParams.get('lng') ?? '')
   const radius = parseFloat(searchParams.get('radius') ?? '5')
+  // 채널 검색은 그 창작자의 전국 장소를 다 보여줘야 하므로 반경 거리필터를 끈다(Infinity).
+  // distanceKm 값 자체는 표시용으로 계속 계산됨. 키워드는 distanceLimit === radius라 동작 불변.
+  const distanceLimit = channelId ? Infinity : radius
 
   if ((!q && !channelId) || isNaN(lat) || isNaN(lng)) {
     return NextResponse.json({ error: 'q (or channelId), lat, lng are required' }, { status: 400 })
@@ -518,6 +585,11 @@ export async function GET(req: NextRequest) {
   // 쿼리 앞에 붙여 해소("서구 진심옥"→"광주 서구 진심옥"). 비-대도시(도 단위)는 ''. GET당 1회만 계산.
   const cityPrefix = await getCityName(lat, lng)
   const geoRegionPrefix = cityPrefix ? `${cityPrefix} ` : ''
+  // 채널 검색은 전국 영상이라 검색중심(예 "광주") 지역으로 장소추출을 앵커링하면 안 됨
+  // (군산 영상의 장소가 "광주 ○○"로 지오코딩→영상텍스트와 불일치→전부 탈락). 채널 모드는
+  // 앵커를 비워 각 영상의 제목/설명 텍스트로 해석하게 한다. 키워드는 기존 앵커 유지.
+  const effGeoRegionPrefix = channelId ? '' : geoRegionPrefix
+  const effRegionName = channelId ? null : regionName
   // 검색 카테고리 — 후보 풀 구성과 행정구역 재라우팅 카테고리 가드레일에서 공용.
   const category: SearchCategory = q ? classifyCategory(q) : 'default'
 
@@ -534,20 +606,17 @@ export async function GET(req: NextRequest) {
       return true
     })
 
-  // Reuse cached search.list results for the same query/channel + ~1km area
-  // (e.g. the user just changing the radius slider) instead of re-querying.
+  // Reuse cached results for the same query/channel instead of re-querying.
+  // 채널은 위치 무관 키 + 긴 TTL(카탈로그 안정적), 키워드는 ~1km 그리드 + 20분.
   const cacheKey = searchCacheKey(q, channelId, lat, lng)
-  let unique = await getCachedSearchItems(cacheKey)
+  let unique = await getCachedSearchItems(cacheKey, channelId ? CHANNEL_CACHE_TTL_MS : undefined)
 
   if (!unique) {
     if (channelId) {
-      // Filtered to one creator, not a keyword match — channel selection
-      // replaces keyword search entirely. Deliberately no location param:
-      // YouTube only returns geotagged videos when location/locationRadius
-      // are set, which would wipe out channels that rarely geotag uploads.
-      // Distance filtering against `radius` happens downstream instead,
-      // same as the non-geotagged fallback path for keyword search.
-      const channelItems = await ytSearch('', { channelId, order: 'date' })
+      // 한 창작자의 전국 영상을 다 보여줌. 업로드 재생목록(playlistItems, 50개당 1유닛)으로
+      // 전체를 가져옴 — 기존 search.list(order=date, 50개)는 최근 영상에 쏠려 전국이 안 떴음.
+      // location 파라미터 없음(비-geotag 업로드도 포함, 거리필터는 다운스트림에서 끔).
+      const channelItems = await ytChannelUploads(channelId)
       unique = dedupe(channelItems)
     } else {
       const { enrichedQ, publishedAfter, order: catOrder } = buildCategoryParams(q!, category)
@@ -639,7 +708,7 @@ export async function GET(req: NextRequest) {
         const pointLat = correction?.lat ?? original.latitude
         const pointLng = correction?.lng ?? original.longitude
         const dist = haversineKm(lat, lng, pointLat, pointLng)
-        if (dist <= radius) {
+        if (dist <= distanceLimit) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
           const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
           // 창작자가 geotag에 단 위치 라벨 — 비-행정구역이면 그대로 상호명("창억떡집 중흥본점")
@@ -704,13 +773,14 @@ export async function GET(req: NextRequest) {
     // 비-geotag 추출(첫 40개) + 행정구역 geotag 재라우팅(adminDesc 있으면 가드레일 적용).
     // adminGeo는 centroid 좌표를 버리고 제목 추출로 실제 장소를 재산출한다.
     ...[
-      ...noGeo.slice(0, 40).map((v) => ({ v, adminDesc: null as string | null })),
+      // 채널 모드는 전국 비-geotag(모음/설명란) 영상도 다 추출해야 전국이 뜸 → 캡 상향.
+      ...noGeo.slice(0, channelId ? MAX_CHANNEL_VIDEOS : 40).map((v) => ({ v, adminDesc: null as string | null })),
       ...adminGeo.map((v) => ({ v, adminDesc: v.recordingDetails?.locationDescription?.trim() ?? null })),
     ].map(async ({ v, adminDesc }) => {
       const correction = corrections.get(v.id)
       if (correction) {
         const dist = haversineKm(lat, lng, correction.lat, correction.lng)
-        if (dist <= radius) {
+        if (dist <= distanceLimit) {
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
           const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
           let placeName: string | undefined
@@ -768,10 +838,10 @@ export async function GET(req: NextRequest) {
       const tryResolveAndPush = async (place: string, requireCorroboration: boolean): Promise<boolean> => {
         // 휴리스틱 쿼리(requireCorroboration=false)에만 도시명 prefix로 대도시 구 모호성 해소.
         // AI 쿼리(=true)는 이미 자체 지역명을 포함하므로 prefix 안 함(중복 방지).
-        const geo2 = await geocodeKorean(requireCorroboration ? place : `${geoRegionPrefix}${place}`.trim())
+        const geo2 = await geocodeKorean(requireCorroboration ? place : `${effGeoRegionPrefix}${place}`.trim())
         if (!geo2) return false
         const dist = haversineKm(lat, lng, geo2.lat, geo2.lng)
-        if (dist > radius) return false
+        if (dist > distanceLimit) return false
 
         if (requireCorroboration) {
           const videoText = `${v.snippet.title} ${v.snippet.description ?? ''}`
@@ -844,7 +914,7 @@ export async function GET(req: NextRequest) {
           title: v.snippet.title,
           description: v.snippet.description ?? '',
           // geocode 쿼리용으로 도시명 prefix 부착(함수 본문 무수정 — regionName은 거기서 쿼리에만 쓰임)
-          regionName: `${geoRegionPrefix}${regionName ?? ''}`.trim() || null, lat, lng, radius,
+          regionName: `${effGeoRegionPrefix}${effRegionName ?? ''}`.trim() || null, lat, lng, radius: distanceLimit,
           adminDesc,            // 이 영상의 adminDesc (없으면 null)
           allowedGroups,
           withinAdminArea,      // 기존 route 내 함수/헬퍼 그대로 전달
@@ -876,7 +946,7 @@ export async function GET(req: NextRequest) {
       }
 
       // ① 휴리스틱 우선 (지역 앵커 + 명시 업체명) — API 비용 없음
-      const candidates = buildHeuristicPlaceQueries(v.snippet.title, v.snippet.description ?? '', regionName)
+      const candidates = buildHeuristicPlaceQueries(v.snippet.title, v.snippet.description ?? '', effRegionName)
       let resolved = false
       for (const place of candidates) {
         if (await tryResolveAndPush(place, false)) { resolved = true; break }
@@ -905,7 +975,8 @@ export async function GET(req: NextRequest) {
 
   // 등록 장소(관리자/파트너)는 큐레이션된 데이터이므로 상단에 배치.
   // YouTube 결과와 videoId 중복 시 등록본 우선.
-  const registered = await getRegisteredResults(lat, lng, radius)
+  // 채널 검색 결과엔 그 채널 영상만 남겨야 함 — 등록 장소(관리자/파트너)는 채널 정보가 없어 제외.
+  const registered = channelId ? [] : await getRegisteredResults(lat, lng, radius)
   const regSeen = new Set(registered.map((r) => r.videoId))
   const finalResults = [...registered, ...filtered.filter((r) => !regSeen.has(r.videoId))]
 
