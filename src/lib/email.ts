@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 
 const CONTACT_EMAIL = 'inewalabs@gmail.com'
-const DASHBOARD_URL = 'https://inewa-labs.vercel.app/partner/dashboard'
+const DASHBOARD_URL = 'https://aimaptube.vercel.app/partner/dashboard'
 
 export async function sendPartnerApplicationEmail(to: string, channelName: string) {
   const apiKey = process.env.RESEND_API_KEY
