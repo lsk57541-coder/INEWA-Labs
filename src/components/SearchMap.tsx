@@ -344,6 +344,9 @@ function PartnerChip() {
   )
 }
 
+// 데스크톱(md+, 768px↑): 하단 바텀시트를 좌측 고정 사이드 패널로(구글맵식). 모바일(≤767px)은 불변.
+const DESKTOP_LEFT_PANEL = 'md:left-3 md:right-auto md:w-[360px] md:bottom-3 md:rounded-2xl md:z-[8]'
+
 // 찜/가본곳 식별키. 모음영상은 같은 videoId가 여러 좌표(가게)로 뜨므로 videoId만으론
 // 한 곳 찜이 전체로 번진다 → videoId+좌표로 장소별 구분(좌표 5자리=약 1m, DB 라운드트립 안전).
 function placeKey(videoId: string, lat: number, lng: number): string {
@@ -1697,8 +1700,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
       {/* Search loading skeleton */}
       {loading && allResults.length === 0 && (
-        <div className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl px-3 pb-4 pt-3">
-          <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-3" />
+        <div className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl px-3 pb-4 pt-3 ${DESKTOP_LEFT_PANEL}`}>
+          <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-3 md:hidden" />
           <div className="flex items-center justify-center gap-1.5 mb-2">
             <Spinner />
             <span className="text-xs font-medium text-gray-500">{LOADING_STAGES[loadingStage]}</span>
@@ -1769,10 +1772,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Results list — independent bottom sheet, slides up from the bottom */}
       {allResults.length > 0 && !selectedGroup && !selectedVideo && (
         <div
-          className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col ${
+          className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col max-h-[50dvh] ${DESKTOP_LEFT_PANEL} md:top-28 md:max-h-none md:translate-y-0 ${
             listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-56px)]'
           }`}
-          style={{ maxHeight: '50dvh' }}
         >
           <div
             onPointerDown={(e) => {
@@ -1781,17 +1783,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             }}
             onPointerMove={(e) => handleSheetDragMove(e.clientY)}
             onPointerUp={handleSheetDragEnd}
-            className="shrink-0 cursor-grab touch-none"
+            className="shrink-0 cursor-grab touch-none md:cursor-default"
           >
-            <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mt-2 mb-1.5" />
+            <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mt-2 mb-1.5 md:hidden" />
             <button
               onClick={() => setListOpen((o) => !o)}
-              className="w-full flex items-center justify-between px-4 pb-3 text-xs text-gray-500 font-medium border-b border-border"
+              className="w-full flex items-center justify-between px-4 pb-3 md:pt-3 text-xs text-gray-500 font-medium border-b border-border"
             >
               <span className="truncate">
                 {searchMode === 'channel' && selectedChannel ? `🎙 ${selectedChannel.title}` : `"${keyword}"`} 검색결과 {filteredResults.length}개
               </span>
-              <span className="shrink-0 ml-2">{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
+              <span className="shrink-0 ml-2 md:hidden">{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
             </button>
           </div>
           <div className="flex gap-1.5 px-3 py-2 border-b border-border shrink-0">
@@ -1927,7 +1929,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Video list — bottom sheet capped under half the screen, shown when a map marker is clicked */}
       {selectedGroup && (
         <div
-          className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl flex flex-col"
+          className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl flex flex-col md:left-1/2 md:right-auto md:-translate-x-1/2 md:max-w-2xl md:w-full md:rounded-2xl md:bottom-3"
           style={{ maxHeight: '45dvh' }}
         >
           <div className="pt-2 pb-0 flex justify-center shrink-0">
