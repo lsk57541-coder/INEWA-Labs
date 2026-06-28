@@ -44,27 +44,54 @@ export async function completePartnerSignup(channel: PendingChannel) {
 
   const match = await findOutreachMatch(supabase, channel.channelId, channel.channelName)
 
-  const { error } = await supabase.from('partners').insert({
-    user_id: user.id,
-    channel_id: channel.channelId,
-    channel_name: channel.channelName,
-    subscriber_count: channel.subscriberCount,
-    categories: match?.category ? [match.category] : null,
-    region: match?.region ?? null,
-    status: 'approved',
-    grade: 'general',
-    avatar_url: channel.thumbnail,
-    youtube_access_token: channel.accessToken,
-    youtube_refresh_token: channel.refreshToken,
-  })
+  // channel_id가 unique라 무조건 INSERT하면 같은 채널 행(특히 탈퇴=withdrawn)과 충돌(23505)나
+  // 재가입이 막힌다. "바로 가입" 정책에 맞게: 같은 채널 행이 있으면 INSERT 대신 UPDATE로
+  // 재활성화(탈퇴했던 파트너도 재연동만으로 복귀). 없으면 신규 INSERT.
+  const { data: existing } = await supabase
+    .from('partners')
+    .select('id, grade')
+    .eq('channel_id', channel.channelId)
+    .maybeSingle()
 
-  if (error) {
-    redirect(error.code === '23505' ? '/partner/apply?error=already_applied' : '/partner/apply?error=youtube_failed')
+  const grade: string = existing?.grade ?? 'general' // 기존 등급 유지(premium 강등 금지), 없으면 general
+
+  if (existing) {
+    const { error } = await supabase
+      .from('partners')
+      .update({
+        user_id: user.id,                 // 채널 소유자(현재 로그인)로 갱신
+        channel_name: channel.channelName,
+        subscriber_count: channel.subscriberCount,
+        avatar_url: channel.thumbnail,    // 이번 연동에서 받아온 아바타
+        status: 'approved',               // 재활성화
+        grade,                            // 기존 등급 유지
+        youtube_access_token: channel.accessToken,
+        youtube_refresh_token: channel.refreshToken,
+        // created_at·categories·region은 건드리지 않음(원래 가입정보 유지)
+      })
+      .eq('id', existing.id)
+    if (error) redirect('/partner/apply?error=youtube_failed')
+  } else {
+    const { error } = await supabase.from('partners').insert({
+      user_id: user.id,
+      channel_id: channel.channelId,
+      channel_name: channel.channelName,
+      subscriber_count: channel.subscriberCount,
+      categories: match?.category ? [match.category] : null,
+      region: match?.region ?? null,
+      status: 'approved',
+      grade: 'general',
+      avatar_url: channel.thumbnail,
+      youtube_access_token: channel.accessToken,
+      youtube_refresh_token: channel.refreshToken,
+    })
+    // unique 경합(드물게 동시요청) 시에도 이미 등록된 채널 안내로
+    if (error) redirect(error.code === '23505' ? '/partner/apply?error=already_applied' : '/partner/apply?error=youtube_failed')
   }
 
   if (user.email) {
     try {
-      await sendPartnerApprovedEmail(user.email, channel.channelName, 'general')
+      await sendPartnerApprovedEmail(user.email, channel.channelName, grade)
     } catch {}
   }
 
