@@ -85,35 +85,41 @@ export default function ExtractPlacesForm() {
     setExtractError(null)
     setCards([])
 
-    const res = await fetch(`/api/partner/extract-places?videoId=${videoId}`)
-    const data = await res.json() as { places?: ExtractedPlace[]; viewCount?: number; publishedAt?: string; error?: string }
+    // 관리자(BulkLocationForm.autoExtract)와 동일한 견고 패턴: try/catch/finally로 감싸
+    // fetch/JSON 파싱 실패(라우트 지연·타임아웃·비JSON)에도 로딩이 반드시 꺼지고 안내가 뜨게.
+    try {
+      const res = await fetch(`/api/partner/extract-places?videoId=${videoId}`)
+      const data = await res.json() as { places?: ExtractedPlace[]; viewCount?: number; publishedAt?: string; error?: string }
 
-    if (!res.ok || data.error) {
-      setExtractError(data.error ?? '추출 중 오류가 발생했습니다.')
+      if (!res.ok || data.error) {
+        setExtractError(data.error ?? '추출 중 오류가 발생했습니다.')
+        return
+      }
+
+      setVideoMeta({ viewCount: data.viewCount, publishedAt: data.publishedAt })
+
+      const newCards: PlaceCard[] = (data.places ?? []).map(p => ({
+        name: p.name,
+        address: '',
+        category: '',
+        latitude: null,
+        longitude: null,
+        timestamp_seconds: p.timestamp_seconds,
+        included: true,
+        searchResults: [],
+        searchOpen: false,
+      }))
+      setCards(newCards)
+
+      // auto-search Kakao for each card
+      newCards.forEach((_, idx) => {
+        searchKakao(idx, newCards[idx].name, newCards)
+      })
+    } catch {
+      setExtractError('추출 중 오류가 났어요. 잠시 후 다시 시도해 주세요.')
+    } finally {
       setExtracting(false)
-      return
     }
-
-    setVideoMeta({ viewCount: data.viewCount, publishedAt: data.publishedAt })
-
-    const newCards: PlaceCard[] = (data.places ?? []).map(p => ({
-      name: p.name,
-      address: '',
-      category: '',
-      latitude: null,
-      longitude: null,
-      timestamp_seconds: p.timestamp_seconds,
-      included: true,
-      searchResults: [],
-      searchOpen: false,
-    }))
-    setCards(newCards)
-    setExtracting(false)
-
-    // auto-search Kakao for each card
-    newCards.forEach((_, idx) => {
-      searchKakao(idx, newCards[idx].name, newCards)
-    })
   }, [])
 
   const searchKakao = async (idx: number, name: string, currentCards?: PlaceCard[]) => {

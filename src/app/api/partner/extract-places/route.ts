@@ -25,11 +25,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '본인 채널 영상만 등록할 수 있습니다' }, { status: 403 })
   }
 
-  let places = extractPlaceList(snippet.title, snippet.description)
-  if (places.length === 0) {
-    places = await extractWithClaude(snippet.title, snippet.description)
+  // 추출 엔진(extractPlaceList/extractWithClaude)은 공유 함수라 변경하지 않고 호출만.
+  // Claude(Haiku) 지연/실패/rate limit 시 504(비JSON)로 끝나 클라가 무한로딩되던 걸 막기 위해
+  // try/catch로 감싸 JSON 에러로 응답한다.
+  try {
+    let places = extractPlaceList(snippet.title, snippet.description)
+    if (places.length === 0) {
+      places = await extractWithClaude(snippet.title, snippet.description)
+    }
+    // 입력 시 저장(2단계)용 영상 메타 — 추가 quota 없이 getVideoSnippet에서 함께 옴.
+    return NextResponse.json({ places, viewCount: snippet.viewCount, publishedAt: snippet.publishedAt })
+  } catch {
+    return NextResponse.json({ error: '장소 추출에 실패했어요. 잠시 후 다시 시도해 주세요.' }, { status: 502 })
   }
-
-  // 입력 시 저장(2단계)용 영상 메타 — 추가 quota 없이 getVideoSnippet에서 함께 옴.
-  return NextResponse.json({ places, viewCount: snippet.viewCount, publishedAt: snippet.publishedAt })
 }
