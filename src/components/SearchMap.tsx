@@ -641,28 +641,35 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [loading])
 
-  // 지도 준비 후 sessionStorage에서 마지막 검색 상태 복원
+  // 지도 준비 후 sessionStorage에서 마지막 검색 상태 복원.
+  // 단, 하드 새로고침(F5)이면 복원하지 않고 초기화면으로 — 저장값도 비운다.
+  // (관리자→메인 등 SPA 재진입은 reload가 아니므로 기존대로 검색 유지.)
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return
     try {
-      const raw = sessionStorage.getItem('maptube_search_state')
-      if (raw) {
-        const s = JSON.parse(raw) as {
-          keyword: string
-          radius: number
-          searchMode: 'keyword' | 'channel'
-          userPos: { lat: number; lng: number }
-          posLabel: string
+      const navType = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type
+      if (navType === 'reload') {
+        sessionStorage.removeItem('maptube_search_state')
+      } else {
+        const raw = sessionStorage.getItem('maptube_search_state')
+        if (raw) {
+          const s = JSON.parse(raw) as {
+            keyword: string
+            radius: number
+            searchMode: 'keyword' | 'channel'
+            userPos: { lat: number; lng: number }
+            posLabel: string
+          }
+          if (s.keyword) setKeyword(s.keyword)
+          if (s.radius && RADIUS_OPTIONS.includes(s.radius as Radius)) setRadius(s.radius as Radius)
+          if (s.searchMode) setSearchMode(s.searchMode)
+          if (s.userPos) {
+            setUserPos(s.userPos)
+            setPosLabel(s.posLabel)
+            mapInstanceRef.current.setCenter(new kakao.maps.LatLng(s.userPos.lat, s.userPos.lng))
+          }
+          if (s.keyword) setSearchChip(s.keyword)
         }
-        if (s.keyword) setKeyword(s.keyword)
-        if (s.radius && RADIUS_OPTIONS.includes(s.radius as Radius)) setRadius(s.radius as Radius)
-        if (s.searchMode) setSearchMode(s.searchMode)
-        if (s.userPos) {
-          setUserPos(s.userPos)
-          setPosLabel(s.posLabel)
-          mapInstanceRef.current.setCenter(new kakao.maps.LatLng(s.userPos.lat, s.userPos.lng))
-        }
-        if (s.keyword) setSearchChip(s.keyword)
       }
     } catch {}
     setRestoreDone(true)
