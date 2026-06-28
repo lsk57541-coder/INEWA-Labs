@@ -121,6 +121,8 @@ export async function addVideo(locationId: string, video: {
   thumbnail: string
   channel: string
   published_at: string
+  view_count?: number
+  subscriber_count?: number
 }) {
   const supabase = await requireAdmin()
   const { error } = await supabase.from('videos').insert({ location_id: locationId, ...video })
@@ -138,7 +140,7 @@ export async function deleteVideo(videoId: string, locationId: string) {
 }
 
 export async function bulkAddLocations(
-  video: { youtube_id: string; title: string; thumbnail: string; channel: string; published_at: string },
+  video: { youtube_id: string; title: string; thumbnail: string; channel: string; published_at: string; view_count?: number; subscriber_count?: number },
   places: { name: string; address: string; category?: string; lat: number; lng: number; timestamp_sec?: number }[],
   opts?: { replace?: boolean }
 ): Promise<{ succeeded: number; errors: string[]; duplicate?: { existingPlaces: number } }> {
@@ -193,6 +195,8 @@ export async function bulkAddLocations(
       published_at: video.published_at,
     }
     if (place.timestamp_sec != null) videoRow.timestamp_sec = place.timestamp_sec
+    if (video.view_count != null) videoRow.view_count = video.view_count
+    if (video.subscriber_count != null) videoRow.subscriber_count = video.subscriber_count
 
     const { error: vidErr } = await supabase.from('videos').insert(videoRow)
 

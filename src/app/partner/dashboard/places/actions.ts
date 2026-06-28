@@ -82,11 +82,18 @@ export interface BulkPlaceInput {
   video_url?: string
   latitude?: number
   longitude?: number
+  view_count?: number       // 영상 조회수(2단계 저장 → 검색 필터)
+  published_at?: string     // 영상 업로드일(2단계 저장 → 검색 필터)
 }
 
 export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ succeeded: number; errors: string[] }> {
   const supabase = await createClient()
   const partnerId = await requireMyPartnerId()
+
+  // 구독자수는 영상이 곧 본인 채널이므로 partners.subscriber_count로 채운다(추가 API 호출 0).
+  const { data: partnerRow } = await supabase
+    .from('partners').select('subscriber_count').eq('id', partnerId).single()
+  const subscriberCount = partnerRow?.subscriber_count ?? null
 
   let succeeded = 0
   const errors: string[] = []
@@ -102,6 +109,9 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
       status: 'reviewing',
+      view_count: p.view_count ?? null,
+      subscriber_count: subscriberCount,
+      published_at: p.published_at ?? null,
     })
     if (error) {
       errors.push(`${p.name}: ${error.message}`)

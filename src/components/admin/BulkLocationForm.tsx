@@ -9,6 +9,8 @@ interface VideoInfo {
   thumbnail: string
   channel: string
   publishedAt: string
+  viewCount?: number       // 입력 시 저장 → 검색 필터(2단계)
+  subscriberCount?: number // 입력 시 저장 → 검색 필터(2단계)
   registeredCount?: number // 이미 등록된 장소 수(조회 시점 중복 미리알림)
 }
 
@@ -307,6 +309,8 @@ export default function BulkLocationForm() {
           thumbnail: videoInfo.thumbnail,
           channel: videoInfo.channel,
           published_at: videoInfo.publishedAt,
+          view_count: videoInfo.viewCount,
+          subscriber_count: videoInfo.subscriberCount,
         },
         valid.map(r => ({
           name: r.name.trim(),

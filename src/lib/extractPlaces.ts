@@ -15,6 +15,8 @@ export interface YouTubeSnippet {
   title: string
   description: string
   channelId: string
+  publishedAt?: string
+  viewCount?: number
 }
 
 export function mmssToSeconds(mmss: string): number | null {
@@ -264,16 +266,24 @@ ${text}`,
 export async function getVideoSnippet(videoId: string): Promise<YouTubeSnippet | null> {
   const key = process.env.YOUTUBE_API_KEY
   if (!key) return null
-  const params = new URLSearchParams({ part: 'snippet', id: videoId, key })
+  // snippet,statistics는 동일 호출(1유닛)이라 조회수는 추가 quota 0.
+  const params = new URLSearchParams({ part: 'snippet,statistics', id: videoId, key })
   const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params}`, { cache: 'no-store' })
   if (!res.ok) return null
-  const json = await res.json() as { items?: { snippet: { title: string; description: string; channelId: string } }[] }
+  const json = await res.json() as {
+    items?: {
+      snippet: { title: string; description: string; channelId: string; publishedAt?: string }
+      statistics?: { viewCount?: string }
+    }[]
+  }
   const item = json.items?.[0]
   if (!item) return null
   return {
     title: item.snippet.title,
     description: item.snippet.description,
     channelId: item.snippet.channelId,
+    publishedAt: item.snippet.publishedAt,
+    viewCount: parseInt(item.statistics?.viewCount ?? '0', 10),
   }
 }
 

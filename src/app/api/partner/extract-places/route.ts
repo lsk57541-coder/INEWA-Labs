@@ -30,5 +30,6 @@ export async function GET(request: NextRequest) {
     places = await extractWithClaude(snippet.title, snippet.description)
   }
 
-  return NextResponse.json({ places })
+  // 입력 시 저장(2단계)용 영상 메타 — 추가 quota 없이 getVideoSnippet에서 함께 옴.
+  return NextResponse.json({ places, viewCount: snippet.viewCount, publishedAt: snippet.publishedAt })
 }

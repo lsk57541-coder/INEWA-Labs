@@ -18,9 +18,11 @@ interface VideoItem {
   snippet: {
     title: string
     channelTitle: string
+    channelId: string
     publishedAt: string
     thumbnails: { medium?: { url: string }; default?: { url: string } }
   }
+  statistics?: { viewCount?: string }
 }
 
 export async function GET(request: NextRequest) {
@@ -41,13 +43,25 @@ export async function GET(request: NextRequest) {
   const key = process.env.YOUTUBE_API_KEY
   if (!key) return NextResponse.json({ error: 'Server config error' }, { status: 500 })
 
-  const params = new URLSearchParams({ part: 'snippet', id: videoId, key })
+  // snippet,statistics는 동일 호출(1유닛)이라 조회수는 추가 quota 0.
+  const params = new URLSearchParams({ part: 'snippet,statistics', id: videoId, key })
   const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params}`, { cache: 'no-store' })
   if (!res.ok) return NextResponse.json({ error: 'YouTube API 오류' }, { status: 500 })
 
   const json = await res.json() as { items?: VideoItem[] }
   const item = json.items?.[0]
   if (!item) return NextResponse.json({ error: '영상을 찾을 수 없습니다' }, { status: 404 })
+
+  const viewCount = parseInt(item.statistics?.viewCount ?? '0', 10)
+
+  // 구독자수는 channels.list 별도 호출(+1유닛/입력 — 어드민 수동 저빈도라 무시 수준).
+  let subscriberCount = 0
+  const chParams = new URLSearchParams({ part: 'statistics', id: item.snippet.channelId, key })
+  const chRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?${chParams}`, { cache: 'no-store' })
+  if (chRes.ok) {
+    const chJson = await chRes.json() as { items?: { statistics?: { subscriberCount?: string } }[] }
+    subscriberCount = parseInt(chJson.items?.[0]?.statistics?.subscriberCount ?? '0', 10)
+  }
 
   // 이미 등록된 영상인지 미리 알림용 — 저장 차단(bulkAddLocations)과 동일 기준(youtube_id 카운트).
   // DB 조회라 YouTube quota 무관. 서비스롤로 RLS 무관하게 정확 카운트.
@@ -66,6 +80,8 @@ export async function GET(request: NextRequest) {
     thumbnail: item.snippet.thumbnails.medium?.url ?? item.snippet.thumbnails.default?.url ?? '',
     channel: item.snippet.channelTitle,
     publishedAt: item.snippet.publishedAt,
+    viewCount,
+    subscriberCount,
     registeredCount,
   })
 }

@@ -516,20 +516,22 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   if (nearby.length > 0) {
     const { data: vids } = await db
       .from('videos')
-      .select('youtube_id, title, thumbnail, channel, location_id, published_at')
+      .select('youtube_id, title, thumbnail, channel, location_id, published_at, view_count, subscriber_count')
       .in('location_id', nearby.map((l) => l.id))
     const locById = new Map(nearby.map((l) => [l.id, l]))
     for (const v of vids ?? []) {
       const loc = locById.get(v.location_id)
       if (!loc || !v.youtube_id) continue
+      const row = v as { published_at?: string; view_count?: number | null; subscriber_count?: number | null }
+      const subs = row.subscriber_count ?? 0
       out.push({
         videoId: v.youtube_id, title: v.title ?? loc.name, thumbnail: v.thumbnail ?? '',
         channel: v.channel ?? '', lat: loc.lat, lng: loc.lng,
         distanceKm: Math.round(haversineKm(lat, lng, loc.lat, loc.lng) * 10) / 10,
-        source: 'geotag', viewCount: 0, placeName: loc.name,
+        source: 'geotag', viewCount: row.view_count ?? 0, placeName: loc.name,
         placeNameSource: 'correction', duration: '', isShort: false,
-        subscriberTier: null, subscriberCount: 0,
-        publishedAt: (v as { published_at?: string }).published_at ?? undefined,
+        subscriberTier: tierForSubscriberCount(subs), subscriberCount: subs,
+        publishedAt: row.published_at ?? undefined,
       })
     }
   }
@@ -537,7 +539,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   // 2) places (status=active)
   const { data: places } = await db
     .from('places')
-    .select('name, video_url, latitude, longitude, category, status')
+    .select('name, video_url, latitude, longitude, category, status, view_count, subscriber_count, published_at')
     .eq('status', 'active')
   for (const p of places ?? []) {
     if (p.latitude == null || p.longitude == null) continue
@@ -545,13 +547,16 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
     if (dist > radius) continue
     const vid = extractYoutubeId(p.video_url ?? '')
     if (!vid) continue
+    const pr = p as { view_count?: number | null; subscriber_count?: number | null; published_at?: string | null }
+    const subs = pr.subscriber_count ?? 0
     out.push({
       videoId: vid, title: p.name, thumbnail: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`,
       channel: p.category ?? '', lat: p.latitude, lng: p.longitude,
       distanceKm: Math.round(dist * 10) / 10,
-      source: 'geotag', viewCount: 0, placeName: p.name,
+      source: 'geotag', viewCount: pr.view_count ?? 0, placeName: p.name,
       placeNameSource: 'correction', duration: '', isShort: false,
-      subscriberTier: null, subscriberCount: 0,
+      subscriberTier: tierForSubscriberCount(subs), subscriberCount: subs,
+      publishedAt: pr.published_at ?? undefined,
     })
   }
 

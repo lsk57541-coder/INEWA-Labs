@@ -62,6 +62,8 @@ export default function ExtractPlacesForm() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submitResult, setSubmitResult] = useState<{ succeeded: number; errors: string[] } | null>(null)
+  // 추출한 영상의 메타(2단계: 입력 시 저장 → 검색 필터). 구독자수는 서버에서 partners 테이블로 채움.
+  const [videoMeta, setVideoMeta] = useState<{ viewCount?: number; publishedAt?: string }>({})
 
   useEffect(() => {
     setVideosLoading(true)
@@ -84,13 +86,15 @@ export default function ExtractPlacesForm() {
     setCards([])
 
     const res = await fetch(`/api/partner/extract-places?videoId=${videoId}`)
-    const data = await res.json() as { places?: ExtractedPlace[]; error?: string }
+    const data = await res.json() as { places?: ExtractedPlace[]; viewCount?: number; publishedAt?: string; error?: string }
 
     if (!res.ok || data.error) {
       setExtractError(data.error ?? '추출 중 오류가 발생했습니다.')
       setExtracting(false)
       return
     }
+
+    setVideoMeta({ viewCount: data.viewCount, publishedAt: data.publishedAt })
 
     const newCards: PlaceCard[] = (data.places ?? []).map(p => ({
       name: p.name,
@@ -174,6 +178,8 @@ export default function ExtractPlacesForm() {
       video_url: videoUrl || undefined,
       latitude: c.latitude ?? undefined,
       longitude: c.longitude ?? undefined,
+      view_count: videoMeta.viewCount,
+      published_at: videoMeta.publishedAt,
     }))
 
     const result = await bulkRequestPlaces(payload)
