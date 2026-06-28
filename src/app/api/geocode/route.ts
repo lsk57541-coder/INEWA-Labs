@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const key = process.env.KAKAO_REST_API_KEY
   if (!key) return NextResponse.json({ error: 'no key' }, { status: 500 })
 
-  const qs = new URLSearchParams({ query: q, size: list ? '10' : '1' })
+  const qs = new URLSearchParams({ query: q, size: list ? '15' : '1' })
   if (categoryGroupCode) qs.set('category_group_code', categoryGroupCode)
   const url = `https://dapi.kakao.com/v2/local/search/keyword.json?${qs}`
   const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })

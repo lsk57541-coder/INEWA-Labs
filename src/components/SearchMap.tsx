@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { CSSProperties } from 'react'
-import { createPortal } from 'react-dom'
 import Script from 'next/script'
 import type { VideoResult, SubscriberTier } from '@/app/api/search/route'
 import type { ChannelSuggestion } from '@/app/api/channel-search/route'
@@ -22,6 +21,7 @@ import {
 import MenuDrawer, { type MenuUser } from '@/components/MenuDrawer'
 import FavoritesOverlay from '@/components/FavoritesOverlay'
 import OnboardingOverlay from '@/components/OnboardingOverlay'
+import SearchResultModal from '@/components/SearchResultModal'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
 // 검색 로딩 중 순차로 보여주는 단계 라벨(가짜 — /api/search는 단일 JSON 응답이라 실제 단계 진행은
@@ -511,9 +511,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [addressInput, setAddressInput] = useState('')
   const [addressLoading, setAddressLoading] = useState(false)
   const [locationSuggestions, setLocationSuggestions] = useState<AddressSuggestion[]>([])
-  const locationSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const addressInputRef = useRef<HTMLInputElement>(null)
-  const [locationDropdownPos, setLocationDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  // 위치/채널 검색결과 모달 표시 대상.
+  const [picker, setPicker] = useState<'location' | 'channel' | null>(null)
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null)
   const [posLabel, setPosLabel] = useState<string>('위치 미설정')
   // True once the user has set their search point via the address input
@@ -536,7 +536,6 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [channelSuggestions, setChannelSuggestions] = useState<ChannelSuggestion[]>([])
   const [channelSearching, setChannelSearching] = useState(false)
   const [selectedChannel, setSelectedChannel] = useState<ChannelSuggestion | null>(null)
-  const channelSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingStage, setLoadingStage] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -623,45 +622,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     centerOverlayRef.current.setMap(mapInstanceRef.current)
   }, [mapReady, userPos])
 
-  // Track address input position so the portal dropdown can align to it
-  useEffect(() => {
-    if (locationSuggestions.length > 0 && addressInputRef.current) {
-      const r = addressInputRef.current.getBoundingClientRect()
-      setLocationDropdownPos({ top: r.bottom + 4, left: r.left, width: r.width })
-    } else {
-      setLocationDropdownPos(null)
-    }
-  }, [locationSuggestions])
-
-  // Close location portal dropdown when clicking outside it or the address input
-  useEffect(() => {
-    if (!locationDropdownPos) return
-    const handler = (e: MouseEvent) => {
-      const t = e.target as Element
-      if (!addressInputRef.current?.contains(t) && !t.closest('[data-location-dd]')) {
-        setLocationSuggestions([])
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [locationDropdownPos])
-
-  // Close channel suggestions when document is clicked outside panel
-  useEffect(() => {
-    if (channelSuggestions.length === 0) return
-    const handler = (e: MouseEvent) => {
-      const t = e.target as Element
-      if (!t.closest('[data-channel-dd]') && !t.closest('[data-channel-input]')) {
-        setChannelSuggestions([])
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [channelSuggestions.length])
-
-  // Clear stale suggestions when panels collapse
-  useEffect(() => { if (!advancedOpen) setLocationSuggestions([]) }, [advancedOpen])
-  useEffect(() => { if (!optionsOpen) setChannelSuggestions([]) }, [optionsOpen])
+  // 위치/채널 검색결과는 SearchResultModal(picker)에서 표시 — 드롭다운/외부클릭 효과 불필요.
 
   // 로딩 중 단계 라벨 전진(가짜 타이머). 마지막 단계에서 멈추고 '완료'는 표시하지 않음.
   // 검색이 빨리 끝나면(캐시) stage 0만 스쳐감 — 정상.
@@ -771,35 +732,29 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
   const fetchLocationSuggestions = async (value: string) => {
     setAddressLoading(true)
-    setError(null)
     try {
       const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}&list=1`)
       const json = await res.json() as { results?: AddressSuggestion[] }
       setLocationSuggestions(json.results ?? [])
-      if (!json.results || json.results.length === 0) setError('일치하는 주소를 찾을 수 없습니다.')
     } catch {
       setLocationSuggestions([])
-      setError('주소 검색 실패')
     } finally {
       setAddressLoading(false)
     }
   }
 
+  // 타이핑은 입력만 갱신(자동검색 제거). 실제 검색은 버튼/Enter → 결과 모달.
   const handleAddressInputChange = (value: string) => {
     setAddressInput(value)
-    if (locationSearchTimer.current) clearTimeout(locationSearchTimer.current)
-    if (!value.trim()) { setLocationSuggestions([]); return }
-    locationSearchTimer.current = setTimeout(() => fetchLocationSuggestions(value.trim()), 350)
   }
 
-  const handleAddressSearch = () => {
-    if (!addressInput.trim()) { setError('주소를 입력해주세요.'); return }
-    // 드롭다운에 이미 결과가 있으면 첫 번째 항목으로 바로 설정
-    if (locationSuggestions.length > 0) {
-      selectLocationSuggestion(locationSuggestions[0])
-      return
-    }
-    fetchLocationSuggestions(addressInput.trim())
+  const runLocationSearch = () => {
+    const q = addressInput.trim()
+    if (!q) { setError('지역명 또는 주소를 입력해주세요.'); return }
+    setError(null)
+    setPicker('location')
+    setLocationSuggestions([])
+    fetchLocationSuggestions(q)
   }
 
   const selectLocationSuggestion = (s: AddressSuggestion) => {
@@ -892,11 +847,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     [radius, panTo]
   )
 
-  const handleSearch = async (opts?: { radiusOverride?: number; keywordOverride?: string }) => {
+  const handleSearch = async (opts?: { radiusOverride?: number; keywordOverride?: string; channelOverride?: ChannelSuggestion }) => {
     if (loading) return   // 중복 검색 방지 — Enter 연타/중복 트리거 가드(버튼·칩·Enter 모든 진입점 커버)
     const effectiveKeyword = opts?.keywordOverride ?? keyword
+    // 모달에서 채널 클릭 시 setSelectedChannel은 비동기라, 검색엔 override를 직접 쓴다.
+    const effectiveChannel = opts?.channelOverride ?? selectedChannel
     if (searchMode === 'keyword' && !effectiveKeyword.trim()) { setError('검색어를 입력해주세요.'); return }
-    if (searchMode === 'channel' && !selectedChannel) { setError('유튜버 채널을 선택해주세요.'); return }
+    if (searchMode === 'channel' && !effectiveChannel) { setError('유튜버 채널을 선택해주세요.'); return }
 
     setLoading(true)
     setError(null)
@@ -929,7 +886,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         radius: String(effectiveRadius),
       })
       if (searchMode === 'keyword') params.set('q', effectiveKeyword)
-      else if (selectedChannel) params.set('channelId', selectedChannel.channelId)
+      else if (effectiveChannel) params.set('channelId', effectiveChannel.channelId)
       const res = await fetch(`/api/search?${params}`)
       const json = await res.json() as { results?: VideoResult[]; error?: string }
 
@@ -949,7 +906,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       setOptionsOpen(false)
       setAdvancedOpen(false)
       setListOpen(true)
-      setSearchChip(searchMode === 'keyword' ? effectiveKeyword.trim() : (selectedChannel?.title ?? ''))
+      setSearchChip(searchMode === 'keyword' ? effectiveKeyword.trim() : (effectiveChannel?.title ?? ''))
 
       // 메인 재진입 시 상태 복원을 위해 검색 설정 저장
       try {
@@ -963,7 +920,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       } catch {}
 
       if (videos.length === 0) {
-        setLastSearchQuery(searchMode === 'keyword' ? effectiveKeyword.trim() : (selectedChannel?.title ?? ''))
+        setLastSearchQuery(searchMode === 'keyword' ? effectiveKeyword.trim() : (effectiveChannel?.title ?? ''))
         setRadius(effectiveRadius as Radius)
       }
     } catch (e) {
@@ -1071,22 +1028,22 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     }, 350)
   }
 
-  const handleChannelQueryChange = (value: string) => {
-    setChannelQuery(value)
-    if (channelSearchTimer.current) clearTimeout(channelSearchTimer.current)
-    if (!value.trim()) { setChannelSuggestions([]); return }
-    channelSearchTimer.current = setTimeout(async () => {
-      setChannelSearching(true)
-      try {
-        const res = await fetch(`/api/channel-search?q=${encodeURIComponent(value.trim())}`)
-        const json = await res.json() as { results?: ChannelSuggestion[] }
-        setChannelSuggestions(json.results ?? [])
-      } catch {
-        setChannelSuggestions([])
-      } finally {
-        setChannelSearching(false)
-      }
-    }, 350)
+  // 버튼/Enter로만 채널 검색 → 결과 모달. (타이핑 자동검색 제거: search.list 100유닛 낭비 방지)
+  const runChannelSearch = async () => {
+    const q = channelQuery.trim()
+    if (!q) { setError('채널명을 입력해주세요.'); return }
+    setPicker('channel')
+    setChannelSearching(true)
+    setChannelSuggestions([])
+    try {
+      const res = await fetch(`/api/channel-search?q=${encodeURIComponent(q)}`)
+      const json = await res.json() as { results?: ChannelSuggestion[] }
+      setChannelSuggestions(json.results ?? [])
+    } catch {
+      setChannelSuggestions([])
+    } finally {
+      setChannelSearching(false)
+    }
   }
 
   const handleHideVideo = (v: VideoResult) => {
@@ -1467,36 +1424,23 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </button>
             </div>
           ) : (
-            <input
-              data-channel-input
-              type="text"
-              value={channelQuery}
-              onChange={(e) => handleChannelQueryChange(e.target.value)}
-              onFocus={() => { setOptionsOpen(true); setLocationSuggestions([]) }}
-              placeholder="유튜버 채널명으로 검색"
-              className="w-full text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
-            />
-          )}
-
-          {/* 채널 자동완성 드롭다운 */}
-          {searchMode === 'channel' && !selectedChannel && (channelSearching || channelSuggestions.length > 0) && (
-            <div data-channel-dd className="absolute z-50 top-full left-3 right-3 mt-1 bg-white border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100">
-              {channelSearching && <p className="text-xs text-gray-400 px-4 py-3">검색 중…</p>}
-              {channelSuggestions.map((c) => (
-                <button
-                  key={c.channelId}
-                  onClick={() => {
-                    setSelectedChannel(c)
-                    setChannelQuery('')
-                    setChannelSuggestions([])
-                  }}
-                  className="w-full flex items-center gap-3 text-left px-4 py-3 hover:bg-gray-50 transition"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={c.thumbnail} alt="" className="w-10 h-10 rounded-full shrink-0 object-cover" />
-                  <p className="text-sm font-medium text-gray-900 line-clamp-2">{c.title}</p>
-                </button>
-              ))}
+            <div className="flex gap-2">
+              <input
+                data-channel-input
+                type="text"
+                value={channelQuery}
+                onChange={(e) => setChannelQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && runChannelSearch()}
+                onFocus={() => setOptionsOpen(true)}
+                placeholder="유튜버 채널명으로 검색"
+                className="flex-1 min-w-0 text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
+              />
+              <button
+                onClick={runChannelSearch}
+                className="shrink-0 text-sm bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 transition"
+              >
+                검색
+              </button>
             </div>
           )}
         </div>
@@ -1576,19 +1520,18 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     type="text"
                     value={addressInput}
                     onChange={(e) => handleAddressInputChange(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
-                    onFocus={() => setChannelSuggestions([])}
+                    onKeyDown={(e) => e.key === 'Enter' && runLocationSearch()}
                     placeholder="지역명 또는 주소 입력"
                     className="w-full text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
                   />
                   {addressInput.trim() && (
                     <div className="flex gap-2 mt-2">
                       <button
-                        onClick={handleAddressSearch}
+                        onClick={runLocationSearch}
                         disabled={addressLoading}
                         className="flex-1 text-sm bg-blue-600 text-white rounded-lg py-2 font-medium hover:bg-blue-700 disabled:opacity-40 transition"
                       >
-                        {addressLoading ? '설정 중…' : '📍 이 위치로 설정'}
+                        {addressLoading ? '검색 중…' : '🔍 검색'}
                       </button>
                       <button
                         onClick={getLocation}
@@ -1613,9 +1556,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 </div>
                 )}
 
-                {/* 지도 밝기 슬라이더 */}
+                {/* 검색창 투명도 슬라이더 */}
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 shrink-0">지도 밝기</span>
+                  <span className="text-xs text-gray-400 shrink-0">투명도</span>
                   <input
                     type="range"
                     min={0.3}
@@ -1662,32 +1605,47 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       )}
 
-      {/* Location dropdown portal — escapes overflow:hidden parents */}
-      {locationDropdownPos && locationSuggestions.length > 0 && createPortal(
-        <div
-          style={{
-            position: 'fixed',
-            top: locationDropdownPos.top,
-            left: locationDropdownPos.left,
-            width: locationDropdownPos.width,
-            zIndex: 9999,
-          }}
-          data-location-dd
-          className="bg-white border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto divide-y divide-gray-100"
-        >
-          {locationSuggestions.map((s, i) => (
-            <button
-              key={i}
-              onClick={() => selectLocationSuggestion(s)}
-              className="w-full text-left px-4 py-3 hover:bg-gray-50 transition"
-            >
-              <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
-              <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{s.address}</p>
-            </button>
-          ))}
-        </div>,
-        document.body
-      )}
+      {/* 위치 검색결과 모달 (네이버·카카오식) */}
+      <SearchResultModal<AddressSuggestion>
+        open={picker === 'location'}
+        onClose={() => setPicker(null)}
+        query={addressInput.trim()}
+        loading={addressLoading}
+        items={locationSuggestions}
+        keyOf={(s) => `${s.lat},${s.lng},${s.name}`}
+        onSelect={selectLocationSuggestion}
+        emptyText="일치하는 장소를 찾을 수 없습니다."
+        renderItem={(s) => (
+          <>
+            <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
+            <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{s.address}</p>
+          </>
+        )}
+      />
+
+      {/* 채널 검색결과 모달 — 클릭 시 바로 그 채널로 검색 */}
+      <SearchResultModal<ChannelSuggestion>
+        open={picker === 'channel'}
+        onClose={() => setPicker(null)}
+        query={channelQuery.trim()}
+        loading={channelSearching}
+        items={channelSuggestions}
+        keyOf={(c) => c.channelId}
+        onSelect={(c) => { setSelectedChannel(c); handleSearch({ channelOverride: c }) }}
+        emptyText="채널을 찾을 수 없습니다."
+        renderItem={(c) => (
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={c.thumbnail} alt="" className="w-11 h-11 rounded-full shrink-0 object-cover" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-gray-900 line-clamp-2">{c.title}</p>
+              {c.subscriberCount != null && (
+                <p className="text-xs text-gray-400 mt-0.5">구독자 {formatCountKo(c.subscriberCount)}명</p>
+              )}
+            </div>
+          </div>
+        )}
+      />
 
       {/* Search loading skeleton */}
       {loading && allResults.length === 0 && (
