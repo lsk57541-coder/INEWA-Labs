@@ -245,11 +245,14 @@ export async function toggleFavorite(video: FavoriteVideo): Promise<{ favorited:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
 
+  // 같은 영상(video_id)이 여러 장소에 있을 수 있으므로 좌표까지 포함해 식별(장소별 독립 토글).
   const { data: existing } = await supabase
     .from('favorites')
     .select('id')
     .eq('user_id', user.id)
     .eq('video_id', video.video_id)
+    .eq('lat', video.lat)
+    .eq('lng', video.lng)
     .maybeSingle()
 
   if (existing) {
@@ -283,11 +286,14 @@ export async function toggleVisited(video: FavoriteVideo): Promise<{ visited: bo
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
 
+  // 같은 영상(video_id)이 여러 장소에 있을 수 있으므로 좌표까지 포함해 식별(장소별 독립 토글).
   const { data: existing } = await supabase
     .from('visited_places')
     .select('id')
     .eq('user_id', user.id)
     .eq('video_id', video.video_id)
+    .eq('lat', video.lat)
+    .eq('lng', video.lng)
     .maybeSingle()
 
   if (existing) {

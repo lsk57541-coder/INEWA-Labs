@@ -187,33 +187,7 @@ const CENTER_MARKER_CONTENT = `
   <div style="margin-top:3px;font-size:10px;font-weight:700;color:#fff;background:#ef4444;padding:1px 6px;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.3);white-space:nowrap">내 위치</div>
 </div>`
 
-const FAVORITE_MARKER_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36" viewBox="0 0 32 36">' +
-  '<path d="M16 0C7 0 0 7 0 16c0 12 16 20 16 20s16-8 16-20C32 7 25 0 16 0z" fill="#f59e0b" stroke="#fff" stroke-width="2"/>' +
-  '<text x="16" y="21" font-size="14" text-anchor="middle" fill="#fff">♥</text>' +
-  '</svg>'
-
-function favoriteMarkerImage(): kakao.maps.MarkerImage {
-  return new kakao.maps.MarkerImage(
-    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(FAVORITE_MARKER_SVG)}`,
-    new kakao.maps.Size(24, 27),
-    { offset: new kakao.maps.Point(12, 27) }
-  )
-}
-
-const VISITED_MARKER_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36" viewBox="0 0 32 36">' +
-  '<path d="M16 0C7 0 0 7 0 16c0 12 16 20 16 20s16-8 16-20C32 7 25 0 16 0z" fill="#475569" stroke="#fff" stroke-width="2"/>' +
-  '<text x="16" y="21" font-size="14" text-anchor="middle" fill="#fff">⚑</text>' +
-  '</svg>'
-
-function visitedMarkerImage(): kakao.maps.MarkerImage {
-  return new kakao.maps.MarkerImage(
-    `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(VISITED_MARKER_SVG)}`,
-    new kakao.maps.Size(24, 27),
-    { offset: new kakao.maps.Point(12, 27) }
-  )
-}
+// 찜/가본곳 마커는 일반·파트너와 같은 로고 핀 모양으로 통일(아래 logo 섹션에서 정의).
 
 // Shared by every "disabled + 처리 중…" button so a server-bound action
 // reads as busy at a glance, not just as a greyed-out label.
@@ -310,49 +284,61 @@ function TierButton({ tier }: { tier: SubscriberTier }) {
   )
 }
 
-// Just the play triangle — no phone-frame outline — for both Shorts and
-// long-form, and a small dot when a location has both.
-function videoTypeGlyphSvg(kind: 'short' | 'long' | 'mixed'): string {
-  if (kind === 'mixed') return '<circle cx="16" cy="12" r="3" fill="#fff"/>'
-  return '<polygon points="9,8 9,16 19,12" fill="#fff"/>'
-}
+// 마커 크기(일반·파트너 공통, 적용 후 미세조정 가능).
+const MARKER_W = 34
+const MARKER_H = 39
+// 브랜드 로고(PinPlayIcon) 핀 path — 일반·파트너 마커가 공유하는 단일 모양.
+const LOGO_PIN_PATH = 'M40 4C23.4 4 10 17.4 10 34C10 53.5 40 88 40 88C40 88 70 53.5 70 34C70 17.4 56.6 4 40 4Z'
 
-function pinMarkerImage(fill: string, innerSvg: string): kakao.maps.MarkerImage {
+// 로고 핀(브랜드) + 내부 글리프로 마커 이미지 생성. fill·innerSvg만 바꿔 일반/찜/가본곳 공유.
+function logoPinMarkerImage(fill: string, innerSvg: string): kakao.maps.MarkerImage {
   const svg =
-    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36" viewBox="0 0 32 36">' +
-    `<path d="M16 0C7 0 0 7 0 16c0 12 16 20 16 20s16-8 16-20C32 7 25 0 16 0z" fill="${fill}" stroke="#fff" stroke-width="2"/>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${MARKER_W}" height="${MARKER_H}" viewBox="0 0 80 92">` +
+    `<path d="${LOGO_PIN_PATH}" fill="${fill}"/>` +
+    '<circle cx="40" cy="34" r="19" fill="rgba(0,0,0,0.18)"/>' +
+    '<ellipse cx="33" cy="23" rx="7" ry="4.5" fill="rgba(255,255,255,0.18)"/>' +
     innerSvg +
     '</svg>'
   return new kakao.maps.MarkerImage(
     `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    new kakao.maps.Size(24, 27),
-    { offset: new kakao.maps.Point(12, 27) }
+    new kakao.maps.Size(MARKER_W, MARKER_H),
+    { offset: new kakao.maps.Point(MARKER_W / 2, MARKER_H) }
   )
 }
 
-// YouTube-red hue, darker for channels with more subscribers and lighter for
-// fewer — a gradient instead of distinct gold/silver/bronze colors.
-function subscriberGradientColor(subscriberCount: number): string {
-  const clamped = Math.min(Math.max(subscriberCount, 1), 10_000_000)
-  const t = Math.log10(clamped) / Math.log10(10_000_000) // 0 (few subs) .. 1 (many subs)
-  const lightness = 70 - t * 35 // 70% light .. 35% dark
-  return `hsl(0, 85%, ${lightness}%)`
-}
+const PLAY_GLYPH = '<polygon points="34,24 34,44 54,34" fill="#fff"/>'
+const HEART_GLYPH = '<text x="40" y="44" font-size="28" text-anchor="middle" fill="#fff">♥</text>'
+const CHECK_GLYPH = '<path d="M31 35l6 7 12-15" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>'
 
-// Picks the marker look for a group of videos at one location: favorited
-// places keep the gold-heart marker, "가본 곳" places keep the gray-flag
-// marker, and otherwise the pin's shade shows how many subscribers the
-// best-known channel there has, with a shape showing whether the videos
-// there are Shorts, long-form, or a mix of both.
-function groupMarkerImage(videos: VideoResult[], isFavorite: boolean, isVisited: boolean): kakao.maps.MarkerImage {
+// 일반=빨간 로고핀+재생삼각형 / 찜=금(amber) 로고핀+♥ / 가본곳=회색 로고핀+✓.
+// (구독자 그라데이션 색·쇼츠/롱폼 글리프는 의도적으로 제거 — 모양 완전 통일.)
+function logoMarkerImage(): kakao.maps.MarkerImage { return logoPinMarkerImage('#FF5C5C', PLAY_GLYPH) }
+function favoriteMarkerImage(): kakao.maps.MarkerImage { return logoPinMarkerImage('#f59e0b', HEART_GLYPH) }
+function visitedMarkerImage(): kakao.maps.MarkerImage { return logoPinMarkerImage('#64748b', CHECK_GLYPH) }
+
+// 마커 모양 선택: 찜=금 로고핀+♥, 가본곳=회색 로고핀+✓(둘 다 사용자 선택이라 최우선),
+// 그 외 일반=빨간 로고핀. (파트너는 renderMarkers에서 CustomOverlay로 별도 처리 — 우선순위 찜>가본곳>파트너>일반.)
+function groupMarkerImage(isFavorite: boolean, isVisited: boolean): kakao.maps.MarkerImage {
   if (isFavorite) return favoriteMarkerImage()
   if (isVisited) return visitedMarkerImage()
+  return logoMarkerImage()
+}
 
-  const maxSubs = Math.max(0, ...videos.map((v) => v.subscriberCount))
-  const allShort = videos.every((v) => v.isShort)
-  const allLong = videos.every((v) => !v.isShort)
-  const kind = allShort ? 'short' : allLong ? 'long' : 'mixed'
-  return pinMarkerImage(subscriberGradientColor(maxSubs), videoTypeGlyphSvg(kind))
+// 영업 시연용 "데모 파트너": 해당 채널의 마커를 금색 링 + 채널 썸네일로 차별화한다.
+// (실제 파트너 시스템 연결 전까지 채널명 정확 매칭. 지금은 둘시네아만 데모 파트너로 지정.)
+const DEMO_PARTNERS: Record<string, { thumbnail: string }> = {
+  '둘시네아 dulcinea': {
+    thumbnail: 'https://yt3.ggpht.com/yQYijHEpoRNen6YgrqWbiXWoGi6D-EvMTKfq4Gut7qSg0UUpNjh8eUZ-y19ouuXaM6bG9hzqQw=s176-c-k-c0xffffffff-no-rj-mo',
+  },
+}
+function getDemoPartner(channel: string): { thumbnail: string } | null {
+  return DEMO_PARTNERS[channel] ?? null
+}
+
+// 찜/가본곳 식별키. 모음영상은 같은 videoId가 여러 좌표(가게)로 뜨므로 videoId만으론
+// 한 곳 찜이 전체로 번진다 → videoId+좌표로 장소별 구분(좌표 5자리=약 1m, DB 라운드트립 안전).
+function placeKey(videoId: string, lat: number, lng: number): string {
+  return `${videoId}:${lat.toFixed(5)}:${lng.toFixed(5)}`
 }
 
 function toFavoritePayload(v: VideoResult): FavoriteVideo {
@@ -670,8 +656,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         return
       }
       const [favs, vis, reports] = await Promise.all([getFavorites(), getVisited(), getMyReports()])
-      setFavoriteIds(new Set(favs.map((f) => f.video_id)))
-      setVisitedIds(new Set(vis.map((v) => v.video_id)))
+      setFavoriteIds(new Set(favs.map((f) => placeKey(f.video_id, f.lat, f.lng))))
+      setVisitedIds(new Set(vis.map((v) => placeKey(v.video_id, v.lat, v.lng))))
       setReportedIds(new Set(reports))
     }
     load().catch(() => {})
@@ -801,14 +787,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
       groups.forEach((group) => {
         const pos = new kakao.maps.LatLng(group.lat, group.lng)
-        const isFavorite = group.videos.some((v) => favIds.has(v.videoId))
-        const isVisited = group.videos.some((v) => visitedIdSet.has(v.videoId))
-        const marker = new kakao.maps.Marker({
-          position: pos,
-          map: mapInstanceRef.current!,
-          image: groupMarkerImage(group.videos, isFavorite, isVisited),
-        })
-        kakao.maps.event.addListener(marker, 'click', () => {
+        const isFavorite = group.videos.some((v) => favIds.has(placeKey(v.videoId, v.lat, v.lng)))
+        const isVisited = group.videos.some((v) => visitedIdSet.has(placeKey(v.videoId, v.lat, v.lng)))
+        // 데모 파트너 채널이 그룹에 있는지. 단 우선순위는 찜>가본곳>파트너>일반 —
+        // 찜/가본곳(사용자 선택)이면 파트너여도 금하트/회색깃발이 우선.
+        const partner = group.videos.map((v) => getDemoPartner(v.channel)).find(Boolean) ?? null
+
+        const onGroupClick = () => {
           if (group.videos.length === 1) {
             setSelectedGroup(null)
             setSelectedVideo(group.videos[0])
@@ -818,7 +803,44 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             setSelectedVideo(group.videos[0])
             panTo(group.lat, group.lng, 0.45)
           }
+        }
+
+        if (partner && !isFavorite && !isVisited) {
+          // 파트너 마커: 일반과 같은 로고 핀 모양 + 밝은 샛노랑(#FFD700) + 핀 머리에 동그란 채널 썸네일.
+          const countBadge = group.videos.length > 1
+            ? `<div style="position:absolute;top:-3px;right:-3px;background:#3b82f6;color:#fff;border-radius:10px;padding:0 5px;font-size:10px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,.3)">${group.videos.length}</div>`
+            : ''
+          const el = document.createElement('div')
+          el.style.cssText = `position:relative;width:${MARKER_W}px;height:${MARKER_H}px;cursor:pointer;`
+          el.innerHTML =
+            `<svg width="${MARKER_W}" height="${MARKER_H}" viewBox="0 0 80 92" style="display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))">` +
+            `<path d="${LOGO_PIN_PATH}" fill="#FFD700"/>` +
+            '<circle cx="40" cy="34" r="22" fill="#fff"/>' +
+            '</svg>' +
+            // 핀 머리(viewBox 40,34) 위에 원형 썸네일을 픽셀 위치로 정렬.
+            `<img src="${partner.thumbnail}" referrerpolicy="no-referrer" alt="" style="position:absolute;left:${MARKER_W / 2 - 8}px;top:${MARKER_H * 34 / 92 - 8}px;width:16px;height:16px;border-radius:50%;object-fit:cover;display:block;" />` +
+            countBadge
+          el.addEventListener('click', onGroupClick)
+          const overlay = new kakao.maps.CustomOverlay({
+            position: pos,
+            content: el,
+            xAnchor: 0.5,
+            yAnchor: 1,
+            zIndex: 5,
+            // kakao SDK는 clickable을 지원하지만 타입 정의에 없어 캐스트로 추가(클릭 이벤트 보장).
+            clickable: true,
+          } as kakao.maps.CustomOverlayOptions & { clickable: boolean })
+          overlay.setMap(mapInstanceRef.current!)
+          overlaysRef.current.push(overlay)
+          return
+        }
+
+        const marker = new kakao.maps.Marker({
+          position: pos,
+          map: mapInstanceRef.current!,
+          image: groupMarkerImage(isFavorite, isVisited),
         })
+        kakao.maps.event.addListener(marker, 'click', onGroupClick)
         markersRef.current.push(marker)
 
         if (group.videos.length > 1) {
@@ -932,10 +954,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
   const handleToggleFavorite = async (v: VideoResult) => {
     if (!user) { setError('로그인이 필요합니다.'); return }
-    const wasFavorited = favoriteIds.has(v.videoId)
+    const key = placeKey(v.videoId, v.lat, v.lng)
+    const wasFavorited = favoriteIds.has(key)
     const next = new Set(favoriteIds)
-    if (wasFavorited) next.delete(v.videoId)
-    else next.add(v.videoId)
+    if (wasFavorited) next.delete(key)
+    else next.add(key)
     setFavoriteIds(next)   // 마커 갱신은 useEffect(favoriteIds 의존)가 처리
 
     try {
@@ -948,10 +971,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
   const handleToggleVisitedVideo = async (v: VideoResult) => {
     if (!user) { setError('로그인이 필요합니다.'); return }
-    const wasVisited = visitedIds.has(v.videoId)
+    const key = placeKey(v.videoId, v.lat, v.lng)
+    const wasVisited = visitedIds.has(key)
     const next = new Set(visitedIds)
-    if (wasVisited) next.delete(v.videoId)
-    else next.add(v.videoId)
+    if (wasVisited) next.delete(key)
+    else next.add(key)
     setVisitedIds(next)   // 마커 갱신은 useEffect(visitedIds 의존)가 처리
 
     try {
@@ -963,10 +987,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   }
 
   const handleToggleFavoriteById = async (v: FavoriteVideo) => {
-    const wasFavorited = favoriteIds.has(v.video_id)
+    const key = placeKey(v.video_id, v.lat, v.lng)
+    const wasFavorited = favoriteIds.has(key)
     const next = new Set(favoriteIds)
-    if (wasFavorited) next.delete(v.video_id)
-    else next.add(v.video_id)
+    if (wasFavorited) next.delete(key)
+    else next.add(key)
     setFavoriteIds(next)
     try {
       await toggleFavorite(v)
@@ -977,10 +1002,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   }
 
   const handleToggleVisited = async (v: FavoriteVideo) => {
-    const wasVisited = visitedIds.has(v.video_id)
+    const key = placeKey(v.video_id, v.lat, v.lng)
+    const wasVisited = visitedIds.has(key)
     const next = new Set(visitedIds)
-    if (wasVisited) next.delete(v.video_id)
-    else next.add(v.video_id)
+    if (wasVisited) next.delete(key)
+    else next.add(key)
     setVisitedIds(next)
     try {
       await toggleVisited(v)
@@ -1842,8 +1868,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       <NaviIcon className="w-6 h-6" />
                     </a>
                     <VideoActionRow
-                      favorited={favoriteIds.has(v.videoId)}
-                      visited={visitedIds.has(v.videoId)}
+                      favorited={favoriteIds.has(placeKey(v.videoId, v.lat, v.lng))}
+                      visited={visitedIds.has(placeKey(v.videoId, v.lat, v.lng))}
                       reported={reportedIds.has(v.videoId)}
                       onToggleFavorite={() => handleToggleFavorite(v)}
                       onToggleVisited={() => handleToggleVisitedVideo(v)}
@@ -1955,8 +1981,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       <NaviIcon className="w-7 h-7" />
                     </a>
                     <VideoActionRow
-                      favorited={favoriteIds.has(v.videoId)}
-                      visited={visitedIds.has(v.videoId)}
+                      favorited={favoriteIds.has(placeKey(v.videoId, v.lat, v.lng))}
+                      visited={visitedIds.has(placeKey(v.videoId, v.lat, v.lng))}
                       reported={reportedIds.has(v.videoId)}
                       onToggleFavorite={() => handleToggleFavorite(v)}
                       onToggleVisited={() => handleToggleVisitedVideo(v)}
@@ -2010,8 +2036,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   <NaviIcon className="w-8 h-8" />
                 </a>
                 <VideoActionRow
-                  favorited={favoriteIds.has(selectedVideo.videoId)}
-                  visited={visitedIds.has(selectedVideo.videoId)}
+                  favorited={favoriteIds.has(placeKey(selectedVideo.videoId, selectedVideo.lat, selectedVideo.lng))}
+                  visited={visitedIds.has(placeKey(selectedVideo.videoId, selectedVideo.lat, selectedVideo.lng))}
                   reported={reportedIds.has(selectedVideo.videoId)}
                   onToggleFavorite={() => handleToggleFavorite(selectedVideo)}
                   onToggleVisited={() => handleToggleVisitedVideo(selectedVideo)}
