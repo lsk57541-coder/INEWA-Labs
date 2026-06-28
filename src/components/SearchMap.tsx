@@ -345,7 +345,7 @@ function PartnerChip() {
 }
 
 // 데스크톱(md+, 768px↑): 하단 바텀시트를 좌측 고정 사이드 패널로(구글맵식). 모바일(≤767px)은 불변.
-const DESKTOP_LEFT_PANEL = 'md:left-3 md:right-auto md:w-[360px] md:bottom-3 md:rounded-2xl md:z-[8]'
+const DESKTOP_LEFT_PANEL = 'md:left-3 md:right-auto md:w-[400px] lg:w-[460px] md:bottom-3 md:rounded-2xl md:z-[8]'
 
 // 찜/가본곳 식별키. 모음영상은 같은 videoId가 여러 좌표(가게)로 뜨므로 videoId만으론
 // 한 곳 찜이 전체로 번진다 → videoId+좌표로 장소별 구분(좌표 5자리=약 1m, DB 라운드트립 안전).
@@ -1280,18 +1280,18 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       <button
         onClick={handleLocateButtonClick}
         title="현재 위치로 이동"
-        className={`absolute ${locateButtonBottomClass} left-3 z-20 w-11 h-11 bg-white rounded-full shadow-lg flex items-center justify-center text-blue-600 hover:bg-gray-50 transition`}
+        className={`absolute ${locateButtonBottomClass} left-3 z-20 md:left-auto md:right-6 md:bottom-6 w-11 h-11 bg-white rounded-full shadow-lg flex items-center justify-center text-blue-600 hover:bg-gray-50 transition`}
       >
         <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
           <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
         </svg>
       </button>
 
-      {/* Hamburger menu */}
+      {/* Hamburger menu (모바일 플로팅 — 데스크톱은 검색바 안 인라인 햄버거 사용) */}
       <button
         ref={hamburgerRef}
         onClick={() => setMenuOpen(true)}
-        className="absolute top-3 left-3 z-20 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-lg hover:bg-gray-50 transition"
+        className="absolute top-3 left-3 z-20 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-lg hover:bg-gray-50 transition md:hidden"
       >
         ☰
       </button>
@@ -1320,10 +1320,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
       {/* 필터 패널 (슬라이드업 시트) */}
       {filterPanelOpen && (
-        <div className="absolute inset-0 z-30 flex flex-col justify-end">
+        <div className="absolute inset-0 z-30 flex flex-col justify-end md:items-center md:justify-center md:p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setFilterPanelOpen(false)} />
-          <div className="relative bg-white rounded-t-2xl shadow-2xl px-5 pt-3 pb-6 max-h-[80dvh] overflow-y-auto">
-            <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mb-3" />
+          <div className="relative bg-white rounded-t-2xl shadow-2xl px-5 pt-3 pb-6 max-h-[80dvh] overflow-y-auto md:w-full md:max-w-md md:rounded-2xl">
+            <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mb-3 md:hidden" />
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-bold text-gray-900">필터</h3>
               <button onClick={() => setFilterPanelOpen(false)} aria-label="닫기" className="text-gray-400 text-xl leading-none px-1">✕</button>
@@ -1424,11 +1424,20 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Search panel / chip — ref always mounted for OnboardingOverlay */}
       <div
         ref={searchBarRef}
-        className="absolute top-16 left-3 z-10"
+        className="absolute top-16 left-3 z-10 md:top-3 md:w-[400px] lg:w-[460px] md:max-w-[calc(100vw-24px)] md:flex md:items-start md:gap-2"
       >
+        {/* 데스크톱: 좌측 패널 헤더의 인라인 햄버거(모바일은 플로팅 햄버거 사용) */}
+        <button
+          onClick={() => setMenuOpen(true)}
+          aria-label="메뉴"
+          className="hidden md:flex shrink-0 w-10 h-10 bg-white rounded-full shadow-lg items-center justify-center text-lg hover:bg-gray-50 transition"
+        >
+          ☰
+        </button>
+        <div className="md:flex-1 md:min-w-0">
         {searchChip ? (
           /* 검색 완료 후 칩 모드 */
-          <div className="flex items-center gap-1 bg-white shadow-lg rounded-full pl-3 pr-2 py-2 max-w-[calc(100vw-24px)]">
+          <div className="flex items-center gap-1 bg-white shadow-lg rounded-full pl-3 pr-2 py-2 max-w-[calc(100vw-24px)] md:w-full md:max-w-none">
             <span className="text-sm shrink-0">🔍</span>
             <button
               onClick={() => { setSearchChip(null); setOptionsOpen(true) }}
@@ -1452,7 +1461,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         ) : (
         /* 패널 모드 */
         <div
-          className="w-72 max-w-[calc(100vw-24px)] shadow-lg rounded-2xl"
+          className="w-72 max-w-[calc(100vw-24px)] md:w-full md:max-w-none shadow-lg rounded-2xl"
           style={{ backgroundColor: `rgba(255,255,255,${panelOpacity})` }}
         >
         {/* 입력창 — 항상 표시, 포커스 시 패널 확장 */}
@@ -1634,6 +1643,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
         </div>
         )}
+        </div>
       </div>
 
       {/* Quick search chips — shown below search bar in initial empty state */}
@@ -1715,7 +1725,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           </div>
           {[0, 1, 2].map((i) => (
             <div key={i} className="flex gap-2 py-2.5 border-b border-border last:border-0 animate-pulse">
-              <div className="w-14 h-8 bg-gray-200 rounded shrink-0" />
+              <div className="w-14 h-8 md:w-24 md:h-14 bg-gray-200 rounded shrink-0" />
               <div className="flex-1 space-y-1.5">
                 <div className="h-2.5 bg-gray-200 rounded w-full" />
                 <div className="h-2.5 bg-gray-200 rounded w-2/3" />
@@ -1779,7 +1789,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Results list — independent bottom sheet, slides up from the bottom */}
       {allResults.length > 0 && !selectedGroup && !selectedVideo && (
         <div
-          className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col max-h-[50dvh] ${DESKTOP_LEFT_PANEL} md:top-28 md:max-h-none md:translate-y-0 ${
+          className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col max-h-[50dvh] ${DESKTOP_LEFT_PANEL} md:top-[64px] md:max-h-none md:translate-y-0 ${
             listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-56px)]'
           }`}
         >
@@ -1866,7 +1876,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition border-b border-border last:border-0"
               >
                 <div className="relative shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
-                  <img src={v.thumbnail} alt="" className="w-14 h-8 object-cover rounded" />
+                  <img src={v.thumbnail} alt="" className="w-14 h-8 md:w-24 md:h-14 object-cover rounded" />
                   <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-0.5 right-0.5" />
                 </div>
                 <div className="flex-1 overflow-hidden min-w-0">
@@ -1885,8 +1895,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-xs text-gray-400 truncate flex-1">
-                      {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel && <>{v.channel}{getDemoPartner(v.channel) && <PartnerChip />} · </>}{formatViews(v.viewCount)}
+                    {/* 모바일: 한 줄 truncate(기존). 데스크톱(md+): flex로 채널명만 truncate하고
+                        PARTNER 배지·조회수는 항상 노출(채널명이 길어도 배지 안 잘리게). */}
+                    <p className="text-xs text-gray-400 truncate flex-1 min-w-0 md:flex md:items-center md:gap-1 md:overflow-visible md:whitespace-normal">
+                      {v.subscriberTier && <TierButton tier={v.subscriberTier} />}
+                      {v.channel && <span className="md:truncate md:min-w-0">{' '}{v.channel}</span>}
+                      {getDemoPartner(v.channel) && <PartnerChip />}
+                      <span className="md:shrink-0 md:whitespace-nowrap"> · {formatViews(v.viewCount)}</span>
                     </p>
                     <a
                       href={navUrl(v, userPos ? { ...userPos, label: posLabel } : null)}

@@ -120,7 +120,12 @@ export default function FavoritesOverlay({
   })
 
   return (
-    <div className="absolute inset-0 z-30 bg-white flex flex-col">
+    // 모바일: 풀스크린 흰 배경. 데스크톱(md+): 백드롭 + 중앙 카드.
+    <div
+      className="absolute inset-0 z-30 flex flex-col bg-white md:bg-black/40 md:items-center md:justify-center md:p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+    <div className="flex flex-col flex-1 w-full bg-white md:flex-none md:w-full md:max-w-2xl md:h-[80dvh] md:rounded-2xl md:shadow-2xl md:overflow-hidden">
       {/* 헤더 */}
       <div className="flex items-center gap-3 px-4 h-14 border-b border-border shrink-0">
         <button onClick={onClose} className="text-2xl text-gray-600 px-1">‹</button>
@@ -230,6 +235,7 @@ export default function FavoritesOverlay({
           )
         })}
       </div>
+    </div>
     </div>
   )
 }
