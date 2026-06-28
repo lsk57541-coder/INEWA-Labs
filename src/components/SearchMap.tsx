@@ -335,6 +335,15 @@ function getDemoPartner(channel: string): { thumbnail: string } | null {
   return DEMO_PARTNERS[channel] ?? null
 }
 
+// 파트너 여부: 실제 파트너(서버 isPartner) 또는 데모 파트너(채널명 매칭).
+function isPartnerVideo(v: VideoResult): boolean {
+  return !!v.isPartner || !!getDemoPartner(v.channel)
+}
+// 파트너 마커 썸네일: 실제 파트너 아바타 → 데모 썸네일 → null(없으면 클라가 금색 핀으로 폴백).
+function partnerThumbOf(v: VideoResult): string | null {
+  return v.partnerThumbnail ?? getDemoPartner(v.channel)?.thumbnail ?? null
+}
+
 // 파트너 채널 표식 — 마커 금색(#FFD700)과 통일한 작은 칩.
 function PartnerChip() {
   return (
@@ -819,7 +828,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         const isVisited = group.videos.some((v) => visitedIdSet.has(placeKey(v.videoId, v.lat, v.lng)))
         // 데모 파트너 채널이 그룹에 있는지. 단 우선순위는 찜>가본곳>파트너>일반 —
         // 찜/가본곳(사용자 선택)이면 파트너여도 금하트/회색깃발이 우선.
-        const partner = group.videos.map((v) => getDemoPartner(v.channel)).find(Boolean) ?? null
+        const partnerVideo = group.videos.find((v) => isPartnerVideo(v)) ?? null
+        const partner = partnerVideo ? { thumbnail: partnerThumbOf(partnerVideo) } : null
 
         const onGroupClick = () => {
           if (group.videos.length === 1) {
@@ -840,13 +850,19 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             : ''
           const el = document.createElement('div')
           el.style.cssText = `position:relative;width:${MARKER_W}px;height:${MARKER_H}px;cursor:pointer;`
+          // 썸네일 있으면 핀 머리에 원형 아바타, 없으면(아바타 NULL/실패) 흰 재생삼각형 → 금색 로고핀으로 폴백(마커 안 깨짐).
+          const partnerHead = partner.thumbnail
+            ? '<circle cx="40" cy="34" r="22" fill="#fff"/>'
+            : PLAY_GLYPH
+          const partnerImg = partner.thumbnail
+            ? `<img src="${partner.thumbnail}" referrerpolicy="no-referrer" alt="" onerror="this.style.display='none'" style="position:absolute;left:${MARKER_W / 2 - 8}px;top:${MARKER_H * 34 / 92 - 8}px;width:16px;height:16px;border-radius:50%;object-fit:cover;display:block;" />`
+            : ''
           el.innerHTML =
             `<svg width="${MARKER_W}" height="${MARKER_H}" viewBox="0 0 80 92" style="display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))">` +
             `<path d="${LOGO_PIN_PATH}" fill="#FFD700"/>` +
-            '<circle cx="40" cy="34" r="22" fill="#fff"/>' +
+            partnerHead +
             '</svg>' +
-            // 핀 머리(viewBox 40,34) 위에 원형 썸네일을 픽셀 위치로 정렬.
-            `<img src="${partner.thumbnail}" referrerpolicy="no-referrer" alt="" style="position:absolute;left:${MARKER_W / 2 - 8}px;top:${MARKER_H * 34 / 92 - 8}px;width:16px;height:16px;border-radius:50%;object-fit:cover;display:block;" />` +
+            partnerImg +
             countBadge
           el.addEventListener('click', onGroupClick)
           const overlay = new kakao.maps.CustomOverlay({
@@ -1188,8 +1204,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       if (sortBy === 'distance') return a.distanceKm - b.distanceKm
       if (sortBy === 'duration') return parseDurationLabel(b.duration) - parseDurationLabel(a.duration)
       // 기본(조회수) 정렬에서만 파트너 영상 우선노출. 사용자가 정렬 탭을 누르면(거리/길이) 해제.
-      const ap = getDemoPartner(a.channel) ? 1 : 0
-      const bp = getDemoPartner(b.channel) ? 1 : 0
+      const ap = isPartnerVideo(a) ? 1 : 0
+      const bp = isPartnerVideo(b) ? 1 : 0
       if (ap !== bp) return bp - ap
       return b.viewCount - a.viewCount
     })
@@ -1900,7 +1916,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     <p className="text-xs text-gray-400 truncate flex-1 min-w-0 md:flex md:items-center md:gap-1 md:overflow-visible md:whitespace-normal">
                       {v.subscriberTier && <TierButton tier={v.subscriberTier} />}
                       {v.channel && <span className="md:truncate md:min-w-0">{' '}{v.channel}</span>}
-                      {getDemoPartner(v.channel) && <PartnerChip />}
+                      {isPartnerVideo(v) && <PartnerChip />}
                       <span className="md:shrink-0 md:whitespace-nowrap"> · {formatViews(v.viewCount)}</span>
                     </p>
                     <a
@@ -2010,7 +2026,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">
-                    {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel}{getDemoPartner(v.channel) && <PartnerChip />}
+                    {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel}{isPartnerVideo(v) && <PartnerChip />}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {formatViews(v.viewCount)}

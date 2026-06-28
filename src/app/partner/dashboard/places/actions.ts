@@ -41,6 +41,7 @@ export async function addPlace(data: PlaceInput) {
     video_url: data.video_url?.trim() || null,
     latitude: data.latitude ?? null,
     longitude: data.longitude ?? null,
+    status: 'active', // 즉시 공개(바로 가입 취지). 사후 가드는 hide(숨김) 유지.
   })
   if (error) throw new Error(error.message)
   revalidatePath('/partner/dashboard/places')
@@ -108,7 +109,7 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
       video_url: p.video_url?.trim() || null,
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
-      status: 'reviewing',
+      status: 'active', // 즉시 공개(바로 가입 취지). 사후 가드는 hide(숨김) 기능 유지.
       view_count: p.view_count ?? null,
       subscriber_count: subscriberCount,
       published_at: p.published_at ?? null,

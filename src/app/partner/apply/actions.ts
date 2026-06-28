@@ -53,6 +53,7 @@ export async function completePartnerSignup(channel: PendingChannel) {
     region: match?.region ?? null,
     status: 'approved',
     grade: 'general',
+    avatar_url: channel.thumbnail,
     youtube_access_token: channel.accessToken,
     youtube_refresh_token: channel.refreshToken,
   })

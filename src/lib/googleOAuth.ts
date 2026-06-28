@@ -47,6 +47,7 @@ export interface OwnChannel {
   channelId: string
   channelName: string
   subscriberCount: number
+  thumbnail: string | null
 }
 
 export async function fetchOwnChannel(accessToken: string): Promise<OwnChannel | null> {
@@ -57,7 +58,11 @@ export async function fetchOwnChannel(accessToken: string): Promise<OwnChannel |
   if (!res.ok) return null
 
   const json = await res.json() as {
-    items?: { id: string; snippet: { title: string }; statistics: { subscriberCount?: string } }[]
+    items?: {
+      id: string
+      snippet: { title: string; thumbnails?: { default?: { url: string }; medium?: { url: string } } }
+      statistics: { subscriberCount?: string }
+    }[]
   }
   const channel = json.items?.[0]
   if (!channel) return null
@@ -66,5 +71,7 @@ export async function fetchOwnChannel(accessToken: string): Promise<OwnChannel |
     channelId: channel.id,
     channelName: channel.snippet.title,
     subscriberCount: parseInt(channel.statistics.subscriberCount ?? '0', 10),
+    // 마커용 채널 아바타(추가 quota 0 — snippet에 이미 포함). 없으면 null → 코드에서 fallback.
+    thumbnail: channel.snippet.thumbnails?.medium?.url ?? channel.snippet.thumbnails?.default?.url ?? null,
   }
 }

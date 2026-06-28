@@ -165,6 +165,8 @@ export interface VideoResult {
   subscriberCount: number
   startSec?: number // 모음영상 챕터 deep-link (해당 장소 구간부터 재생)
   publishedAt?: string // 영상 업로드일(ISO). 날짜 필터용. videos.list snippet에서. 등록장소는 published_at 또는 미상.
+  isPartner?: boolean // 실제 파트너(places.partner_id) 장소 → 금색 마커/PARTNER 배지/상위노출
+  partnerThumbnail?: string | null // 파트너 채널 아바타(마커 썸네일). NULL이면 클라가 금색 핀으로 폴백
 }
 
 // Fire-and-forget log of how each video's place name was resolved. Upserts by
@@ -536,27 +538,42 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
     }
   }
 
-  // 2) places (status=active)
+  // 2) places (status=active) — 파트너 셀프 등록 장소
   const { data: places } = await db
     .from('places')
-    .select('name, video_url, latitude, longitude, category, status, view_count, subscriber_count, published_at')
+    .select('name, video_url, latitude, longitude, category, status, view_count, subscriber_count, published_at, partner_id')
     .eq('status', 'active')
+
+  // 파트너 정보(채널명·아바타·구독자수) 일괄 조회 → 금색 마커/PARTNER 배지/상위노출용.
+  const partnerIds = [...new Set((places ?? []).map((p) => (p as { partner_id?: string | null }).partner_id).filter(Boolean) as string[])]
+  const partnerMap = new Map<string, { channel_name: string; avatar_url: string | null; subscriber_count: number | null }>()
+  if (partnerIds.length > 0) {
+    const { data: partners } = await db
+      .from('partners')
+      .select('id, channel_name, avatar_url, subscriber_count')
+      .in('id', partnerIds)
+    for (const pt of partners ?? []) partnerMap.set(pt.id, pt)
+  }
+
   for (const p of places ?? []) {
     if (p.latitude == null || p.longitude == null) continue
     const dist = haversineKm(lat, lng, p.latitude, p.longitude)
     if (dist > radius) continue
     const vid = extractYoutubeId(p.video_url ?? '')
     if (!vid) continue
-    const pr = p as { view_count?: number | null; subscriber_count?: number | null; published_at?: string | null }
-    const subs = pr.subscriber_count ?? 0
+    const pr = p as { view_count?: number | null; subscriber_count?: number | null; published_at?: string | null; partner_id?: string | null }
+    const partner = pr.partner_id ? partnerMap.get(pr.partner_id) : undefined
+    const subs = partner?.subscriber_count ?? pr.subscriber_count ?? 0
     out.push({
       videoId: vid, title: p.name, thumbnail: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`,
-      channel: p.category ?? '', lat: p.latitude, lng: p.longitude,
+      channel: partner?.channel_name ?? p.category ?? '', lat: p.latitude, lng: p.longitude,
       distanceKm: Math.round(dist * 10) / 10,
       source: 'geotag', viewCount: pr.view_count ?? 0, placeName: p.name,
       placeNameSource: 'correction', duration: '', isShort: false,
       subscriberTier: tierForSubscriberCount(subs), subscriberCount: subs,
       publishedAt: pr.published_at ?? undefined,
+      isPartner: !!partner,
+      partnerThumbnail: partner?.avatar_url ?? null,
     })
   }
 

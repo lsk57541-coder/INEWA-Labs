@@ -9,6 +9,7 @@ export interface PendingChannel {
   channelId: string
   channelName: string
   subscriberCount: number
+  thumbnail: string | null
   accessToken: string
   refreshToken: string | null
 }

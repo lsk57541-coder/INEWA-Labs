@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
         .update({
           channel_name: channel.channelName,
           subscriber_count: channel.subscriberCount,
+          avatar_url: channel.thumbnail,  // NULL이던 기존 파트너도 재연동 시 채워짐
           youtube_access_token: tokens.access_token,
           youtube_refresh_token: tokens.refresh_token ?? null,
         })
@@ -79,6 +80,7 @@ export async function GET(request: NextRequest) {
     channelId: channel.channelId,
     channelName: channel.channelName,
     subscriberCount: channel.subscriberCount,
+    thumbnail: channel.thumbnail,
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token ?? null,
   }
