@@ -164,6 +164,7 @@ export interface VideoResult {
   subscriberTier: SubscriberTier | null
   subscriberCount: number
   startSec?: number // 모음영상 챕터 deep-link (해당 장소 구간부터 재생)
+  publishedAt?: string // 영상 업로드일(ISO). 날짜 필터용. videos.list snippet에서. 등록장소는 published_at 또는 미상.
 }
 
 // Fire-and-forget log of how each video's place name was resolved. Upserts by
@@ -278,6 +279,7 @@ interface YTVideoItem {
     title: string
     channelTitle: string
     channelId: string
+    publishedAt?: string
     thumbnails: { medium: { url: string } }
   }
   recordingDetails?: { location?: { latitude: number; longitude: number }; locationDescription?: string }
@@ -514,7 +516,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   if (nearby.length > 0) {
     const { data: vids } = await db
       .from('videos')
-      .select('youtube_id, title, thumbnail, channel, location_id')
+      .select('youtube_id, title, thumbnail, channel, location_id, published_at')
       .in('location_id', nearby.map((l) => l.id))
     const locById = new Map(nearby.map((l) => [l.id, l]))
     for (const v of vids ?? []) {
@@ -527,6 +529,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
         source: 'geotag', viewCount: 0, placeName: loc.name,
         placeNameSource: 'correction', duration: '', isShort: false,
         subscriberTier: null, subscriberCount: 0,
+        publishedAt: (v as { published_at?: string }).published_at ?? undefined,
       })
     }
   }
@@ -766,6 +769,7 @@ export async function GET(req: NextRequest) {
             aspectRatio: aspectRatioOf(v),
             subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
             subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
+            publishedAt: v.snippet.publishedAt,
           })
         }
       }),
@@ -826,6 +830,7 @@ export async function GET(req: NextRequest) {
               aspectRatio: aspectRatioOf(v),
               subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
               subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
+              publishedAt: v.snippet.publishedAt,
             })
           }
         }
@@ -903,6 +908,7 @@ export async function GET(req: NextRequest) {
           aspectRatio: aspectRatioOf(v),
           subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
           subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
+          publishedAt: v.snippet.publishedAt,
         })
         return true
       }
@@ -939,6 +945,7 @@ export async function GET(req: NextRequest) {
               subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
               subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
               startSec: r.startSec,
+              publishedAt: v.snippet.publishedAt,
             })
           }
         }

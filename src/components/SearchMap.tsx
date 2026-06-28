@@ -95,6 +95,70 @@ function formatViews(n: number): string {
   return `${n}회`
 }
 
+// "회" 없는 컴팩트 한글 숫자표기 (필터 슬라이더 라벨용). 1.2만 / 10만 / 100만 …
+function formatCountKo(n: number): string {
+  if (n >= 100_000_000) return `${n % 100_000_000 === 0 ? n / 100_000_000 : (n / 100_000_000).toFixed(1)}억`
+  if (n >= 10_000) return `${n % 10_000 === 0 ? n / 10_000 : (n / 10_000).toFixed(1)}만`
+  if (n >= 1_000) return `${n / 1_000}천`
+  return `${n}`
+}
+
+// 슬라이더 스냅 스텝: 선형은 작은 값 도달이 어려워서 단계로 매핑한다.
+// 1-2-3-5-7 / decade 로그식 — 0~수백만 범위를 촘촘하게(작은 값 구간일수록 더 정밀).
+const VIEW_STEPS = [
+  0, 1_000, 2_000, 3_000, 5_000, 7_000,
+  10_000, 20_000, 30_000, 50_000, 70_000,
+  100_000, 150_000, 200_000, 300_000, 500_000, 700_000,
+  1_000_000, 2_000_000, 3_000_000, 5_000_000, 10_000_000,
+]
+const SUB_STEPS = [
+  0, 1_000, 2_000, 3_000, 5_000, 7_000,
+  10_000, 20_000, 30_000, 50_000, 70_000,
+  100_000, 200_000, 300_000, 500_000, 700_000,
+  1_000_000, 2_000_000, 5_000_000, 10_000_000,
+]
+
+const DATE_RANGES = [
+  { key: 'all', label: '전체' },
+  { key: '1y', label: '최근 1년' },
+  { key: '3y', label: '최근 3년' },
+  { key: '5y', label: '최근 5년' },
+] as const
+type DateRange = (typeof DATE_RANGES)[number]['key']
+
+// 해당 구간의 하한 타임스탬프(ms). 'all'은 0(필터 없음).
+function dateCutoff(range: DateRange): number {
+  if (range === 'all') return 0
+  const years = range === '1y' ? 1 : range === '3y' ? 3 : 5
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - years)
+  return d.getTime()
+}
+
+// 값 → 스텝 인덱스(패널 열 때 적용값으로 슬라이더 위치 복원). 값보다 작거나 같은 가장 큰 스텝.
+function stepIndexForValue(steps: number[], value: number): number {
+  let idx = 0
+  for (let i = 0; i < steps.length; i++) if (steps[i] <= value) idx = i
+  return idx
+}
+
+// 거르기 판정(마커·리스트·[적용] 즉시렌더 공유). 롱폼/쇼츠는 항상 적용.
+// 조회수/구독자/날짜 3개 필터는, YT 통계가 없는(views=0 && subs=0) 등록장소·제주 데모를
+// "데이터 없음 → 항상 통과"로 둔다(1단계 임시정책). 2·3단계 backfill로 데이터 채우면 정상 적용됨.
+function passesFilters(
+  v: VideoResult,
+  f: { videoFilter: 'all' | 'short' | 'long'; minViews: number; minSubs: number; dateMin: number }
+): boolean {
+  if (f.videoFilter === 'short' && !v.isShort) return false
+  if (f.videoFilter === 'long' && v.isShort) return false
+  // 데이터 없는 등록장소/데모: 조회수/구독자/날짜 필터 전부 통과(항상 표시).
+  if (v.viewCount === 0 && v.subscriberCount === 0) return true
+  if (f.minViews > 0 && v.viewCount < f.minViews) return false
+  if (f.minSubs > 0 && v.subscriberCount < f.minSubs) return false
+  if (f.dateMin > 0 && v.publishedAt && new Date(v.publishedAt).getTime() < f.dateMin) return false
+  return true
+}
+
 // Parses the server-formatted "m:ss" / "h:mm:ss" duration string back into
 // seconds, purely for client-side sorting.
 function parseDurationLabel(duration: string): number {
@@ -459,6 +523,15 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [allResults, setAllResults] = useState<VideoResult[]>([])
   const [videoFilter, setVideoFilter] = useState<'all' | 'short' | 'long'>('all')
   const [sortBy, setSortBy] = useState<'views' | 'duration' | 'distance'>('views')
+  // 적용된 필터(거르기): 마커+리스트를 줄인다. 0/all = 미적용. 데이터 없는(0/미상) 등록장소는 항상 통과.
+  const [minViews, setMinViews] = useState(0)
+  const [minSubs, setMinSubs] = useState(0)
+  const [dateRange, setDateRange] = useState<DateRange>('all')
+  // 필터 패널 드래프트(편집 중) — [적용] 시 위 적용값으로 커밋, [초기화]는 드래프트를 0/all로.
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+  const [draftViewIdx, setDraftViewIdx] = useState(0)
+  const [draftSubIdx, setDraftSubIdx] = useState(0)
+  const [draftDateRange, setDraftDateRange] = useState<DateRange>('all')
   const [channelQuery, setChannelQuery] = useState('')
   const [channelSuggestions, setChannelSuggestions] = useState<ChannelSuggestion[]>([])
   const [channelSearching, setChannelSearching] = useState(false)
@@ -865,7 +938,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       const videos = json.results ?? []
       setAllResults(videos)
       setVideoFilter('all')
-      renderMarkers(groupByLocation(videos, clusterThresholdKm(radius)), pos, favoriteIds, visitedIds, 0.5, searchMode === 'channel')
+      // 새 검색은 필터 초기화. 마커 렌더는 아래 useEffect가 filteredResults 기준으로 처리한다.
+      // (center만 여기서 세팅 — 첫 검색에서 effect가 그릴 수 있도록.)
+      setMinViews(0); setMinSubs(0); setDateRange('all')
+      lastCenterRef.current = pos
 
       // Collapse the options panel out of the way and open the results sheet
       // so the list is visible right away — the search bar itself (with the
@@ -903,14 +979,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     const next = new Set(favoriteIds)
     if (wasFavorited) next.delete(v.videoId)
     else next.add(v.videoId)
-    setFavoriteIds(next)
-    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults, clusterThresholdKm(radius)), lastCenterRef.current, next, visitedIds, currentSheetFraction)
+    setFavoriteIds(next)   // 마커 갱신은 useEffect(favoriteIds 의존)가 처리
 
     try {
       await toggleFavorite(toFavoritePayload(v))
     } catch (e) {
       setFavoriteIds(favoriteIds)
-      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults, clusterThresholdKm(radius)), lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction)
       setError(e instanceof Error ? e.message : '찜하기 실패')
     }
   }
@@ -921,14 +995,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     const next = new Set(visitedIds)
     if (wasVisited) next.delete(v.videoId)
     else next.add(v.videoId)
-    setVisitedIds(next)
-    if (lastCenterRef.current) renderMarkers(groupByLocation(allResults, clusterThresholdKm(radius)), lastCenterRef.current, favoriteIds, next, currentSheetFraction)
+    setVisitedIds(next)   // 마커 갱신은 useEffect(visitedIds 의존)가 처리
 
     try {
       await toggleVisited(toFavoritePayload(v))
     } catch (e) {
       setVisitedIds(visitedIds)
-      if (lastCenterRef.current) renderMarkers(groupByLocation(allResults, clusterThresholdKm(radius)), lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction)
       setError(e instanceof Error ? e.message : '표시 실패')
     }
   }
@@ -1093,18 +1165,61 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     setFavoritesOverlayOpen(true)
   }
 
-  const filteredResults = allResults
-    .filter((v) => {
-      if (videoFilter === 'short') return v.isShort
-      if (videoFilter === 'long') return !v.isShort
-      return true
-    })
+  // 거르기(필터): 마커+리스트 공통 집합. 정렬 전 단계라 마커 그룹핑에 그대로 쓴다.
+  const filteredResults = allResults.filter((v) =>
+    passesFilters(v, { videoFilter, minViews, minSubs, dateMin: dateCutoff(dateRange) })
+  )
+
+  // 리스트 표시는 정렬 적용본. (마커는 filteredResults를 써서 정렬 변경 시 불필요 재렌더 방지.)
+  const sortedResults = filteredResults
     .slice()
     .sort((a, b) => {
       if (sortBy === 'distance') return a.distanceKm - b.distanceKm
       if (sortBy === 'duration') return parseDurationLabel(b.duration) - parseDurationLabel(a.duration)
       return b.viewCount - a.viewCount
     })
+
+  // 적용 필터값이 기본이 아니면 활성 — 아이콘 배지/카운트 표시용.
+  const filterActive = minViews > 0 || minSubs > 0 || dateRange !== 'all'
+
+  // 패널 열 때 드래프트를 현재 적용값으로 동기화(슬라이더 위치 복원).
+  const openFilterPanel = () => {
+    setDraftViewIdx(stepIndexForValue(VIEW_STEPS, minViews))
+    setDraftSubIdx(stepIndexForValue(SUB_STEPS, minSubs))
+    setDraftDateRange(dateRange)
+    setFilterPanelOpen(true)
+  }
+
+  // [초기화]: 드래프트만 기본으로(아직 적용 안 함 — [적용] 눌러야 반영).
+  const resetDraftFilters = () => {
+    setDraftViewIdx(0); setDraftSubIdx(0); setDraftDateRange('all')
+  }
+
+  // [적용]: 드래프트 → 적용값 커밋 + 패널 닫기. 마커는 아래 useEffect가 갱신(추가 API 호출 없음).
+  const applyFilters = () => {
+    setMinViews(VIEW_STEPS[draftViewIdx])
+    setMinSubs(SUB_STEPS[draftSubIdx])
+    setDateRange(draftDateRange)
+    setFilterPanelOpen(false)
+  }
+
+  // ── 마커 단일 렌더 소스 ──
+  // 검색/조회수·구독자·날짜/롱폼·쇼츠/찜·가본곳/신고삭제 등 무엇이 바뀌든, 마커는 항상
+  // filteredResults(= 리스트 sortedResults와 동일 집합)를 반영해 다시 그린다. (흩어진 명령형
+  // 호출을 없애 마커-리스트 불일치를 제거.) center 미설정(검색 전)이면 건너뜀.
+  useEffect(() => {
+    if (!lastCenterRef.current) return
+    renderMarkers(
+      groupByLocation(filteredResults, clusterThresholdKm(radius)),
+      lastCenterRef.current,
+      favoriteIds,
+      visitedIds,
+      currentSheetFraction,
+      searchMode === 'channel'
+    )
+    // filteredResults는 아래 입력들로 파생되므로 그 입력들을 의존성으로 둔다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allResults, videoFilter, minViews, minSubs, dateRange, favoriteIds, visitedIds])
 
   // Keep the locate-me button clear of whichever bottom sheet is currently
   // showing (results list or a marker group's video list), instead of
@@ -1165,6 +1280,101 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       >
         ☰
       </button>
+
+      {/* 결과 필터 버튼 (우측 상단) — 결과가 있을 때만. 활성 시 "전체→남은" 개수 표시. */}
+      {allResults.length > 0 && (
+        <button
+          onClick={openFilterPanel}
+          title="검색결과 필터"
+          aria-label="검색결과 필터"
+          className={`absolute top-3 right-3 z-20 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition ${filterActive ? 'gap-1.5 px-3' : 'w-10'}`}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={filterActive ? 'text-blue-600' : 'text-gray-700'}>
+            <line x1="4" y1="7" x2="20" y2="7" />
+            <circle cx="9" cy="7" r="2.4" fill="white" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <circle cx="15" cy="12" r="2.4" fill="white" />
+            <line x1="4" y1="17" x2="20" y2="17" />
+            <circle cx="11" cy="17" r="2.4" fill="white" />
+          </svg>
+          {filterActive && (
+            <span className="text-xs font-bold text-blue-600 tabular-nums">{allResults.length}→{filteredResults.length}</span>
+          )}
+        </button>
+      )}
+
+      {/* 필터 패널 (슬라이드업 시트) */}
+      {filterPanelOpen && (
+        <div className="absolute inset-0 z-30 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setFilterPanelOpen(false)} />
+          <div className="relative bg-white rounded-t-2xl shadow-2xl px-5 pt-3 pb-6 max-h-[80dvh] overflow-y-auto">
+            <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mb-3" />
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-bold text-gray-900">필터</h3>
+              <button onClick={() => setFilterPanelOpen(false)} aria-label="닫기" className="text-gray-400 text-xl leading-none px-1">✕</button>
+            </div>
+
+            {/* 최소 조회수 */}
+            <div className="mb-5">
+              <div className="flex justify-between items-baseline mb-2">
+                <label className="text-sm font-semibold text-gray-800">최소 조회수</label>
+                <span className="text-sm font-bold text-blue-600">{draftViewIdx === 0 ? '전체' : `${formatCountKo(VIEW_STEPS[draftViewIdx])} 이상`}</span>
+              </div>
+              <input
+                type="range" min={0} max={VIEW_STEPS.length - 1} step={1} value={draftViewIdx}
+                onChange={(e) => setDraftViewIdx(Number(e.target.value))}
+                className="w-full h-2 accent-blue-600"
+              />
+            </div>
+
+            {/* 최소 구독자수 */}
+            <div className="mb-5">
+              <div className="flex justify-between items-baseline mb-2">
+                <label className="text-sm font-semibold text-gray-800">최소 구독자수</label>
+                <span className="text-sm font-bold text-blue-600">{draftSubIdx === 0 ? '전체' : `${formatCountKo(SUB_STEPS[draftSubIdx])} 이상`}</span>
+              </div>
+              <input
+                type="range" min={0} max={SUB_STEPS.length - 1} step={1} value={draftSubIdx}
+                onChange={(e) => setDraftSubIdx(Number(e.target.value))}
+                className="w-full h-2 accent-blue-600"
+              />
+            </div>
+
+            {/* 업로드 날짜 (구간 칩) */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-800 mb-2">업로드 날짜</label>
+              <div className="flex gap-2">
+                {DATE_RANGES.map((r) => (
+                  <button
+                    key={r.key}
+                    onClick={() => setDraftDateRange(r.key)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${draftDateRange === r.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 액션 */}
+            <div className="flex gap-2">
+              <button
+                onClick={resetDraftFilters}
+                className="flex-1 py-3 rounded-lg text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
+              >
+                초기화
+              </button>
+              <button
+                onClick={applyFilters}
+                className="flex-[2] py-3 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition"
+              >
+                적용
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <MenuDrawer
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
@@ -1633,9 +1843,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 )}
               </div>
             )}
-            {filteredResults.map((v) => (
+            {sortedResults.map((v) => (
               <div
-                key={v.videoId}
+                // 모음영상은 같은 videoId가 여러 좌표로 중복 → videoId만으론 React key 충돌이 나서
+                // 필터로 줄 때 옛 DOM이 안 지워졌음. videoId+좌표로 고유화.
+                key={`${v.videoId}:${v.lat}:${v.lng}`}
                 className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition border-b border-border last:border-0"
               >
                 <div className="relative shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
@@ -1731,7 +1943,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           <div className="flex-1 overflow-y-auto">
             {selectedGroup.videos.map((v) => (
               <div
-                key={v.videoId}
+                key={`${v.videoId}:${v.lat}:${v.lng}`}
                 className={`flex gap-3 px-3 py-3.5 transition border-b border-border last:border-0 group ${
                   selectedVideo?.videoId === v.videoId
                     ? 'border-l-4 border-blue-500 bg-blue-50'
