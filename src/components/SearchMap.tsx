@@ -594,7 +594,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
   const initMap = useCallback(() => {
     if (!mapRef.current || !window.kakao) return
+    if (mapInstanceRef.current) { setMapReady(true); return } // 같은 마운트 내 중복 호출 가드
     kakao.maps.load(() => {
+      if (mapInstanceRef.current) { setMapReady(true); return }
       mapInstanceRef.current = new kakao.maps.Map(mapRef.current!, {
         center: new kakao.maps.LatLng(37.5665, 126.978),
         level: 7,
@@ -602,6 +604,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       setMapReady(true)
     })
   }, [])
+
+  // 관리자→메인 등 클라이언트 라우팅으로 재진입하면 SDK가 이미 로드돼 있어 <Script onLoad>가
+  // 다시 안 불린다 → 지도가 "불러오는 중"에서 멈춤. 마운트 시 한 번 더 초기화 시도한다.
+  // (initMap 내부에 !window.kakao 가드가 있어, 최초 방문은 no-op → Script onLoad가 처리.)
+  useEffect(() => {
+    initMap()
+  }, [initMap])
 
   // Show / update the red center marker whenever position or map readiness changes
   useEffect(() => {
