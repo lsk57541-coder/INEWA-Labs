@@ -335,6 +335,15 @@ function getDemoPartner(channel: string): { thumbnail: string } | null {
   return DEMO_PARTNERS[channel] ?? null
 }
 
+// 파트너 채널 표식 — 마커 금색(#FFD700)과 통일한 작은 칩.
+function PartnerChip() {
+  return (
+    <span className="ml-1 align-[1px] inline-block rounded bg-[#FFD700] px-1 py-px text-[9px] font-extrabold leading-none text-[#5c4600] tracking-wide">
+      PARTNER
+    </span>
+  )
+}
+
 // 찜/가본곳 식별키. 모음영상은 같은 videoId가 여러 좌표(가게)로 뜨므로 videoId만으론
 // 한 곳 찜이 전체로 번진다 → videoId+좌표로 장소별 구분(좌표 5자리=약 1m, DB 라운드트립 안전).
 function placeKey(videoId: string, lat: number, lng: number): string {
@@ -1159,6 +1168,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     .sort((a, b) => {
       if (sortBy === 'distance') return a.distanceKm - b.distanceKm
       if (sortBy === 'duration') return parseDurationLabel(b.duration) - parseDurationLabel(a.duration)
+      // 기본(조회수) 정렬에서만 파트너 영상 우선노출. 사용자가 정렬 탭을 누르면(거리/길이) 해제.
+      const ap = getDemoPartner(a.channel) ? 1 : 0
+      const bp = getDemoPartner(b.channel) ? 1 : 0
+      if (ap !== bp) return bp - ap
       return b.viewCount - a.viewCount
     })
 
@@ -1855,8 +1868,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-xs text-gray-400 truncate flex-1">
-                      {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {formatViews(v.viewCount)}
-                      {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
+                      {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel && <>{v.channel}{getDemoPartner(v.channel) && <PartnerChip />} · </>}{formatViews(v.viewCount)}
                     </p>
                     <a
                       href={navUrl(v, userPos ? { ...userPos, label: posLabel } : null)}
@@ -1965,11 +1977,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">
-                    {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel}
+                    {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel}{getDemoPartner(v.channel) && <PartnerChip />}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {formatViews(v.viewCount)}
-                    {v.source === 'ai' && <span className="ml-1 text-purple-400">AI</span>}
                   </p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <a
