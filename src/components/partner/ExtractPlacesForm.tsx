@@ -198,8 +198,8 @@ export default function ExtractPlacesForm() {
     return (
       <div className="text-center py-12">
         <p className="text-2xl mb-2">✓</p>
-        <p className="font-medium mb-1">등록 요청이 완료됐습니다.</p>
-        <p className="text-sm text-gray-500 mb-1">검토 후 1~2 영업일 내 지도에 표시됩니다.</p>
+        <p className="font-medium mb-1">등록 완료!</p>
+        <p className="text-sm text-gray-500 mb-1">추가한 장소가 지도에 바로 반영됐어요.</p>
         {submitResult.succeeded > 0 && (
           <p className="text-xs text-gray-400 mt-1">{submitResult.succeeded}개 요청 완료</p>
         )}
