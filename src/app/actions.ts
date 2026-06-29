@@ -5,6 +5,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { searchPlaceInfo, reverseGeocode, type PlaceDetails } from '@/lib/geocode'
 import { PLACENAME_SOURCES, type MinConfidenceSource } from '@/lib/placeNameSources'
+import { sendInquiryNotificationEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -319,6 +320,23 @@ export async function submitInquiry(input: { title: string; content: string }): 
     // status 컬럼은 DB에 남아있지만(삭제 안 함) 미사용 — insert 시 건드리지 않는다.
   })
   if (error) throw new Error(error.message)
+
+  // 관리자 이메일 알림(베스트에포트) — 실패해도 위 저장/사용자 흐름은 유지(에러 throw 안 함).
+  try {
+    // 전역 미답변 건수는 service role로 집계(제출자는 RLS상 본인 문의만 보이므로).
+    let pendingCount: number | null = null
+    const sUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (sUrl && sKey) {
+      const admin = createServiceClient(sUrl, sKey)
+      const { count } = await admin
+        .from('inquiries').select('id', { count: 'exact', head: true }).is('reply', null)
+      pendingCount = count ?? null
+    }
+    await sendInquiryNotificationEmail({ nickname: profile?.nickname ?? null, title, content, pendingCount })
+  } catch (e) {
+    console.error('[submitInquiry] notification email failed:', e)
+  }
 }
 
 // 관리자 — 전체 문의. RLS "admin can read inquiries"로 통과(requireAdmin이 role 확인).

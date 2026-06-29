@@ -2,7 +2,13 @@ import { Resend } from 'resend'
 
 const CONTACT_EMAIL = 'inewalabs@gmail.com'
 const DASHBOARD_URL = 'https://aimaptube.vercel.app/partner/dashboard'
+const ADMIN_INQUIRIES_URL = 'https://aimaptube.vercel.app/admin/inquiries'
 const LOGO_URL = 'https://aimaptube.vercel.app/icon-192.png'
+
+// 사용자 자유입력(제목·내용·닉네임)을 메일 HTML에 넣기 전 이스케이프(깨짐·주입 방지).
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
 
 // 이메일 클라이언트 호환을 위해 테이블 기반 인라인 스타일. 로고는 절대 URL(SVG/인라인 불가).
 // 네이비 배경 + 로고 + MAPTUBE + 코랄선 + 슬로건 — 웹/메뉴/OG와 통일.
@@ -17,6 +23,39 @@ function brandHeader(): string {
       </td></tr>
     </table>
     <div style="height:16px"></div>`
+}
+
+// 새 문의 도착 시 관리자(CONTACT_EMAIL)에게 알림. 호출부(submitInquiry)에서 try/catch로 감싸
+// 베스트에포트로 보낸다 — 실패해도 문의 저장/사용자 흐름은 막지 않는다.
+export async function sendInquiryNotificationEmail(args: {
+  nickname: string | null
+  title: string
+  content: string
+  pendingCount: number | null // 현재 미답변 건수(reply IS NULL). 없으면 줄 생략.
+}) {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return
+
+  const { nickname, title, content, pendingCount } = args
+  const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+  const contentHtml = escapeHtml(content).replace(/\n/g, '<br>')
+
+  const resend = new Resend(apiKey)
+  await resend.emails.send({
+    from: 'AI맵튜브 <onboarding@resend.dev>',
+    to: CONTACT_EMAIL,
+    subject: `[MAPTUBE] 새 문의 도착 — ${title}`,
+    html: `
+      ${brandHeader()}
+      <p><strong>새 문의가 도착했어요.</strong></p>
+      <p>보낸 사람: ${escapeHtml(nickname ?? '(알 수 없음)')}</p>
+      <p>제목: ${escapeHtml(title)}</p>
+      <p>내용:<br>${contentHtml}</p>
+      <p>받은 시각: ${now}</p>
+      ${pendingCount != null ? `<p style="color:#dc2626;font-weight:700">현재 미답변 ${pendingCount}건</p>` : ''}
+      <p><a href="${ADMIN_INQUIRIES_URL}">관리자 문의 페이지에서 답장하기</a></p>
+    `,
+  })
 }
 
 export async function sendPartnerApplicationEmail(to: string, channelName: string) {
