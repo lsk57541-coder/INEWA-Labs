@@ -23,6 +23,7 @@ import FavoritesOverlay from '@/components/FavoritesOverlay'
 import OnboardingOverlay from '@/components/OnboardingOverlay'
 import GuideOverlay from '@/components/GuideOverlay'
 import InquiryOverlay from '@/components/InquiryOverlay'
+import LoginPromptModal from '@/components/LoginPromptModal'
 import SearchResultModal from '@/components/SearchResultModal'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
@@ -560,6 +561,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [favoritesOverlayOpen, setFavoritesOverlayOpen] = useState(false)
   const [guideOverlayOpen, setGuideOverlayOpen] = useState(false)
   const [inquiryOverlayOpen, setInquiryOverlayOpen] = useState(false)
+  // 비로그인 로그인 유도 모달. null=닫힘, 문자열=떠 있고 어떤 기능 때문인지(예: "찜하기").
+  const [loginPrompt, setLoginPrompt] = useState<string | null>(null)
   const [reportTarget, setReportTarget] = useState<VideoResult | null>(null)
   const [reportReason, setReportReason] = useState<ReportReason>('wrong_address')
   const [reportFixAddress, setReportFixAddress] = useState(true)
@@ -1003,7 +1006,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   }
 
   const handleToggleFavorite = async (v: VideoResult) => {
-    if (!user) { setError('로그인이 필요합니다.'); return }
+    if (!user) { setLoginPrompt('찜하기'); return }
     const key = placeKey(v.videoId, v.lat, v.lng)
     const wasFavorited = favoriteIds.has(key)
     const next = new Set(favoriteIds)
@@ -1020,7 +1023,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   }
 
   const handleToggleVisitedVideo = async (v: VideoResult) => {
-    if (!user) { setError('로그인이 필요합니다.'); return }
+    if (!user) { setLoginPrompt('가본 곳 저장'); return }
     const key = placeKey(v.videoId, v.lat, v.lng)
     const wasVisited = visitedIds.has(key)
     const next = new Set(visitedIds)
@@ -1133,7 +1136,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   }
 
   const handleReport = async (v: VideoResult) => {
-    if (!user) { setError('로그인이 필요합니다.'); return }
+    if (!user) { setLoginPrompt('신고하기'); return }
     if (reportedIds.has(v.videoId)) {
       const next = new Set(reportedIds)
       next.delete(v.videoId)
@@ -1194,15 +1197,15 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   }
 
   const handleShowFavorites = () => {
-    if (!user) { setError('로그인이 필요합니다.'); return }
+    if (!user) { setLoginPrompt('관심목록 보기'); return }
     setFavoritesOverlayOpen(true)
   }
 
   const handleShowGuide = () => setGuideOverlayOpen(true) // 사용법 — 로그인 불필요
 
-  // 문의하기 — 찜·가본곳과 동일한 비로그인 게이팅(같은 error 안내 패턴).
+  // 문의하기 — 찜·가본곳과 동일한 비로그인 게이팅(공용 로그인 유도 모달).
   const handleShowInquiry = () => {
-    if (!user) { setError('로그인이 필요합니다.'); return }
+    if (!user) { setLoginPrompt('문의하기'); return }
     setInquiryOverlayOpen(true)
   }
 
@@ -1431,6 +1434,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       />
       <GuideOverlay open={guideOverlayOpen} onClose={() => setGuideOverlayOpen(false)} />
       <InquiryOverlay open={inquiryOverlayOpen} onClose={() => setInquiryOverlayOpen(false)} />
+      <LoginPromptModal open={loginPrompt !== null} feature={loginPrompt ?? undefined} onClose={() => setLoginPrompt(null)} />
       <FavoritesOverlay
         open={favoritesOverlayOpen}
         onClose={() => setFavoritesOverlayOpen(false)}
