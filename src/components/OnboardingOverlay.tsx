@@ -7,7 +7,10 @@ const PADDING = 10
 
 interface OnboardingOverlayProps {
   searchBarRef: RefObject<HTMLDivElement | null>
-  hamburgerRef: RefObject<HTMLButtonElement | null>
+  hamburgerRef: RefObject<HTMLButtonElement | null>        // 모바일 플로팅 ☰ (md:hidden)
+  hamburgerInlineRef: RefObject<HTMLButtonElement | null>  // 데스크톱 검색패널 내부 인라인 ☰ (hidden md:flex)
+  channelTabRef: RefObject<HTMLButtonElement | null>       // "🎙 채널 검색" 탭(검색패널 확장 시 노출)
+  onChannelStep?: () => void                               // 채널 Step 진입 시 검색패널 펼침 요청
 }
 
 interface SpotlightRect {
@@ -19,24 +22,41 @@ interface SpotlightRect {
   right: number
 }
 
+// 모바일/데스크톱에서 같은 역할의 버튼이 둘(하나는 숨김)일 때 실제로 보이는 쪽을 고른다.
+// display:none 요소는 getBoundingClientRect가 0,0,0,0 → width/height 0으로 걸러냄.
+function firstVisible(...els: (HTMLElement | null)[]): HTMLElement | null {
+  for (const el of els) {
+    if (!el) continue
+    const r = el.getBoundingClientRect()
+    if (r.width > 0 && r.height > 0) return el
+  }
+  return null
+}
+
 const STEPS = [
   {
     targetKey: 'search' as const,
-    title: '키워드나 지역으로 검색해보세요',
+    title: '지역이나 키워드로 검색해보세요',
     description: '유튜버가 다녀온 맛집, 카페, 여행지를\n바로 지도에서 찾을 수 있어요',
     examples: ['강남 맛집', '홍대 카페', '제주 숙소'],
     tooltipDir: 'below' as const,
   },
   {
+    targetKey: 'channelTab' as const,
+    title: '유튜브 채널명으로도 검색돼요',
+    description: '채널명으로 검색하면, 그 채널이 소개한 장소가\n전국 지도에 한눈에 떠요 — 네이버·카카오엔 없는 기능!',
+    tooltipDir: 'below' as const,
+  },
+  {
     targetKey: 'none' as const,
     title: '마커를 탭하면 영상을 볼 수 있어요',
-    description: '지도 위 빨간 핀을 클릭하면\n해당 장소의 유튜브 영상이 바로 열려요',
+    description: '지도 위 핀을 탭하면 그 장소가 나온\n유튜브 영상이 바로 열려요',
     tooltipDir: 'below-marker' as const,
   },
   {
     targetKey: 'hamburger' as const,
-    title: '관심 장소는 여기서 저장해요',
-    description: '☰ 메뉴 → 관심목록에서\n저장한 장소를 언제든 다시 볼 수 있어요',
+    title: '찜·가본곳·사용법은 여기 메뉴에 있어요',
+    description: '☰ 메뉴에서 관심목록, 가본 곳,\n사용법을 언제든 다시 볼 수 있어요',
     tooltipDir: 'right' as const,
   },
 ]
@@ -56,7 +76,13 @@ function MapPinIcon() {
   )
 }
 
-export default function OnboardingOverlay({ searchBarRef, hamburgerRef }: OnboardingOverlayProps) {
+export default function OnboardingOverlay({
+  searchBarRef,
+  hamburgerRef,
+  hamburgerInlineRef,
+  channelTabRef,
+  onChannelStep,
+}: OnboardingOverlayProps) {
   const [visible, setVisible] = useState(false)
   const [step, setStep] = useState(0)
   const [rect, setRect] = useState<SpotlightRect | null>(null)
@@ -67,24 +93,41 @@ export default function OnboardingOverlay({ searchBarRef, hamburgerRef }: Onboar
     }
   }, [])
 
+  // 채널 Step에선 검색패널이 펼쳐져 있어야 "🎙 채널 검색" 탭이 보이므로 부모에 펼침 요청.
+  // (접혀 있으면 아래 updateRect가 rect=null로 떨어져 중앙 폴백되니 안전엔 문제 없음.)
+  useEffect(() => {
+    if (visible && STEPS[step]?.targetKey === 'channelTab') onChannelStep?.()
+  }, [visible, step, onChannelStep])
+
   const updateRect = useCallback(() => {
     const key = STEPS[step]?.targetKey
-    if (key === 'search') {
-      const r = searchBarRef.current?.getBoundingClientRect()
-      setRect(r ? { left: r.left, top: r.top, width: r.width, height: r.height, bottom: r.bottom, right: r.right } : null)
-    } else if (key === 'hamburger') {
-      const r = hamburgerRef.current?.getBoundingClientRect()
-      setRect(r ? { left: r.left, top: r.top, width: r.width, height: r.height, bottom: r.bottom, right: r.right } : null)
-    } else {
-      setRect(null)
-    }
-  }, [step, searchBarRef, hamburgerRef])
+    let el: HTMLElement | null = null
+    if (key === 'search') el = searchBarRef.current
+    else if (key === 'channelTab') el = channelTabRef.current
+    else if (key === 'hamburger') el = firstVisible(hamburgerRef.current, hamburgerInlineRef.current)
+
+    const r = el?.getBoundingClientRect()
+    // 타겟이 없거나 보이지 않으면(width/height 0) rect=null → 스포트라이트 없이 중앙 모드 폴백.
+    // 데스크톱에서 숨김 햄버거를 가리켜 좌상단(0,0)으로 튀던 결함을 이 가드가 일반적으로 막는다.
+    setRect(
+      r && r.width > 0 && r.height > 0
+        ? { left: r.left, top: r.top, width: r.width, height: r.height, bottom: r.bottom, right: r.right }
+        : null
+    )
+  }, [step, searchBarRef, hamburgerRef, hamburgerInlineRef, channelTabRef])
 
   useEffect(() => {
     if (!visible) return
     updateRect()
+    // 검색패널 펼침(max-h transition 200ms) 등 레이아웃이 안정된 뒤 한 번 더 측정.
+    const t1 = setTimeout(updateRect, 60)
+    const t2 = setTimeout(updateRect, 260)
     window.addEventListener('resize', updateRect)
-    return () => window.removeEventListener('resize', updateRect)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      window.removeEventListener('resize', updateRect)
+    }
   }, [visible, updateRect])
 
   const finish = useCallback(() => {
@@ -116,7 +159,8 @@ export default function OnboardingOverlay({ searchBarRef, hamburgerRef }: Onboar
       left: '50%',
       transform: 'translateX(-50%)',
     }
-  } else if (!rect || current.tooltipDir === ('center' as string)) {
+  } else if (!rect) {
+    // 타겟 없음/비가시 → 중앙 폴백(기존 마커 Step과 동일 처리).
     tooltipStyle = { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
   } else if (current.tooltipDir === 'below') {
     const left = Math.max(12, Math.min(rect.left, vw - TOOLTIP_W - 12))
@@ -150,8 +194,8 @@ export default function OnboardingOverlay({ searchBarRef, hamburgerRef }: Onboar
         <rect width="100%" height="100%" fill="rgba(0,0,0,0.68)" mask="url(#ob-mask)" />
       </svg>
 
-      {/* Step 2: example marker with pulse, above the dim */}
-      {step === 1 && (
+      {/* 마커 Step: 펄스 도는 예시 핀(딤 위). targetKey 'none'/below-marker일 때만. */}
+      {current.tooltipDir === 'below-marker' && (
         <div
           className="fixed pointer-events-none z-[61]"
           style={{ top: '36%', left: '50%', transform: 'translate(-50%, -100%)' }}

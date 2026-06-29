@@ -570,6 +570,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const sheetDragStartY = useRef<number | null>(null)
   const searchBarRef = useRef<HTMLDivElement>(null)
   const hamburgerRef = useRef<HTMLButtonElement>(null)
+  const hamburgerInlineRef = useRef<HTMLButtonElement>(null) // 데스크톱 검색패널 내부 ☰ (온보딩 타겟)
+  const channelTabRef = useRef<HTMLButtonElement>(null)      // "🎙 채널 검색" 탭 (온보딩 Step2 타겟)
   const [onboardingKey, setOnboardingKey] = useState(0)
 
   const handleRestartOnboarding = useCallback(() => {
@@ -1427,7 +1429,14 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           if (match) setSelectedVideo(match)
         }}
       />
-      <OnboardingOverlay key={onboardingKey} searchBarRef={searchBarRef} hamburgerRef={hamburgerRef} />
+      <OnboardingOverlay
+        key={onboardingKey}
+        searchBarRef={searchBarRef}
+        hamburgerRef={hamburgerRef}
+        hamburgerInlineRef={hamburgerInlineRef}
+        channelTabRef={channelTabRef}
+        onChannelStep={() => setOptionsOpen(true)}
+      />
 
       {/* Panel backdrop — tap map to collapse expanded panel */}
       {optionsOpen && (
@@ -1444,6 +1453,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       >
         {/* 데스크톱: 좌측 패널 헤더의 인라인 햄버거(모바일은 플로팅 햄버거 사용) */}
         <button
+          ref={hamburgerInlineRef}
           onClick={() => setMenuOpen(true)}
           aria-label="메뉴"
           className="hidden md:flex shrink-0 w-10 h-10 bg-white rounded-full shadow-lg items-center justify-center text-lg hover:bg-gray-50 transition"
@@ -1545,6 +1555,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 🔎 키워드 검색
               </button>
               <button
+                ref={channelTabRef}
                 onClick={() => setSearchMode('channel')}
                 className={`flex-1 text-xs py-1.5 rounded-full font-medium transition ${
                   searchMode === 'channel' ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
