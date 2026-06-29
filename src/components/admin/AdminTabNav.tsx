@@ -5,6 +5,7 @@ const TABS = [
   { key: '파트너', href: '/admin/partners', label: '파트너' },
   { key: '검토', href: '/admin/places', label: '검토' },
   { key: '아웃리치', href: '/admin/outreach', label: '아웃리치' },
+  { key: '문의', href: '/admin/inquiries', label: '문의' },
   { key: '영상등록', href: '/admin/locations/new/bulk', label: '영상등록' },
 ] as const
 

@@ -281,6 +281,61 @@ export async function getFavorites(): Promise<FavoriteVideo[]> {
   return data ?? []
 }
 
+// ===== 문의하기(inquiries) =====
+export interface Inquiry {
+  id: string
+  user_id: string | null
+  nickname: string | null
+  title: string
+  content: string
+  status: 'unread' | 'read'
+  created_at: string
+}
+
+// 사용자 문의 접수. RLS "insert own inquiry"(auth.uid()=user_id) 통과를 위해 user_id를
+// 현재 로그인 사용자로 명시. nickname은 제출 시점 값을 profiles에서 읽어 비정규화 저장.
+export async function submitInquiry(input: { title: string; content: string }): Promise<void> {
+  const title = input.title.trim()
+  const content = input.content.trim()
+  if (!title) throw new Error('제목을 입력해주세요.')
+  if (!content) throw new Error('내용을 입력해주세요.')
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('로그인이 필요합니다.')
+
+  const { data: profile } = await supabase
+    .from('profiles').select('nickname').eq('id', user.id).single()
+
+  const { error } = await supabase.from('inquiries').insert({
+    user_id: user.id,                 // RLS: auth.uid() = user_id 여야 insert 통과
+    nickname: profile?.nickname ?? null,
+    title,
+    content,
+    // status는 DB 기본값 'unread'
+  })
+  if (error) throw new Error(error.message)
+}
+
+// 관리자 — 전체 문의 최신순. RLS "admin can read inquiries"로 통과(requireAdmin이 role 확인).
+export async function getInquiries(): Promise<Inquiry[]> {
+  const supabase = await requireAdmin()
+  const { data, error } = await supabase
+    .from('inquiries')
+    .select('id, user_id, nickname, title, content, status, created_at')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Inquiry[]
+}
+
+// 관리자 — 읽음/안읽음 토글. RLS "admin can update inquiries"로 통과.
+export async function setInquiryStatus(id: string, status: 'unread' | 'read'): Promise<void> {
+  const supabase = await requireAdmin()
+  const { error } = await supabase.from('inquiries').update({ status }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/inquiries')
+}
+
 export async function toggleVisited(video: FavoriteVideo): Promise<{ visited: boolean }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

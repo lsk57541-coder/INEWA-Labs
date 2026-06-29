@@ -22,6 +22,7 @@ import MenuDrawer, { type MenuUser } from '@/components/MenuDrawer'
 import FavoritesOverlay from '@/components/FavoritesOverlay'
 import OnboardingOverlay from '@/components/OnboardingOverlay'
 import GuideOverlay from '@/components/GuideOverlay'
+import InquiryOverlay from '@/components/InquiryOverlay'
 import SearchResultModal from '@/components/SearchResultModal'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
@@ -558,6 +559,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
   const [favoritesOverlayOpen, setFavoritesOverlayOpen] = useState(false)
   const [guideOverlayOpen, setGuideOverlayOpen] = useState(false)
+  const [inquiryOverlayOpen, setInquiryOverlayOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<VideoResult | null>(null)
   const [reportReason, setReportReason] = useState<ReportReason>('wrong_address')
   const [reportFixAddress, setReportFixAddress] = useState(true)
@@ -1198,6 +1200,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
   const handleShowGuide = () => setGuideOverlayOpen(true) // 사용법 — 로그인 불필요
 
+  // 문의하기 — 찜·가본곳과 동일한 비로그인 게이팅(같은 error 안내 패턴).
+  const handleShowInquiry = () => {
+    if (!user) { setError('로그인이 필요합니다.'); return }
+    setInquiryOverlayOpen(true)
+  }
+
   // 거르기(필터): 마커+리스트 공통 집합. 정렬 전 단계라 마커 그룹핑에 그대로 쓴다.
   const filteredResults = allResults.filter((v) =>
     passesFilters(v, { videoFilter, minViews, minSubs, dateMin: dateCutoff(dateRange) })
@@ -1419,8 +1427,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         onShowFavorites={handleShowFavorites}
         onRestartOnboarding={handleRestartOnboarding}
         onShowGuide={handleShowGuide}
+        onShowInquiry={handleShowInquiry}
       />
       <GuideOverlay open={guideOverlayOpen} onClose={() => setGuideOverlayOpen(false)} />
+      <InquiryOverlay open={inquiryOverlayOpen} onClose={() => setInquiryOverlayOpen(false)} />
       <FavoritesOverlay
         open={favoritesOverlayOpen}
         onClose={() => setFavoritesOverlayOpen(false)}

@@ -20,6 +20,7 @@ interface MenuDrawerProps {
   onShowFavorites: () => void
   onRestartOnboarding: () => void
   onShowGuide: () => void
+  onShowInquiry: () => void
 }
 
 function HeartIcon() {
@@ -48,6 +49,15 @@ function CompassIcon() {
   )
 }
 
+function MailIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-10 5L2 7" />
+    </svg>
+  )
+}
+
 function BookIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -66,7 +76,7 @@ function SettingsIcon() {
   )
 }
 
-export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRestartOnboarding, onShowGuide }: MenuDrawerProps) {
+export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRestartOnboarding, onShowGuide, onShowInquiry }: MenuDrawerProps) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -178,6 +188,14 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
           >
             <BookIcon />
             사용법
+          </button>
+
+          <button
+            onClick={() => { onShowInquiry(); onClose() }}
+            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+          >
+            <MailIcon />
+            문의하기
           </button>
 
           {user?.isAdmin && (
