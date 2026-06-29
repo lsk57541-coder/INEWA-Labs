@@ -76,6 +76,33 @@ export async function hidePlace(id: string) {
   revalidatePath('/partner/dashboard/places')
 }
 
+// 파트너 장소 검증 — 본인 장소만(.eq('partner_id') 명시 + RLS "partner manages own places" 이중).
+// confirm: 맞다고 확인(공개 유지). reject: 잘못된 추출 → 검색/지도에서 숨김(status='hidden').
+export async function confirmPlace(id: string) {
+  const supabase = await createClient()
+  const partnerId = await requireMyPartnerId()
+
+  const { error } = await supabase
+    .from('places')
+    .update({ verification_status: 'confirmed', verified_at: new Date().toISOString() })
+    .eq('id', id).eq('partner_id', partnerId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/partner/dashboard/places')
+}
+
+export async function rejectPlace(id: string) {
+  const supabase = await createClient()
+  const partnerId = await requireMyPartnerId()
+
+  // 거부 = 잘못된 장소 → 검증상태 rejected + status='hidden'으로 검색/지도에서 즉시 제외.
+  const { error } = await supabase
+    .from('places')
+    .update({ verification_status: 'rejected', verified_at: new Date().toISOString(), status: 'hidden' })
+    .eq('id', id).eq('partner_id', partnerId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/partner/dashboard/places')
+}
+
 export interface BulkPlaceInput {
   name: string
   address?: string

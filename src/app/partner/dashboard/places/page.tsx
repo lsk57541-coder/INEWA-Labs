@@ -22,12 +22,19 @@ export default async function PartnerPlacesPage({
   const supabase = await createClient()
   let query = supabase
     .from('places')
-    .select('id, name, address, category, video_url, status, click_count, rejection_reason')
+    .select('id, name, address, category, video_url, status, click_count, rejection_reason, verification_status, source')
     .eq('partner_id', partner.id)
     .order('created_at', { ascending: false })
   if (status) query = query.eq('status', status)
 
-  const { data: places } = await query
+  const { data } = await query
+  // AI가 찾은 미검증 장소(source='ai' && unverified)를 위로 — 확인이 가장 필요한 것부터.
+  // 그 외는 기존 최신순 유지(안정 정렬).
+  const places = (data ?? []).slice().sort((a, b) => {
+    const aTop = a.source === 'ai' && a.verification_status === 'unverified' ? 0 : 1
+    const bTop = b.source === 'ai' && b.verification_status === 'unverified' ? 0 : 1
+    return aTop - bTop
+  })
 
   return (
     <div>

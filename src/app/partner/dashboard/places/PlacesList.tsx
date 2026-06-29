@@ -80,6 +80,11 @@ export default function PlacesList({ places }: { places: Place[] }) {
               직접 입력
             </button>
           </div>
+          {optimisticPlaces.some((p) => p.source === 'ai' && (p.verification_status ?? 'unverified') === 'unverified') && (
+            <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mb-3">
+              AI가 찾은 장소는 정확도 확인이 필요해요. 위쪽 장소부터 “맞아요/아니에요”로 확인해 주세요.
+            </p>
+          )}
           <div className="space-y-3">
             {optimisticPlaces.map((p) => (
               <PlaceRow key={p.id} place={p} onHidden={handleHidden} />

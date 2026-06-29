@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { updatePlace, hidePlace, type PlaceInput } from './actions'
+import { updatePlace, hidePlace, confirmPlace, rejectPlace, type PlaceInput } from './actions'
 
 export interface Place {
   id: string
@@ -12,6 +12,8 @@ export interface Place {
   status: 'active' | 'reviewing' | 'hidden' | 'rejected'
   click_count: number
   rejection_reason?: string | null
+  verification_status?: 'unverified' | 'confirmed' | 'rejected' | null
+  source?: 'coords' | 'timestamp' | 'ai' | 'list' | null
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -61,6 +63,31 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     })
   }
 
+  const handleConfirm = () => {
+    setError(null)
+    startTransition(async () => {
+      try {
+        await confirmPlace(place.id)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '확인 처리 실패')
+      }
+    })
+  }
+
+  const handleReject = () => {
+    if (!window.confirm(`"${place.name}"이(가) 잘못된 장소인가요?\n검색·지도에서 숨김 처리됩니다.`)) return
+    onHidden(place.id) // 숨김되므로 목록에서 낙관적 제거(비공개 처리와 동일)
+    startTransition(async () => {
+      try {
+        await rejectPlace(place.id)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '처리 실패')
+      }
+    })
+  }
+
+  const isAiUnverified = place.source === 'ai' && (place.verification_status ?? 'unverified') === 'unverified'
+
   return (
     <div className="border rounded-lg p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -99,6 +126,33 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
           className="flex-1 text-xs border-b border-transparent hover:border-gray-200 focus:border-blue-400 outline-none px-1 py-0.5"
         />
       </div>
+
+      {/* 검증 — AI가 찾은 미검증 장소는 확인 유도, 확인/거부 결과는 상태로 표시 */}
+      {isAiUnverified ? (
+        <div className="flex items-center gap-2 bg-blue-50 rounded-lg px-2.5 py-2">
+          <span className="text-xs text-blue-700 flex-1">AI가 찾은 장소예요. 정확한가요?</span>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleConfirm}
+            className="text-xs font-medium bg-blue-600 text-white px-2.5 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition"
+          >
+            맞아요
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleReject}
+            className="text-xs font-medium bg-white text-gray-600 border border-gray-300 px-2.5 py-1 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition"
+          >
+            아니에요
+          </button>
+        </div>
+      ) : place.verification_status === 'confirmed' ? (
+        <p className="text-xs text-green-600">✓ 확인됨</p>
+      ) : place.verification_status === 'rejected' ? (
+        <p className="text-xs text-gray-400">숨김 처리됨 (잘못된 장소로 표시)</p>
+      ) : null}
 
       <div className="flex items-center justify-between pt-1">
         <span className="text-xs text-gray-400">클릭 {place.click_count.toLocaleString()}회</span>
