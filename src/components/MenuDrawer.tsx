@@ -19,6 +19,7 @@ interface MenuDrawerProps {
   user: MenuUser | null
   onShowFavorites: () => void
   onRestartOnboarding: () => void
+  onShowGuide: () => void
 }
 
 function HeartIcon() {
@@ -47,6 +48,15 @@ function CompassIcon() {
   )
 }
 
+function BookIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  )
+}
+
 function SettingsIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -56,7 +66,7 @@ function SettingsIcon() {
   )
 }
 
-export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRestartOnboarding }: MenuDrawerProps) {
+export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRestartOnboarding, onShowGuide }: MenuDrawerProps) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -160,6 +170,14 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
           >
             <CompassIcon />
             앱 소개 다시보기
+          </button>
+
+          <button
+            onClick={() => { onShowGuide(); onClose() }}
+            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+          >
+            <BookIcon />
+            사용법
           </button>
 
           {user?.isAdmin && (

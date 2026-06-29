@@ -21,6 +21,7 @@ import {
 import MenuDrawer, { type MenuUser } from '@/components/MenuDrawer'
 import FavoritesOverlay from '@/components/FavoritesOverlay'
 import OnboardingOverlay from '@/components/OnboardingOverlay'
+import GuideOverlay from '@/components/GuideOverlay'
 import SearchResultModal from '@/components/SearchResultModal'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 
@@ -556,6 +557,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [visitedIds, setVisitedIds] = useState<Set<string>>(new Set())
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
   const [favoritesOverlayOpen, setFavoritesOverlayOpen] = useState(false)
+  const [guideOverlayOpen, setGuideOverlayOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<VideoResult | null>(null)
   const [reportReason, setReportReason] = useState<ReportReason>('wrong_address')
   const [reportFixAddress, setReportFixAddress] = useState(true)
@@ -1194,6 +1196,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     setFavoritesOverlayOpen(true)
   }
 
+  const handleShowGuide = () => setGuideOverlayOpen(true) // 사용법 — 로그인 불필요
+
   // 거르기(필터): 마커+리스트 공통 집합. 정렬 전 단계라 마커 그룹핑에 그대로 쓴다.
   const filteredResults = allResults.filter((v) =>
     passesFilters(v, { videoFilter, minViews, minSubs, dateMin: dateCutoff(dateRange) })
@@ -1414,7 +1418,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         user={user}
         onShowFavorites={handleShowFavorites}
         onRestartOnboarding={handleRestartOnboarding}
+        onShowGuide={handleShowGuide}
       />
+      <GuideOverlay open={guideOverlayOpen} onClose={() => setGuideOverlayOpen(false)} />
       <FavoritesOverlay
         open={favoritesOverlayOpen}
         onClose={() => setFavoritesOverlayOpen(false)}
