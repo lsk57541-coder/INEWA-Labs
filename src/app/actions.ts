@@ -288,13 +288,12 @@ export interface Inquiry {
   nickname: string | null
   title: string
   content: string
-  status: 'unread' | 'read'
   created_at: string
-  reply: string | null         // 관리자 답장(없으면 null)
+  reply: string | null         // 관리자 답장(없으면 null). 처리상태는 이 값의 유무로 판단(미답변/답변완료).
   replied_at: string | null    // 답장 시각
 }
 
-const INQUIRY_COLS = 'id, user_id, nickname, title, content, status, created_at, reply, replied_at'
+const INQUIRY_COLS = 'id, user_id, nickname, title, content, created_at, reply, replied_at'
 
 // 사용자 문의 접수. RLS "insert own inquiry"(auth.uid()=user_id) 통과를 위해 user_id를
 // 현재 로그인 사용자로 명시. nickname은 제출 시점 값을 profiles에서 읽어 비정규화 저장.
@@ -316,12 +315,14 @@ export async function submitInquiry(input: { title: string; content: string }): 
     nickname: profile?.nickname ?? null,
     title,
     content,
-    // status는 DB 기본값 'unread'
+    // 처리상태는 더 이상 status 컬럼을 쓰지 않고 reply 유무로 판단(미답변/답변완료).
+    // status 컬럼은 DB에 남아있지만(삭제 안 함) 미사용 — insert 시 건드리지 않는다.
   })
   if (error) throw new Error(error.message)
 }
 
-// 관리자 — 전체 문의 최신순. RLS "admin can read inquiries"로 통과(requireAdmin이 role 확인).
+// 관리자 — 전체 문의. RLS "admin can read inquiries"로 통과(requireAdmin이 role 확인).
+// 정렬: 미답변(reply IS NULL) 먼저, 그 안에서 최신순 → 처리할 문의가 위로 모임.
 export async function getInquiries(): Promise<Inquiry[]> {
   const supabase = await requireAdmin()
   const { data, error } = await supabase
@@ -329,7 +330,15 @@ export async function getInquiries(): Promise<Inquiry[]> {
     .select(INQUIRY_COLS)
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
-  return (data ?? []) as Inquiry[]
+  const rows = (data ?? []) as Inquiry[]
+  // (reply is null) desc, created_at desc — 미답변을 상단으로.
+  rows.sort((a, b) => {
+    const aAnswered = a.reply == null ? 0 : 1
+    const bAnswered = b.reply == null ? 0 : 1
+    if (aAnswered !== bAnswered) return aAnswered - bAnswered
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  })
+  return rows
 }
 
 // 사용자 — 본인 문의(+답장) 최신순. RLS "select own inquiry"(auth.uid()=user_id)로 본인 것만.
@@ -345,14 +354,6 @@ export async function getMyInquiries(): Promise<Inquiry[]> {
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
   return (data ?? []) as Inquiry[]
-}
-
-// 관리자 — 읽음/안읽음 토글. RLS "admin can update inquiries"로 통과.
-export async function setInquiryStatus(id: string, status: 'unread' | 'read'): Promise<void> {
-  const supabase = await requireAdmin()
-  const { error } = await supabase.from('inquiries').update({ status }).eq('id', id)
-  if (error) throw new Error(error.message)
-  revalidatePath('/admin/inquiries')
 }
 
 // 관리자 — 답장 저장(덮어쓰기). reply/replied_at update는 기존 "admin can update inquiries" RLS로 통과.

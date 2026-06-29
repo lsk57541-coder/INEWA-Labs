@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import AdminTabNav from '@/components/admin/AdminTabNav'
 import { getInquiries } from '@/app/actions'
-import InquiryStatusToggle from './InquiryStatusToggle'
 import InquiryReplyForm from './InquiryReplyForm'
 
 export default async function AdminInquiriesPage() {
@@ -16,7 +15,7 @@ export default async function AdminInquiriesPage() {
   if (profile?.role !== 'admin') redirect('/')
 
   const inquiries = await getInquiries()
-  const unreadCount = inquiries.filter((i) => i.status === 'unread').length
+  const pendingCount = inquiries.filter((i) => i.reply == null).length // 미답변 개수
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -27,9 +26,9 @@ export default async function AdminInquiriesPage() {
 
       <div className="flex items-center gap-2 mb-4">
         <h1 className="text-lg font-bold">문의</h1>
-        {unreadCount > 0 && (
+        {pendingCount > 0 && (
           <span className="text-xs font-bold text-white bg-blue-600 rounded-full px-2 py-0.5">
-            안읽음 {unreadCount}
+            미답변 {pendingCount}
           </span>
         )}
         <span className="text-xs text-gray-400 ml-auto">총 {inquiries.length}건</span>
@@ -44,16 +43,17 @@ export default async function AdminInquiriesPage() {
           {inquiries.map((q) => (
             <div
               key={q.id}
-              className={`border rounded-lg p-4 ${q.status === 'unread' ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200'}`}
+              className={`border rounded-lg p-4 ${q.reply == null ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200'}`}
             >
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-sm font-semibold text-gray-900">{q.nickname ?? '(알 수 없음)'}</span>
                 <span className="text-xs text-gray-400">{new Date(q.created_at).toLocaleString('ko-KR')}</span>
-                {q.reply && (
-                  <span className="text-[10px] font-medium text-green-700 bg-green-50 rounded px-1.5 py-0.5">답변완료</span>
-                )}
                 <span className="ml-auto">
-                  <InquiryStatusToggle id={q.id} status={q.status} />
+                  {q.reply == null ? (
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100 rounded px-1.5 py-0.5">미답변</span>
+                  ) : (
+                    <span className="text-[10px] font-medium text-green-700 bg-green-50 rounded px-1.5 py-0.5">답변완료</span>
+                  )}
                 </span>
               </div>
               <p className="text-sm font-bold mb-1">{q.title}</p>
