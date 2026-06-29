@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { formatEffectiveDate } from '@/lib/legal'
 
 export const metadata = {
   title: '개인정보처리방침 | MAPTUBE',
@@ -9,7 +10,7 @@ export default function PrivacyPage() {
     <div className="max-w-2xl mx-auto px-5 py-10 text-sm leading-relaxed text-gray-700">
       <Link href="/" className="text-blue-500 hover:underline">← 홈으로</Link>
       <h1 className="text-2xl font-bold mt-4 mb-2">개인정보처리방침</h1>
-      <p className="text-gray-400 mb-8">시행일: 2026년 6월 18일</p>
+      <p className="text-gray-400 mb-8">시행일: {formatEffectiveDate()}</p>
 
       <p className="mb-8">
         INEWA Labs(이하 &apos;회사&apos;)는 MAPTUBE 서비스(이하 &apos;서비스&apos;)를 운영하며,
