@@ -12,6 +12,9 @@ export async function logConsent(
   supabase: SupabaseClient,
   params: { userId: string; partnerId: string; channelId: string; event: ConsentEvent }
 ): Promise<void> {
+  // 실패 추적용 식별자(민감정보 아님 — 토큰류는 여기 없음). "동의 공백 0"이 목적이라
+  // 조용히 삼키지 않고 누가/어느 이벤트에서 누락됐는지 서버 로그로 남긴다.
+  const ctx = `event=${params.event} user=${params.userId} partner=${params.partnerId} channel=${params.channelId}`
   try {
     const { error } = await supabase.from('consent_logs').insert({
       user_id: params.userId,
@@ -23,8 +26,8 @@ export async function logConsent(
       oauth_scope: YOUTUBE_OAUTH_SCOPE,  // 부여한 OAuth scope
       // consent_kinds, granted_at은 DB 기본값 사용
     })
-    if (error) console.error('[logConsent] insert failed:', params.event, error.message)
+    if (error) console.error(`[logConsent] insert failed (${ctx}):`, error.message)
   } catch (e) {
-    console.error('[logConsent] unexpected error:', e)
+    console.error(`[logConsent] unexpected error (${ctx}):`, e instanceof Error ? e.message : e)
   }
 }
