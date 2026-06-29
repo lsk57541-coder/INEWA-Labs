@@ -59,7 +59,7 @@ function ChannelFlowDiagram() {
 }
 
 interface GuideItem {
-  icon: React.ReactNode
+  icon?: React.ReactNode
   title: string
   body: React.ReactNode
 }
@@ -136,40 +136,119 @@ const ITEMS: GuideItem[] = [
   },
 ]
 
-export default function GuideContent() {
-  // 1번(채널 검색 — 핵심 강점)을 기본 펼침.
-  const [openIdx, setOpenIdx] = useState(0)
+// 일반 사용자용 FAQ(파트너 신청 페이지 FAQ와 별개). 질문-답변 형식, 기능 안내와 같은 톤.
+// 4·5번 답변의 "문의하기/파트너 신청하기"는 메뉴 항목 — 문의 기능은 후속 작업에서 추가 예정이라
+// 지금은 문구만 두고 링크는 걸지 않는다.
+const FAQ_ITEMS: GuideItem[] = [
+  {
+    icon: <span className="text-base">✅</span>,
+    title: '유튜버 영상을 써도 되나요? 저작권 문제는 없나요?',
+    body: (
+      <>
+        MAPTUBE는 <strong>YouTube 공식 API</strong>로 영상 정보(제목·썸네일·링크)를 가져와,
+        지도에서 <strong>원본 영상으로 바로 연결</strong>해 드려요. 영상을 따로 복제하거나 다시 올리지 않고,
+        클릭하면 유튜브에서 재생돼요. 영상의 조회수와 트래픽은 그대로 <strong>창작자에게 돌아가고</strong>,
+        오히려 새 시청자가 찾아오는 통로가 됩니다.
+      </>
+    ),
+  },
+  {
+    icon: <span className="text-base">💰</span>,
+    title: '무료인가요?',
+    body: <>네, 무료로 쓸 수 있어요.</>,
+  },
+  {
+    icon: <span className="text-base">🔍</span>,
+    title: '검색했는데 결과가 적어요',
+    body: (
+      <>
+        MAPTUBE는 <strong>유튜버가 영상에서 직접 소개한 장소</strong>를 모아 보여줘요.
+        아직 영상에 안 나온 곳은 결과가 적을 수 있어요.
+      </>
+    ),
+  },
+  {
+    icon: <span className="text-base">🔑</span>,
+    title: '로그인 안 하면 못 쓰나요?',
+    body: (
+      <>
+        검색·지도는 <strong>로그인 없이</strong> 둘러볼 수 있어요. 찜·가본곳 저장과 문의하기는 로그인이 필요해요.
+      </>
+    ),
+  },
+  {
+    icon: <span className="text-base">📍</span>,
+    title: '장소 정보가 틀렸어요',
+    body: <>메뉴의 <strong>“문의하기”</strong>로 알려주시면 확인할게요.</>,
+  },
+  {
+    icon: <span className="text-base">🎬</span>,
+    title: '제 유튜브 채널도 올릴 수 있나요?',
+    body: (
+      <>
+        네! 메뉴의 <strong>“파트너 신청하기”</strong>에서 채널을 연동하면 영상 속 장소가 지도에 표시돼요.
+      </>
+    ),
+  },
+]
 
+// 단일 오픈 아코디언(기능 안내·FAQ 공용). defaultOpen=-1이면 전부 닫힌 상태로 시작.
+// qa=true면 FAQ용 Q&A 시각화(질문 앞 Q 배지 + 답변 앞 A 배지). qa=false(기본)는 기능 안내 — 기존 렌더 그대로.
+function Accordion({ items, defaultOpen = -1, qa = false }: { items: GuideItem[]; defaultOpen?: number; qa?: boolean }) {
+  const [openIdx, setOpenIdx] = useState(defaultOpen)
   return (
-    <div>
-      <div className="space-y-2">
-        {ITEMS.map((item, i) => {
-          const open = openIdx === i
-          return (
-            <div key={i} className="border border-gray-200 rounded-lg overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setOpenIdx(open ? -1 : i)}
-                aria-expanded={open}
-                className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-gray-50 transition"
-              >
-                <span className="shrink-0 flex items-center justify-center w-6">{item.icon}</span>
-                <span className="flex-1 text-sm font-semibold text-gray-900">{item.title}</span>
-                <span className="shrink-0 text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
-              </button>
-              {open && (
+    <div className="space-y-2">
+      {items.map((item, i) => {
+        const open = openIdx === i
+        return (
+          <div key={i} className={`border border-gray-200 rounded-lg overflow-hidden ${qa ? 'bg-gray-50/60' : ''}`}>
+            <button
+              type="button"
+              onClick={() => setOpenIdx(open ? -1 : i)}
+              aria-expanded={open}
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-gray-50 transition"
+            >
+              {qa && (
+                <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-md bg-blue-600 text-white text-[11px] font-bold">Q</span>
+              )}
+              {item.icon && <span className="shrink-0 flex items-center justify-center w-6">{item.icon}</span>}
+              <span className="flex-1 text-sm font-semibold text-gray-900">{item.title}</span>
+              <span className="shrink-0 text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
+            </button>
+            {open && (
+              qa ? (
+                <div className="px-4 pb-4 flex gap-2 items-start">
+                  <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-md bg-gray-200 text-gray-600 text-[11px] font-bold">A</span>
+                  <div className="text-sm text-gray-600 leading-relaxed">{item.body}</div>
+                </div>
+              ) : (
                 <div className="px-4 pb-4 text-sm text-gray-600 leading-relaxed">
                   {item.body}
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+              )
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export default function GuideContent() {
+  return (
+    <div>
+      {/* 기능 안내 — 1번(채널 검색) 기본 펼침 */}
+      <Accordion items={ITEMS} defaultOpen={0} />
 
       <p className="mt-6 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 leading-relaxed">
         💡 지도 위 <strong>마커(핀)를 탭</strong>하면 그 장소가 나온 <strong>유튜브 영상</strong>이 바로 열려요.
       </p>
+
+      {/* 자주 묻는 질문 — 기능 안내와 구분되는 별도 섹션 */}
+      <div className="mt-8 pt-6 border-t border-gray-200">
+        <h2 className="text-sm font-bold text-gray-900 mb-3">자주 묻는 질문</h2>
+        <Accordion items={FAQ_ITEMS} qa />
+      </div>
     </div>
   )
 }
