@@ -290,7 +290,11 @@ export interface Inquiry {
   content: string
   status: 'unread' | 'read'
   created_at: string
+  reply: string | null         // 관리자 답장(없으면 null)
+  replied_at: string | null    // 답장 시각
 }
+
+const INQUIRY_COLS = 'id, user_id, nickname, title, content, status, created_at, reply, replied_at'
 
 // 사용자 문의 접수. RLS "insert own inquiry"(auth.uid()=user_id) 통과를 위해 user_id를
 // 현재 로그인 사용자로 명시. nickname은 제출 시점 값을 profiles에서 읽어 비정규화 저장.
@@ -322,7 +326,22 @@ export async function getInquiries(): Promise<Inquiry[]> {
   const supabase = await requireAdmin()
   const { data, error } = await supabase
     .from('inquiries')
-    .select('id, user_id, nickname, title, content, status, created_at')
+    .select(INQUIRY_COLS)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Inquiry[]
+}
+
+// 사용자 — 본인 문의(+답장) 최신순. RLS "select own inquiry"(auth.uid()=user_id)로 본인 것만.
+// 명시적 .eq('user_id', user.id)는 RLS와 더해 본인 범위를 코드에서도 분명히 한다(favorites와 동일 관례).
+export async function getMyInquiries(): Promise<Inquiry[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data, error } = await supabase
+    .from('inquiries')
+    .select(INQUIRY_COLS)
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
   return (data ?? []) as Inquiry[]
@@ -332,6 +351,19 @@ export async function getInquiries(): Promise<Inquiry[]> {
 export async function setInquiryStatus(id: string, status: 'unread' | 'read'): Promise<void> {
   const supabase = await requireAdmin()
   const { error } = await supabase.from('inquiries').update({ status }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/inquiries')
+}
+
+// 관리자 — 답장 저장(덮어쓰기). reply/replied_at update는 기존 "admin can update inquiries" RLS로 통과.
+export async function replyInquiry(id: string, reply: string): Promise<void> {
+  const trimmed = reply.trim()
+  if (!trimmed) throw new Error('답장 내용을 입력해주세요.')
+  const supabase = await requireAdmin()
+  const { error } = await supabase
+    .from('inquiries')
+    .update({ reply: trimmed, replied_at: new Date().toISOString() })
+    .eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/inquiries')
 }
