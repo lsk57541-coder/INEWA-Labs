@@ -110,10 +110,16 @@ async function setCachedSearchItems(key: string, items: YTSearchItem[]) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) return
 
+  // 방안 A: 캐시(DB)에 영상 설명란 원문이 남지 않도록 담기 직전 snippet.description만 ''로 비운다.
+  // 다른 필드(id.videoId·snippet.channelId·title·thumbnails·publishedAt 등)는 스프레드로 그대로 보존.
+  // 추출은 캐시가 아니라 매 요청 fetchVideoDetails(videos.list 신선조회)에서 description을 읽으므로
+  // 이 strip은 추출 정확도/비용과 무관하다(읽기/TTL/캐시키 로직은 손대지 않음).
+  const payload = items.map((it) => ({ ...it, snippet: { ...it.snippet, description: '' } }))
+
   const supabase = createClient(url, anonKey)
   await supabase
     .from('search_cache')
-    .upsert({ key, payload: items, created_at: new Date().toISOString() })
+    .upsert({ key, payload, created_at: new Date().toISOString() })
     .then(() => {}, () => {})
 }
 
