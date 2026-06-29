@@ -85,6 +85,7 @@ export interface BulkPlaceInput {
   longitude?: number
   view_count?: number       // 영상 조회수(2단계 저장 → 검색 필터)
   published_at?: string     // 영상 업로드일(2단계 저장 → 검색 필터)
+  source?: 'coords' | 'timestamp' | 'ai' | 'list'  // 추출 출처(엔진 반환값). 수동 행은 생략 → null 저장.
 }
 
 export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ succeeded: number; errors: string[] }> {
@@ -113,6 +114,7 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
       view_count: p.view_count ?? null,
       subscriber_count: subscriberCount,
       published_at: p.published_at ?? null,
+      source: p.source ?? null,  // 추출 출처(coords/timestamp/ai/list). 수동 추가 행은 null.
     })
     if (error) {
       errors.push(`${p.name}: ${error.message}`)

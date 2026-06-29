@@ -22,12 +22,16 @@ interface VideoInfo {
   registeredCount?: number // 이미 이 영상으로 등록한 장소 수(정보성 — 덮어쓰기 없음)
 }
 
+// 추출 출처 — 엔진(extractPlaces.ts)이 반환하는 값. 수동 추가 행은 출처가 없어 null.
+type PlaceSource = 'coords' | 'timestamp' | 'ai' | 'list' | null
+
 interface PlaceRow {
   id: string
   name: string
   address: string
   category: string
   timestampSec: number | null // 등장시간 — 표시 전용(places에 컬럼 없어 저장 안 함)
+  source: PlaceSource         // 추출 출처(places.source로 저장). 수동 추가 행은 null.
   lat: number | null
   lng: number | null
   geocoding: boolean
@@ -52,13 +56,14 @@ interface SearchModal {
   error: string | null
 }
 
-function makeRow(name = '', timestampSec: number | null = null): PlaceRow {
+function makeRow(name = '', timestampSec: number | null = null, source: PlaceSource = null): PlaceRow {
   return {
     id: Math.random().toString(36).slice(2),
     name,
     address: '',
     category: '',
     timestampSec,
+    source,           // 수동 추가(인자 생략) 시 null
     lat: null,
     lng: null,
     geocoding: false,
@@ -206,7 +211,8 @@ export default function ExtractPlacesForm() {
     // 추출은 본인채널 가드가 박힌 공유 라우트 그대로 사용. extractPlaces 엔진은 수정하지 않음.
     try {
       const res = await fetch(`/api/partner/extract-places?videoId=${videoInfo.videoId}`)
-      const data = await res.json() as { places?: { name: string; timestamp_seconds: number | null }[]; error?: string }
+      // source는 엔진(extractPlaces.ts)이 이미 반환 → 응답에 그대로 살아옴. 행까지 보존해 저장 경로로 전달.
+      const data = await res.json() as { places?: { name: string; timestamp_seconds: number | null; source?: PlaceSource }[]; error?: string }
       if (!res.ok || data.error) {
         setExtractError(data.error ?? '추출 중 오류가 발생했어요.')
         return
@@ -216,7 +222,7 @@ export default function ExtractPlacesForm() {
         setExtractError('영상 설명에서 상호명을 찾지 못했어요. 아래 "+ 장소 추가"로 직접 입력해주세요.')
         return
       }
-      const rows = list.map(p => makeRow(p.name, p.timestamp_seconds))
+      const rows = list.map(p => makeRow(p.name, p.timestamp_seconds, p.source ?? null))
       setPlaces(rows)
       setExtractedCount(list.length)
       void autoGeocodeRows(rows, region.trim())
@@ -313,6 +319,7 @@ export default function ExtractPlacesForm() {
       longitude: r.lng ?? undefined,
       view_count: videoInfo?.viewCount,
       published_at: videoInfo?.publishedAt,
+      source: r.source ?? undefined,  // 추출 출처(수동 행은 undefined → insert에서 null)
     }))
     const result = await bulkRequestPlaces(payload)
     setSubmitResult(result)
