@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { PENDING_CHANNEL_COOKIE, type PendingChannel } from '@/lib/partnerPendingChannel'
 import { PARTNER_CATEGORIES, KOREA_REGIONS } from '@/lib/partnerOptions'
 import { sendPartnerApplicationEmail, sendPartnerApprovedEmail } from '@/lib/email'
+import { logConsent } from '@/lib/consent'
 
 // Outbound 채널은 관리자가 outreach_targets에 등록할 때 이미 category/region을
 // 입력해뒀으므로, 가입 폼에서 다시 받지 않고 여기서 복사해온다. 매칭되는 대상이
@@ -87,6 +88,19 @@ export async function completePartnerSignup(channel: PendingChannel) {
     })
     // unique 경합(드물게 동시요청) 시에도 이미 등록된 채널 안내로
     if (error) redirect(error.code === '23505' ? '/partner/apply?error=already_applied' : '/partner/apply?error=youtube_failed')
+  }
+
+  // 가입(C)/재활성화(B) 성사 직후 동의 로그(append-only). 위 insert/update 문은 변경하지 않고,
+  // partner_id만 channel_id(unique)로 조회해 기록. logConsent는 throw하지 않아 가입을 막지 않음.
+  const { data: signedPartner } = await supabase
+    .from('partners').select('id').eq('channel_id', channel.channelId).maybeSingle()
+  if (signedPartner?.id) {
+    await logConsent(supabase, {
+      userId: user.id,
+      partnerId: signedPartner.id,
+      channelId: channel.channelId,
+      event: existing ? 'reactivate' : 'signup',
+    })
   }
 
   if (user.email) {

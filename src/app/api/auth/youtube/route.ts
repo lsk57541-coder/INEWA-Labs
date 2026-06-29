@@ -9,6 +9,7 @@ import {
 import { type PendingChannel } from '@/lib/partnerPendingChannel'
 import { createClient } from '@/lib/supabase/server'
 import { completePartnerSignup } from '@/app/partner/apply/actions'
+import { logConsent } from '@/lib/consent'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -70,6 +71,13 @@ export async function GET(request: NextRequest) {
           youtube_refresh_token: tokens.refresh_token ?? null,
         })
         .eq('id', ownedPartner.id)
+      // 재연동 성사 직후 동의 로그(append-only, 실패해도 재연동은 완료 — logConsent는 throw 안 함).
+      await logConsent(supabase, {
+        userId: user.id,
+        partnerId: ownedPartner.id,
+        channelId: channel.channelId,
+        event: 'reconnect',
+      })
       return NextResponse.redirect(`${origin}/partner/dashboard/settings?reconnected=1`)
     }
   }
