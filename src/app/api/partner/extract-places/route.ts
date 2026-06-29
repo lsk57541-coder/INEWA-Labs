@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
   try {
     let places = extractPlaceList(snippet.title, snippet.description)
     if (places.length === 0) {
-      places = await extractWithClaude(snippet.title, snippet.description)
+      // 폴백: extractWithClaude는 source를 안 붙여 반환하므로 라우트에서 'ai' 태깅
+      // (extractMultiPlaces와 동일 패턴, 엔진 무수정). 안 하면 AI 추출분이 places.source NULL로 저장됨.
+      places = (await extractWithClaude(snippet.title, snippet.description)).map(p => ({ ...p, source: 'ai' as const }))
     }
     // 입력 시 저장(2단계)용 영상 메타 — 추가 quota 없이 getVideoSnippet에서 함께 옴.
     return NextResponse.json({ places, viewCount: snippet.viewCount, publishedAt: snippet.publishedAt })
