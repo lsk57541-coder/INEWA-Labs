@@ -149,9 +149,31 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
           </button>
         </div>
       ) : place.verification_status === 'confirmed' ? (
-        <p className="text-xs text-green-600">✓ 확인됨</p>
+        // 정정 가능: 확인됨 → "아니에요로 변경"(reject 재사용). 번복 기록은 verification_logs에 append됨.
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-green-600 flex-1">✓ 확인됨</span>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleReject}
+            className="text-xs font-medium bg-white text-gray-600 border border-gray-300 px-2.5 py-1 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition"
+          >
+            아니에요로 변경
+          </button>
+        </div>
       ) : place.verification_status === 'rejected' ? (
-        <p className="text-xs text-gray-400">숨김 처리됨 (잘못된 장소로 표시)</p>
+        // 정정 가능: 아니에요(숨김) → "맞아요로 변경"(confirm 재사용 → status도 active로 복원).
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 flex-1">✗ 아니에요 (숨김 처리됨)</span>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleConfirm}
+            className="text-xs font-medium bg-blue-600 text-white px-2.5 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition"
+          >
+            맞아요로 변경
+          </button>
+        </div>
       ) : null}
 
       <div className="flex items-center justify-between pt-1">

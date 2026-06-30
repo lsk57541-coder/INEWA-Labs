@@ -116,10 +116,17 @@ export async function confirmPlace(id: string) {
   const { data: partner } = await supabase
     .from('partners').select('is_demo').eq('id', partnerId).maybeSingle()
 
-  // ↓ 기존 동작 그대로(덮어쓰기 update) — 절대 변경하지 않음.
+  // ↓ 검증 본 동작(verification_status/verified_at 덮어쓰기) — 기존과 동일.
+  // 단 번복(rejected→confirmed) 시에만 status='hidden'을 'active'로 복원한다.
+  // rejectPlace는 reject 시 status='hidden'으로 숨기므로, "검증 reject로 인한 hidden"은
+  // 현재 verification_status==='rejected'로 식별 가능 → 그것만 복원(의도적 hidePlace는 건드리지 않음).
+  const restoreToActive = place?.verification_status === 'rejected'
+  const patch: Record<string, unknown> = { verification_status: 'confirmed', verified_at: new Date().toISOString() }
+  if (restoreToActive) patch.status = 'active'
+
   const { error } = await supabase
     .from('places')
-    .update({ verification_status: 'confirmed', verified_at: new Date().toISOString() })
+    .update(patch)
     .eq('id', id).eq('partner_id', partnerId)
   if (error) throw new Error(error.message)
 
