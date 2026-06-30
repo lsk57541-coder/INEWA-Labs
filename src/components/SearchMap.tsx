@@ -26,6 +26,7 @@ import InquiryOverlay from '@/components/InquiryOverlay'
 import LoginPromptModal from '@/components/LoginPromptModal'
 import SearchResultModal from '@/components/SearchResultModal'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
+import { track } from '@/lib/track'
 
 // 검색 로딩 중 순차로 보여주는 단계 라벨(가짜 — /api/search는 단일 JSON 응답이라 실제 단계 진행은
 // 받을 수 없음). 실제 파이프라인 순서(YT 검색 → geocode/추출 → dedupe/정렬)에 맞춰 체감만 개선.
@@ -709,6 +710,14 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     load().catch(() => {})
   }, [user])
 
+  // embed_play 계측(fire-and-forget): 영상이 실제 임베드 재생될 때 1회.
+  // PlayerFrame autoplay는 selectedVideo 하나로 수렴(마커 단일선택·그룹리스트 선택 모두) →
+  // 여기 단일 지점에서 일괄 계측. placeId 없는 admin/비파트너 결과는 track()이 자체 무시.
+  // 재생을 막지 않음(await 없음). selectedVideo=null(닫힘)은 placeId 없어 자연 스킵.
+  useEffect(() => {
+    if (selectedVideo?.placeId) track(selectedVideo.placeId, 'embed_play')
+  }, [selectedVideo])
+
   // sheetFraction is how much of the map's height a bottom sheet currently
   // covers (0–1). Without it, setCenter puts the point at the geometric
   // center of the whole container, which sits behind/just above the sheet
@@ -841,6 +850,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         const partner = partnerVideo ? { thumbnail: partnerThumbOf(partnerVideo) } : null
 
         const onGroupClick = () => {
+          // place_click 계측(fire-and-forget): 클릭한 마커/클러스터에 속한 파트너 장소(placeId)별 1회.
+          // placeId 없는 admin/비파트너 결과는 track()이 자체 무시. 아래 기존 동작은 그대로 진행.
+          for (const pid of new Set(group.videos.map((v) => v.placeId).filter(Boolean) as string[])) {
+            track(pid, 'place_click')
+          }
           if (group.videos.length === 1) {
             setSelectedGroup(null)
             setSelectedVideo(group.videos[0])
@@ -1075,6 +1089,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       return
     }
     if (!Kakao.isInitialized()) Kakao.init(process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY!)
+    // kakao_share 계측(fire-and-forget): 파트너 장소면 기록. 아래 공유 동작은 그대로 진행.
+    track(v.placeId, 'kakao_share')
     const youtubeUrl = `https://youtu.be/${v.videoId}`
     Kakao.Share.sendDefault({
       objectType: 'feed',
