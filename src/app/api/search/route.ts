@@ -173,6 +173,7 @@ export interface VideoResult {
   publishedAt?: string // 영상 업로드일(ISO). 날짜 필터용. videos.list snippet에서. 등록장소는 published_at 또는 미상.
   isPartner?: boolean // 실제 파트너(places.partner_id) 장소 → 금색 마커/PARTNER 배지/상위노출
   partnerThumbnail?: string | null // 파트너 채널 아바타(마커 썸네일). NULL이면 클라가 금색 핀으로 폴백
+  placeId?: string // places.id. 파트너 셀프등록 장소 결과에만 실림(admin locations/videos 경로엔 없음). 계측(/api/track)의 장소↔영상 유입 귀속용.
 }
 
 // Fire-and-forget log of how each video's place name was resolved. Upserts by
@@ -547,7 +548,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   // 2) places (status=active) — 파트너 셀프 등록 장소
   const { data: places } = await db
     .from('places')
-    .select('name, video_url, latitude, longitude, category, status, view_count, subscriber_count, published_at, partner_id')
+    .select('id, name, video_url, latitude, longitude, category, status, view_count, subscriber_count, published_at, partner_id')
     .eq('status', 'active')
 
   // 파트너 정보(채널명·아바타·구독자수) 일괄 조회 → 금색 마커/PARTNER 배지/상위노출용.
@@ -580,6 +581,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
       publishedAt: pr.published_at ?? undefined,
       isPartner: !!partner,
       partnerThumbnail: partner?.avatar_url ?? null,
+      placeId: (p as { id?: string }).id, // 계측(/api/track)이 "어느 places 행에서 영상 유입인지" 식별용. places 경로에만 실림(admin locations/videos 경로엔 없음).
     })
   }
 
