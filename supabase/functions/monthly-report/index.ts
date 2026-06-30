@@ -27,8 +27,10 @@ async function sendReportEmail(resendApiKey: string, to: string, channelName: st
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'AI맵튜브 <onboarding@resend.dev>',
+      // Resend 인증 완료된 커스텀 도메인(aimaptube.com)에서 발송. 답장은 운영 메일로(reply_to).
+      from: 'MAPTUBE <inewalabs@aimaptube.com>',
       to,
+      reply_to: CONTACT_EMAIL,
       subject: `[AI맵튜브] ${channelName} 월간 리포트`,
       html,
     }),

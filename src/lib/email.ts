@@ -1,6 +1,9 @@
 import { Resend } from 'resend'
 
 const CONTACT_EMAIL = 'inewalabs@gmail.com'
+// Resend 인증 완료된 커스텀 도메인(aimaptube.com)에서 발송. 답장은 운영 메일(gmail)로.
+const EMAIL_FROM = 'MAPTUBE <inewalabs@aimaptube.com>'
+const EMAIL_REPLY_TO = CONTACT_EMAIL
 const DASHBOARD_URL = 'https://aimaptube.vercel.app/partner/dashboard'
 const ADMIN_INQUIRIES_URL = 'https://aimaptube.vercel.app/admin/inquiries'
 const LOGO_URL = 'https://aimaptube.vercel.app/icon-192.png'
@@ -42,7 +45,8 @@ export async function sendInquiryNotificationEmail(args: {
 
   const resend = new Resend(apiKey)
   await resend.emails.send({
-    from: 'AI맵튜브 <onboarding@resend.dev>',
+    from: EMAIL_FROM,
+    replyTo: EMAIL_REPLY_TO,
     to: CONTACT_EMAIL,
     subject: `[MAPTUBE] 새 문의 도착 — ${title}`,
     html: `
@@ -64,7 +68,8 @@ export async function sendPartnerApplicationEmail(to: string, channelName: strin
 
   const resend = new Resend(apiKey)
   await resend.emails.send({
-    from: 'AI맵튜브 <onboarding@resend.dev>',
+    from: EMAIL_FROM,
+    replyTo: EMAIL_REPLY_TO,
     to,
     subject: 'AI맵튜브 파트너 신청이 접수되었습니다',
     html: `
@@ -84,7 +89,8 @@ export async function sendPartnerApprovedEmail(to: string, channelName: string, 
 
   const resend = new Resend(apiKey)
   await resend.emails.send({
-    from: 'AI맵튜브 <onboarding@resend.dev>',
+    from: EMAIL_FROM,
+    replyTo: EMAIL_REPLY_TO,
     to,
     subject: '🎉 AI맵튜브 파트너 승인을 축하합니다',
     html: `
@@ -106,7 +112,8 @@ export async function sendOutreachEmail(to: string, subject: string, body: strin
 
   const resend = new Resend(apiKey)
   const { error } = await resend.emails.send({
-    from: 'AI맵튜브 <onboarding@resend.dev>',
+    from: EMAIL_FROM,
+    replyTo: EMAIL_REPLY_TO,
     to,
     subject,
     html: body.split('\n').map((line) => `<p>${line.trim() ? line : '&nbsp;'}</p>`).join(''),
@@ -120,7 +127,8 @@ export async function sendOutreachFollowUpEmail(to: string, channelName: string)
 
   const resend = new Resend(apiKey)
   const { error } = await resend.emails.send({
-    from: 'AI맵튜브 <onboarding@resend.dev>',
+    from: EMAIL_FROM,
+    replyTo: EMAIL_REPLY_TO,
     to,
     subject: `[AI MAPTUBE] ${channelName} 채널 파트너십 제안 - 다시 안내드립니다`,
     html: `
@@ -140,7 +148,8 @@ export async function sendPartnerRejectedEmail(to: string, channelName: string, 
 
   const resend = new Resend(apiKey)
   await resend.emails.send({
-    from: 'AI맵튜브 <onboarding@resend.dev>',
+    from: EMAIL_FROM,
+    replyTo: EMAIL_REPLY_TO,
     to,
     subject: 'AI맵튜브 파트너 신청 결과 안내',
     html: `
