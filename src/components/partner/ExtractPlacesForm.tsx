@@ -122,7 +122,7 @@ export default function ExtractPlacesForm() {
 
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  const [submitResult, setSubmitResult] = useState<{ succeeded: number; errors: string[] } | null>(null)
+  const [submitResult, setSubmitResult] = useState<{ succeeded: number; updated: number; errors: string[] } | null>(null)
 
   const [modal, setModal] = useState<SearchModal | null>(null)
   const modalInputRef = useRef<HTMLInputElement>(null)
@@ -334,7 +334,10 @@ export default function ExtractPlacesForm() {
         <p className="font-medium mb-1">등록 완료!</p>
         <p className="text-sm text-gray-500 mb-1">추가한 장소가 지도에 바로 반영됐어요.</p>
         {submitResult.succeeded > 0 && (
-          <p className="text-xs text-gray-400 mt-1">{submitResult.succeeded}개 등록 완료</p>
+          <p className="text-xs text-gray-400 mt-1">{submitResult.succeeded}개 신규 등록</p>
+        )}
+        {submitResult.updated > 0 && (
+          <p className="text-xs text-gray-400 mt-1">{submitResult.updated}개는 이미 등록된 영상이라 기존 장소를 갱신했어요</p>
         )}
         {submitResult.errors.length > 0 && (
           <p className="text-xs text-red-500 mt-1">{submitResult.errors.length}개 실패</p>

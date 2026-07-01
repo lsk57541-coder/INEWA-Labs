@@ -3,6 +3,24 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
+// 재등록 중복 판정용 헬퍼 2종.
+// ① videoId 추출 — video-info/route.ts의 매칭 방식(watch?v= / youtu.be 둘 다 커버)과 동일.
+//    URL이 없거나 비-YouTube면 null → 영상 기준 매칭 불가 → 신규 insert로 흘러감.
+function extractVideoIdFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    const u = new URL(url)
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1).split('?')[0] || null
+    if (u.hostname.includes('youtube.com')) return u.searchParams.get('v')
+    return null
+  } catch { return null }
+}
+// ② 이름 정규화 — ExtractPlacesForm.tsx의 normName과 동일(공백·기호 제거, 소문자).
+//    ★매칭키에 name을 넣어 "1영상 다장소(다른 이름)"는 미매칭 → 각각 insert(정상)되게 함.
+function normName(s: string): string {
+  return s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()
+}
+
 async function requireMyPartnerId(): Promise<string> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -179,7 +197,8 @@ export interface BulkPlaceInput {
   source?: 'coords' | 'timestamp' | 'ai' | 'list'  // 추출 출처(엔진 반환값). 수동 행은 생략 → null 저장.
 }
 
-export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ succeeded: number; errors: string[] }> {
+// 반환: succeeded=신규 insert 수, updated=기존 행 갱신 수(재등록). 중복 방지의 핵심 경로.
+export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ succeeded: number; updated: number; errors: string[] }> {
   const supabase = await createClient()
   const partnerId = await requireMyPartnerId()
 
@@ -189,16 +208,60 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
   const subscriberCount = partnerRow?.subscriber_count ?? null
 
   let succeeded = 0
+  let updated = 0
   const errors: string[] = []
+
+  const isEmptyStr = (v: string | null): boolean => v === null || v.trim() === ''
 
   for (const p of places) {
     if (!p.name?.trim()) continue
+    const name = p.name.trim()
+    const videoUrl = p.video_url?.trim() || null
+    const videoId = extractVideoIdFromUrl(videoUrl)
+
+    // 재등록 중복 방지: (현재 파트너 + 같은 영상 + 정규화 name 일치) 기존 행을 찾는다.
+    // videoId가 없으면(영상 URL 없음/비유튜브) 매칭 자체가 불가 → 신규 insert로 진행.
+    // ★name까지 일치해야 매칭 → 같은 영상의 서로 다른 상호(맛집 3곳)는 미매칭되어 각각 insert.
+    let existing:
+      | { id: string; name: string; address: string | null; category: string | null; latitude: number | null; longitude: number | null; view_count: number | null; subscriber_count: number | null; published_at: string | null }
+      | null = null
+    if (videoId) {
+      const { data: candidates } = await supabase
+        .from('places')
+        .select('id, name, address, category, latitude, longitude, view_count, subscriber_count, published_at')
+        .eq('partner_id', partnerId)
+        .ilike('video_url', `%${videoId}%`)
+      existing = (candidates ?? []).find(c => normName(c.name) === normName(name)) ?? null
+    }
+
+    if (existing) {
+      // 기존 행 UPDATE(id 유지 — delete+recreate 금지: video_referrals·verification_logs·
+      // place_clicks가 place_id로 참조, place_clicks는 cascade라 지우면 클릭이력 소멸).
+      // ★보존(patch에 넣지 않음): verification_status·verified_at(검증이력), status(숨김
+      //   되살아남 방지), id·click_count·created_at.
+      // (A) 갱신 필드도 "기존 값이 비었을 때만" 채운다(값 있으면 유지 → 수동 보정 보호).
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (isEmptyStr(existing.address) && p.address?.trim()) patch.address = p.address.trim()
+      if (isEmptyStr(existing.category) && p.category?.trim()) patch.category = p.category.trim()
+      if (existing.latitude === null && p.latitude != null) patch.latitude = p.latitude
+      if (existing.longitude === null && p.longitude != null) patch.longitude = p.longitude
+      if (existing.view_count === null && p.view_count != null) patch.view_count = p.view_count
+      if (existing.subscriber_count === null && subscriberCount != null) patch.subscriber_count = subscriberCount
+      if (existing.published_at === null && p.published_at) patch.published_at = p.published_at
+
+      const { error } = await supabase
+        .from('places').update(patch).eq('id', existing.id).eq('partner_id', partnerId)
+      if (error) errors.push(`${name}: ${error.message}`)
+      else updated++
+      continue
+    }
+
     const { error } = await supabase.from('places').insert({
       partner_id: partnerId,
-      name: p.name.trim(),
+      name,
       address: p.address?.trim() || null,
       category: p.category?.trim() || null,
-      video_url: p.video_url?.trim() || null,
+      video_url: videoUrl,
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
       status: 'active', // 즉시 공개(바로 가입 취지). 사후 가드는 hide(숨김) 기능 유지.
@@ -215,5 +278,5 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
   }
 
   revalidatePath('/partner/dashboard/places')
-  return { succeeded, errors }
+  return { succeeded, updated, errors }
 }
