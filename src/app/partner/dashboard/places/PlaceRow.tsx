@@ -14,6 +14,7 @@ export interface Place {
   rejection_reason?: string | null
   verification_status?: 'unverified' | 'confirmed' | 'rejected' | null
   source?: 'coords' | 'timestamp' | 'ai' | 'list' | null
+  video_title?: string | null  // 영상별 그룹 헤더 라벨용(없으면 대표 장소명 폴백)
 }
 
 const STATUS_BADGE: Record<string, string> = {

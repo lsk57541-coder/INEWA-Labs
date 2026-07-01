@@ -207,6 +207,7 @@ export interface BulkPlaceInput {
   view_count?: number       // 영상 조회수(2단계 저장 → 검색 필터)
   published_at?: string     // 영상 업로드일(2단계 저장 → 검색 필터)
   source?: 'coords' | 'timestamp' | 'ai' | 'list'  // 추출 출처(엔진 반환값). 수동 행은 생략 → null 저장.
+  video_title?: string      // 영상 제목(등록 시 videoInfo.title에서. 장소관리 영상별 그룹 헤더용).
 }
 
 // 반환: succeeded=신규 insert 수, updated=기존 행 갱신 수(재등록). 중복 방지의 핵심 경로.
@@ -235,12 +236,12 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
     // videoId가 없으면(영상 URL 없음/비유튜브) 매칭 자체가 불가 → 신규 insert로 진행.
     // ★name까지 일치해야 매칭 → 같은 영상의 서로 다른 상호(맛집 3곳)는 미매칭되어 각각 insert.
     let existing:
-      | { id: string; name: string; address: string | null; category: string | null; latitude: number | null; longitude: number | null; view_count: number | null; subscriber_count: number | null; published_at: string | null }
+      | { id: string; name: string; address: string | null; category: string | null; latitude: number | null; longitude: number | null; view_count: number | null; subscriber_count: number | null; published_at: string | null; video_title: string | null }
       | null = null
     if (videoId) {
       const { data: candidates } = await supabase
         .from('places')
-        .select('id, name, address, category, latitude, longitude, view_count, subscriber_count, published_at')
+        .select('id, name, address, category, latitude, longitude, view_count, subscriber_count, published_at, video_title')
         .eq('partner_id', partnerId)
         .ilike('video_url', `%${videoId}%`)
         .neq('status', 'deleted')  // 삭제한 장소는 매칭 제외 → 재등록 시 신규 생성(deleted 되살아남 방지).
@@ -261,6 +262,7 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
       if (existing.view_count === null && p.view_count != null) patch.view_count = p.view_count
       if (existing.subscriber_count === null && subscriberCount != null) patch.subscriber_count = subscriberCount
       if (existing.published_at === null && p.published_at) patch.published_at = p.published_at
+      if (isEmptyStr(existing.video_title) && p.video_title?.trim()) patch.video_title = p.video_title.trim()
 
       const { error } = await supabase
         .from('places').update(patch).eq('id', existing.id).eq('partner_id', partnerId)
@@ -282,6 +284,7 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
       subscriber_count: subscriberCount,
       published_at: p.published_at ?? null,
       source: p.source ?? null,  // 추출 출처(coords/timestamp/ai/list). 수동 추가 행은 null.
+      video_title: p.video_title?.trim() || null,  // 영상 제목(영상별 그룹 헤더용). 수동 행은 null.
     })
     if (error) {
       errors.push(`${p.name}: ${error.message}`)

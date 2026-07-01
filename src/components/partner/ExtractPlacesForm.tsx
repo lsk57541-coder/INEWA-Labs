@@ -320,6 +320,7 @@ export default function ExtractPlacesForm() {
       view_count: videoInfo?.viewCount,
       published_at: videoInfo?.publishedAt,
       source: r.source ?? undefined,  // 추출 출처(수동 행은 undefined → insert에서 null)
+      video_title: videoInfo ? decodeHtmlEntities(videoInfo.title) : undefined,  // 영상 제목(그룹 헤더용, 엔티티 정리)
     }))
     const result = await bulkRequestPlaces(payload)
     setSubmitResult(result)

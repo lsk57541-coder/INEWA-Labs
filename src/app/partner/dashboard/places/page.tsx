@@ -22,7 +22,7 @@ export default async function PartnerPlacesPage({
   const supabase = await createClient()
   let query = supabase
     .from('places')
-    .select('id, name, address, category, video_url, status, click_count, rejection_reason, verification_status, source')
+    .select('id, name, address, category, video_url, status, click_count, rejection_reason, verification_status, source, video_title')
     .eq('partner_id', partner.id)
     .neq('status', 'deleted')  // 소프트 삭제는 모든 탭(전체 포함)에서 제외 — 삭제했으니 목록에 안 보임.
     .order('created_at', { ascending: false })

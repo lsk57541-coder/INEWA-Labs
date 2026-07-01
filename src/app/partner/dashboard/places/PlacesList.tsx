@@ -1,12 +1,69 @@
 'use client'
 
 import Link from 'next/link'
-import { useOptimistic, useState, useTransition } from 'react'
+import { useMemo, useOptimistic, useState, useTransition } from 'react'
 import PlaceRow, { type Place } from './PlaceRow'
 import AddPlaceModal from './AddPlaceModal'
 import { addPlace, type PlaceInput } from './actions'
 
 type Action = { type: 'remove'; id: string } | { type: 'add'; place: Place }
+
+// 영상별 그룹핑 — 유튜버 사고 단위는 "내 영상". video_url의 videoId로 묶는다(표기 달라도 한 그룹).
+const UNLINKED = '__unlinked__'
+
+function videoIdFromUrl(url: string): string | null {
+  const m = url.match(/(?:youtu\.be\/|watch\?v=|\/shorts\/|\/embed\/)([\w-]{11})/)
+  return m ? m[1] : null
+}
+// 그룹 키: URL 없음/빈값 → 미연결. videoId 뽑히면 그것, 아니면 raw URL(표기 달라도 같은 영상은 합쳐짐).
+function videoKeyOf(place: Place): string {
+  const url = (place.video_url ?? '').trim()
+  if (!url) return UNLINKED
+  return videoIdFromUrl(url) ?? url
+}
+function isUnverified(p: Place): boolean {
+  return p.source === 'ai' && (p.verification_status ?? 'unverified') === 'unverified'
+}
+
+interface VideoGroup {
+  key: string
+  label: string
+  count: number
+  unverifiedCount: number
+  isUnlinked: boolean
+  places: Place[]
+}
+
+function buildGroups(places: Place[]): VideoGroup[] {
+  const order: string[] = []
+  const map = new Map<string, Place[]>()
+  for (const p of places) {
+    const k = videoKeyOf(p)
+    if (!map.has(k)) { map.set(k, []); order.push(k) }
+    map.get(k)!.push(p)
+  }
+  const groups: VideoGroup[] = order.map((k) => {
+    const rows = map.get(k)!
+    const isUnlinked = k === UNLINKED
+    // 헤더 라벨: 실제 영상 제목 우선, 없으면(옛 행 등 null) "대표 장소명 외 N-1곳" 폴백.
+    const title = rows.find((r) => (r.video_title ?? '').trim())?.video_title?.trim()
+    const first = rows[0]?.name?.trim() || '이름 없는 장소'
+    const label = isUnlinked
+      ? '(영상 미연결)'
+      : (title || (rows.length > 1 ? `${first} 외 ${rows.length - 1}곳` : first))
+    return {
+      key: k,
+      label,
+      count: rows.length,
+      unverifiedCount: rows.filter(isUnverified).length,
+      isUnlinked,
+      places: rows,
+    }
+  })
+  // 미연결 그룹은 항상 맨 아래(안정 정렬이라 나머지는 첫 등장 순 유지).
+  groups.sort((a, b) => (a.isUnlinked ? 1 : 0) - (b.isUnlinked ? 1 : 0))
+  return groups
+}
 
 export default function PlacesList({ places }: { places: Place[] }) {
   const [optimisticPlaces, applyOptimistic] = useOptimistic(places, (state: Place[], action: Action) => {
@@ -14,7 +71,12 @@ export default function PlacesList({ places }: { places: Place[] }) {
     return [action.place, ...state]
   })
   const [modalOpen, setModalOpen] = useState(false)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [, startTransition] = useTransition()
+
+  const groups = useMemo(() => buildGroups(optimisticPlaces), [optimisticPlaces])
+  // 삭제/비공개로 그룹이 비면 groups에서 사라짐 → selectedGroup=null → 자동으로 Level1 복귀.
+  const selectedGroup = selectedKey ? groups.find((g) => g.key === selectedKey) ?? null : null
 
   const handleHidden = (id: string) => {
     startTransition(async () => {
@@ -39,11 +101,17 @@ export default function PlacesList({ places }: { places: Place[] }) {
     })
   }
 
-  return (
-    <div>
-      {modalOpen && <AddPlaceModal onSubmit={handleAdd} onClose={() => setModalOpen(false)} />}
+  const verifyBanner = (
+    <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mb-3">
+      AI가 찾은 장소는 정확도 확인이 필요해요. “맞아요/아니에요”로 확인해 주세요.
+    </p>
+  )
 
-      {optimisticPlaces.length === 0 ? (
+  // ── 빈 상태(장소 0개) — 기존 안내 그대로 ──
+  if (optimisticPlaces.length === 0) {
+    return (
+      <div>
+        {modalOpen && <AddPlaceModal onSubmit={handleAdd} onClose={() => setModalOpen(false)} />}
         <div className="border rounded-lg p-8 text-center mt-2">
           <p className="text-sm font-medium mb-1">등록된 장소가 없어요</p>
           <p className="text-xs text-gray-400 mb-6">영상에서 방문 장소를 자동으로 추출해 등록할 수 있어요</p>
@@ -63,35 +131,88 @@ export default function PlacesList({ places }: { places: Place[] }) {
             </button>
           </div>
         </div>
-      ) : (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <Link
-              href="/partner/dashboard/places/extract"
-              className="text-sm bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
-            >
-              + 영상으로 등록하기
-            </Link>
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition"
-            >
-              직접 입력
-            </button>
-          </div>
-          {optimisticPlaces.some((p) => p.source === 'ai' && (p.verification_status ?? 'unverified') === 'unverified') && (
-            <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mb-3">
-              AI가 찾은 장소는 정확도 확인이 필요해요. 위쪽 장소부터 “맞아요/아니에요”로 확인해 주세요.
-            </p>
-          )}
-          <div className="space-y-3">
-            {optimisticPlaces.map((p) => (
-              <PlaceRow key={p.id} place={p} onHidden={handleHidden} />
-            ))}
-          </div>
+      </div>
+    )
+  }
+
+  // ── Level 2: 영상 클릭 → 그 영상의 장소들만(기존 PlaceRow 그대로) ──
+  if (selectedGroup) {
+    return (
+      <div>
+        {modalOpen && <AddPlaceModal onSubmit={handleAdd} onClose={() => setModalOpen(false)} />}
+        <button
+          type="button"
+          onClick={() => setSelectedKey(null)}
+          className="text-xs text-gray-500 hover:text-gray-700 transition mb-3"
+        >
+          ← 영상 목록으로
+        </button>
+        <div className="mb-3">
+          <p className={`text-sm font-semibold ${selectedGroup.isUnlinked ? 'text-gray-500' : ''}`}>
+            {selectedGroup.label}
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {selectedGroup.count}곳
+            {selectedGroup.unverifiedCount > 0 && (
+              <span className="text-blue-600 font-medium"> · 확인 {selectedGroup.unverifiedCount}</span>
+            )}
+          </p>
         </div>
-      )}
+        {selectedGroup.places.some(isUnverified) && verifyBanner}
+        <div className="space-y-3">
+          {selectedGroup.places.map((p) => (
+            <PlaceRow key={p.id} place={p} onHidden={handleHidden} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Level 1: 내 영상 리스트 ──
+  return (
+    <div>
+      {modalOpen && <AddPlaceModal onSubmit={handleAdd} onClose={() => setModalOpen(false)} />}
+      <div className="flex items-center justify-between mb-3">
+        <Link
+          href="/partner/dashboard/places/extract"
+          className="text-sm bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+        >
+          + 영상으로 등록하기
+        </Link>
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition"
+        >
+          직접 입력
+        </button>
+      </div>
+
+      {optimisticPlaces.some(isUnverified) && verifyBanner}
+
+      <div className="space-y-2">
+        {groups.map((g) => (
+          <button
+            key={g.key}
+            type="button"
+            onClick={() => setSelectedKey(g.key)}
+            className="w-full flex items-center gap-3 border rounded-lg px-4 py-3.5 hover:bg-gray-50 transition text-left"
+          >
+            <div className="min-w-0 flex-1">
+              <p className={`text-sm font-medium truncate ${g.isUnlinked ? 'text-gray-500' : ''}`}>
+                {g.label}
+              </p>
+              {g.unverifiedCount > 0 && (
+                <p className="text-xs text-blue-600 font-medium mt-0.5">확인 {g.unverifiedCount}</p>
+              )}
+            </div>
+            <span className="text-xs text-gray-500 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">
+              {g.count}곳
+            </span>
+            <span className="text-gray-300 shrink-0 text-lg leading-none">›</span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
