@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
     .select('id', { count: 'exact', head: true })
     .eq('partner_id', partner.id)
     .ilike('video_url', `%${videoId}%`)
+    .neq('status', 'deleted')  // 삭제한 장소는 "이미 N개 등록" 안내 카운트에서 제외.
   const registeredCount = count ?? 0
 
   return NextResponse.json({

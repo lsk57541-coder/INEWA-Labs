@@ -122,6 +122,18 @@ export async function hidePlace(id: string) {
   revalidatePath('/partner/dashboard/places')
 }
 
+// 소프트 삭제 — status='deleted'로만 표시(행 유지). hidePlace(일시 비공개)와 의미 분리한 신규 함수.
+// ★소프트라 verification_status·verified_at·id·click_count·created_at 무수정 → place_id 살아있어
+//   verification_logs·video_referrals·place_clicks 귀속 보존(delete/cascade 아님). 복구는 관리자만.
+export async function deletePlace(id: string) {
+  const supabase = await createClient()
+  const partnerId = await requireMyPartnerId()
+
+  const { error } = await supabase.from('places').update({ status: 'deleted', updated_at: new Date().toISOString() }).eq('id', id).eq('partner_id', partnerId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/partner/dashboard/places')
+}
+
 // 파트너 장소 검증 — 본인 장소만(.eq('partner_id') 명시 + RLS "partner manages own places" 이중).
 // confirm: 맞다고 확인(공개 유지). reject: 잘못된 추출 → 검색/지도에서 숨김(status='hidden').
 export async function confirmPlace(id: string) {
@@ -231,6 +243,7 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
         .select('id, name, address, category, latitude, longitude, view_count, subscriber_count, published_at')
         .eq('partner_id', partnerId)
         .ilike('video_url', `%${videoId}%`)
+        .neq('status', 'deleted')  // 삭제한 장소는 매칭 제외 → 재등록 시 신규 생성(deleted 되살아남 방지).
       existing = (candidates ?? []).find(c => normName(c.name) === normName(name)) ?? null
     }
 

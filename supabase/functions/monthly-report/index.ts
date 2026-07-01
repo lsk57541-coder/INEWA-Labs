@@ -71,6 +71,7 @@ Deno.serve(async () => {
       .from('places')
       .select('name, click_count')
       .eq('partner_id', partner.id)
+      .neq('status', 'deleted')  // 삭제한 장소는 리포트 상위3에서 제외.
       .order('click_count', { ascending: false })
       .limit(3)
 

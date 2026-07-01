@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { updatePlace, hidePlace, confirmPlace, rejectPlace, type PlaceInput } from './actions'
+import { updatePlace, hidePlace, deletePlace, confirmPlace, rejectPlace, type PlaceInput } from './actions'
 
 export interface Place {
   id: string
@@ -9,7 +9,7 @@ export interface Place {
   address: string | null
   category: string | null
   video_url: string | null
-  status: 'active' | 'reviewing' | 'hidden' | 'rejected'
+  status: 'active' | 'reviewing' | 'hidden' | 'rejected' | 'deleted'
   click_count: number
   rejection_reason?: string | null
   verification_status?: 'unverified' | 'confirmed' | 'rejected' | null
@@ -59,6 +59,18 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
         await hidePlace(place.id)
       } catch (e) {
         setError(e instanceof Error ? e.message : '처리 실패')
+      }
+    })
+  }
+
+  const handleDelete = () => {
+    if (!window.confirm(`"${place.name}"을(를) 삭제할까요?\n삭제하면 목록에서 사라집니다. 되돌리려면 관리자에게 문의해야 해요.`)) return
+    onHidden(place.id) // 삭제되므로 목록에서 낙관적 제거(hide/reject와 동일 패턴)
+    startTransition(async () => {
+      try {
+        await deletePlace(place.id)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '삭제 실패')
       }
     })
   }
@@ -178,16 +190,27 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
 
       <div className="flex items-center justify-between pt-1">
         <span className="text-xs text-gray-400">클릭 {place.click_count.toLocaleString()}회</span>
-        {place.status !== 'hidden' && (
+        <div className="flex items-center gap-3">
+          {place.status !== 'hidden' && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={handleHide}
+              className="text-xs text-gray-500 hover:text-red-600 disabled:opacity-40 transition"
+            >
+              비공개 처리
+            </button>
+          )}
+          {/* 삭제 — 비공개(일시)와 구분되게 더 약한 회색. 잘못 등록한 장소 제거용. */}
           <button
             type="button"
             disabled={pending}
-            onClick={handleHide}
-            className="text-xs text-gray-500 hover:text-red-600 disabled:opacity-40 transition"
+            onClick={handleDelete}
+            className="text-xs text-gray-300 hover:text-red-600 disabled:opacity-40 transition"
           >
-            비공개 처리
+            삭제
           </button>
-        )}
+        </div>
       </div>
       {place.status === 'rejected' && place.rejection_reason && (
         <p className="text-xs text-red-600 bg-red-50 rounded px-2 py-1.5">
