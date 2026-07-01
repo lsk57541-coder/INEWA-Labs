@@ -979,6 +979,14 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       const res = await fetch(`/api/search?${params}`)
       const json = await res.json() as { results?: VideoResult[]; error?: string }
 
+      // Rate limit(429) — 하드에러/크래시 대신 안내 배너. 익명엔 로그인 유도.
+      if (res.status === 429) {
+        setError(user
+          ? '검색 요청이 잠시 많아요. 잠시 후 다시 시도해주세요.'
+          : '검색 요청이 잠시 많아요. 잠시 후 다시 시도하거나, 로그인하면 더 많이 검색할 수 있어요.')
+        return
+      }
+
       if (!res.ok) throw new Error(json.error ?? '검색 실패')
 
       const videos = json.results ?? []

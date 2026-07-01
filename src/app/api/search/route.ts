@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { haversineKm } from '@/lib/haversine'
@@ -84,6 +85,65 @@ const SEARCH_CACHE_TTL_MS = 20 * 60 * 1000
 // 채널 결과는 업로드 카탈로그라 자주 안 바뀜 → 길게 캐싱(재검색 quota 0). 채널당 최대 영상 수 상한.
 const CHANNEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const MAX_CHANNEL_VIDEOS = 200
+
+// 익명/로그인 시간당 키워드검색(캐시미스) 캡. 튜닝 용이하게 상수로 분리(하드코딩 산재 금지).
+// 근거: YouTube 일 10,000유닛 ÷ 키워드검색 200~500유닛 = 하루 ~20~50 고유검색이 시스템 천장.
+// 정상 사용자는 시간당 고유 미스가 한 자릿수라 익명 10에도 거의 안 걸리고, 스크립트는 걸린다.
+const RATE_LIMIT_ANON = 10
+const RATE_LIMIT_AUTH = 40
+
+// 키워드검색(q, search.list 200~500유닛/건)만 게이팅. 채널검색은 v1 면제(저위험 ~수유닛+24h캐시,
+// 나중 남용 시 별도 캡 추가). 캐시 미스 시점(실제 YouTube 호출 직전)에서만 호출되므로 캐시 히트는
+// 구조적으로 자동 면제. ★fail-open: 설정 누락/DB 오류 시 검색을 막지 않고 통과(가용성 우선).
+async function checkKeywordRateLimit(
+  req: NextRequest,
+  userId: string | null
+): Promise<{ limited: boolean; retryAfterSec: number }> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) return { limited: false, retryAfterSec: 0 } // fail-open
+
+  // identifier: 로그인은 user_id(공유 IP 무관), 익명은 IP sha256 해시. ★원문 IP는 저장/로그 금지, 해시만.
+  let identifier: string
+  let cap: number
+  if (userId) {
+    identifier = `user:${userId}`
+    cap = RATE_LIMIT_AUTH
+  } else {
+    const fwd = req.headers.get('x-forwarded-for') ?? ''
+    const ip = fwd.split(',')[0].trim() || 'unknown'
+    identifier = `ip:${createHash('sha256').update(ip).digest('hex')}`
+    cap = RATE_LIMIT_ANON
+  }
+
+  // 정시(UTC) 시간버킷 — JS에서 일관되게 truncate하면 PG 세션 TZ와 무관하게 내부 일관성 유지.
+  const now = new Date()
+  const windowStart = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()
+  ))
+
+  try {
+    const db = createClient(url, serviceKey)
+    // bump_search_rate: (identifier, window)로 원자적 +1 후 새 count 반환(동시요청 언더카운트 없음).
+    const { data, error } = await db.rpc('bump_search_rate', {
+      p_identifier: identifier,
+      p_window: windowStart.toISOString(),
+    })
+    if (error) {
+      console.error('[rate-limit] rpc failed:', error.message)
+      return { limited: false, retryAfterSec: 0 } // fail-open
+    }
+    const count = typeof data === 'number' ? data : 0
+    if (count > cap) {
+      const retryAfterSec = Math.max(1, Math.ceil((windowStart.getTime() + 3600_000 - now.getTime()) / 1000))
+      return { limited: true, retryAfterSec }
+    }
+    return { limited: false, retryAfterSec: 0 }
+  } catch (e) {
+    console.error('[rate-limit] failed:', e instanceof Error ? e.message : e)
+    return { limited: false, retryAfterSec: 0 } // fail-open
+  }
+}
 
 function searchCacheKey(q: string | undefined, channelId: string | undefined, lat: number, lng: number): string {
   // 채널 후보 풀은 위치 무관(전국, 거리는 다운스트림 계산) → lat/lng 빼서 위치 불문 캐시 재사용.
@@ -652,6 +712,18 @@ export async function GET(req: NextRequest) {
       const channelItems = await ytChannelUploads(channelId)
       unique = dedupe(channelItems)
     } else {
+      // ★rate limit — 캐시 미스 + 키워드검색(q)에서만 도달(캐시 히트/채널검색은 여기 안 옴 → 자동 면제).
+      // 로그인은 user_id, 익명은 IP 해시 기준. 초과 시 429. fail-open이라 DB 오류엔 통과.
+      const supabaseAuth = await createServerClient()
+      const { data: { user: rlUser } } = await supabaseAuth.auth.getUser()
+      const { limited, retryAfterSec } = await checkKeywordRateLimit(req, rlUser?.id ?? null)
+      if (limited) {
+        return NextResponse.json(
+          { error: 'rate_limited', retryAfterSec },
+          { status: 429, headers: { 'Retry-After': String(retryAfterSec) } }
+        )
+      }
+
       const { enrichedQ, publishedAfter, order: catOrder } = buildCategoryParams(q!, category)
 
       const geoItems = await ytSearch(enrichedQ, {
