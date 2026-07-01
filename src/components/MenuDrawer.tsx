@@ -224,7 +224,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
               className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
             >
               <StarIcon />
-              유튜버 파트너 신청
+              유튜버 파트너
             </Link>
           )}
 
