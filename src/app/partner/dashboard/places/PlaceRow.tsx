@@ -129,16 +129,27 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
           onChange={(e) => setFields((f) => ({ ...f, category: e.target.value }))}
           onBlur={() => saveField({ category: fields.category })}
           placeholder="카테고리"
-          className="flex-1 text-sm border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+          className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
         />
         <input
           value={fields.video_url}
           onChange={(e) => setFields((f) => ({ ...f, video_url: e.target.value }))}
           onBlur={() => saveField({ video_url: fields.video_url })}
           placeholder="연결 영상 URL"
-          className="flex-1 text-sm border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+          className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
         />
       </div>
+      {/* 긴 URL을 늘어놓는 대신 실제 영상을 여는 액션(Notion/Airbnb식). URL 편집칸은 위에 그대로 유지. */}
+      {/^https?:\/\//.test((fields.video_url ?? '').trim()) && (
+        <a
+          href={(fields.video_url ?? '').trim()}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+        >
+          ▶ 영상 보기
+        </a>
+      )}
 
       {/* 검증 — AI가 찾은 미검증 장소는 확인 유도, 확인/거부 결과는 상태로 표시 */}
       {isAiUnverified ? (

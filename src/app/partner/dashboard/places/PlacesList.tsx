@@ -31,6 +31,7 @@ interface VideoGroup {
   count: number
   unverifiedCount: number
   isUnlinked: boolean
+  videoUrl: string | null  // 대표 영상 URL(헤더 "영상 보기" 링크용). 미연결/비URL이면 null.
   places: Place[]
 }
 
@@ -51,12 +52,17 @@ function buildGroups(places: Place[]): VideoGroup[] {
     const label = isUnlinked
       ? '(영상 미연결)'
       : (title || (rows.length > 1 ? `${first} 외 ${rows.length - 1}곳` : first))
+    // 대표 영상 URL — 같은 영상이라 아무 장소나 동일. http(s)만(깨진 href 방지). 미연결이면 null.
+    const videoUrl = isUnlinked
+      ? null
+      : (rows.find((r) => /^https?:\/\//.test((r.video_url ?? '').trim()))?.video_url?.trim() ?? null)
     return {
       key: k,
       label,
       count: rows.length,
       unverifiedCount: rows.filter(isUnverified).length,
       isUnlinked,
+      videoUrl,
       places: rows,
     }
   })
@@ -148,9 +154,21 @@ export default function PlacesList({ places }: { places: Place[] }) {
           ← 영상 목록으로
         </button>
         <div className="mb-3">
-          <p className={`text-sm font-semibold ${selectedGroup.isUnlinked ? 'text-gray-500' : ''}`}>
-            {selectedGroup.label}
-          </p>
+          {selectedGroup.videoUrl ? (
+            <a
+              href={selectedGroup.videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-start gap-1 text-sm font-semibold text-blue-600 hover:underline"
+            >
+              <span className="shrink-0">▶</span>
+              <span className="min-w-0">{selectedGroup.label}</span>
+            </a>
+          ) : (
+            <p className={`text-sm font-semibold ${selectedGroup.isUnlinked ? 'text-gray-500' : ''}`}>
+              {selectedGroup.label}
+            </p>
+          )}
           <p className="text-xs text-gray-400 mt-0.5">
             {selectedGroup.count}곳
             {selectedGroup.unverifiedCount > 0 && (
