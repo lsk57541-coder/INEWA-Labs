@@ -117,7 +117,41 @@ export async function hidePlace(id: string) {
   const supabase = await createClient()
   const partnerId = await requireMyPartnerId()
 
-  const { error } = await supabase.from('places').update({ status: 'hidden', updated_at: new Date().toISOString() }).eq('id', id).eq('partner_id', partnerId)
+  // 복원 목적지 기억: 숨기기 직전 status를 prev_status에 저장(unhidePlace가 되돌릴 때 사용).
+  // ★이미 'hidden'인 행 재호출 시 prev_status가 'hidden'으로 오염되는 것 방지 — hidden이 아닐 때만 캡처.
+  const { data: place } = await supabase
+    .from('places').select('status').eq('id', id).eq('partner_id', partnerId).maybeSingle()
+
+  const patch: Record<string, unknown> = { status: 'hidden', updated_at: new Date().toISOString() }
+  if (place && place.status !== 'hidden') patch.prev_status = place.status
+
+  const { error } = await supabase.from('places').update(patch).eq('id', id).eq('partner_id', partnerId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/partner/dashboard/places')
+}
+
+// 공개로 전환(일반 비공개 복원) — prev_status로 되돌린다(null이면 'active' 폴백). 복원 후 prev_status 비움.
+// ★검증-reject로 숨긴 것(verification_status==='rejected')은 confirmPlace("맞아요로 변경")가 담당 →
+//   여기선 no-op(두 복원 경로가 겹치지 않게). verification_status는 절대 건드리지 않음(검증 이력 보존).
+export async function unhidePlace(id: string) {
+  const supabase = await createClient()
+  const partnerId = await requireMyPartnerId()
+
+  const { data: place } = await supabase
+    .from('places').select('prev_status, verification_status').eq('id', id).eq('partner_id', partnerId).maybeSingle()
+  if (!place) throw new Error('장소를 찾을 수 없습니다.')
+
+  // reject-hidden은 검증 경로 전용 — 방어적으로 no-op(UI가 이미 버튼을 안 띄우지만 이중처리 방지).
+  if (place.verification_status === 'rejected') {
+    revalidatePath('/partner/dashboard/places')
+    return
+  }
+
+  const target = place.prev_status ?? 'active'  // 옛 hidden 행 등 prev_status 없으면 active 폴백
+  const { error } = await supabase
+    .from('places')
+    .update({ status: target, prev_status: null, updated_at: new Date().toISOString() })
+    .eq('id', id).eq('partner_id', partnerId)
   if (error) throw new Error(error.message)
   revalidatePath('/partner/dashboard/places')
 }

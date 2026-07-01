@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { updatePlace, hidePlace, deletePlace, confirmPlace, rejectPlace, type PlaceInput } from './actions'
+import { updatePlace, hidePlace, unhidePlace, deletePlace, confirmPlace, rejectPlace, type PlaceInput } from './actions'
 
 export interface Place {
   id: string
@@ -58,6 +58,18 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     startTransition(async () => {
       try {
         await hidePlace(place.id)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '처리 실패')
+      }
+    })
+  }
+
+  // 공개로 전환(일반 비공개 복원) — prev_status로 되돌림(서버). 비공개 탭에서 낙관적 제거.
+  const handleUnhide = () => {
+    onHidden(place.id) // 복원되면 비공개 탭 목록에서 빠짐(hide/reject와 동일 패턴)
+    startTransition(async () => {
+      try {
+        await unhidePlace(place.id)
       } catch (e) {
         setError(e instanceof Error ? e.message : '처리 실패')
       }
@@ -211,6 +223,17 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
               className="text-xs text-gray-500 hover:text-red-600 disabled:opacity-40 transition"
             >
               비공개 처리
+            </button>
+          )}
+          {/* 공개로 전환(일반 비공개 복원) — reject로 숨긴 건 위 "맞아요로 변경"이 담당하므로 제외. */}
+          {place.status === 'hidden' && place.verification_status !== 'rejected' && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={handleUnhide}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40 transition"
+            >
+              공개로 전환
             </button>
           )}
           {/* 삭제 — 비공개(일시)와 구분되게 더 약한 회색. 잘못 등록한 장소 제거용. */}
