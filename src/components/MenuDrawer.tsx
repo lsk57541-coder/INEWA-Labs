@@ -67,6 +67,14 @@ function BookIcon() {
   )
 }
 
+function StarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  )
+}
+
 function SettingsIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -198,6 +206,28 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
             문의하기
           </button>
 
+          {/* 파트너 — 모집 진입로(핵심 전략). 푸터 회색 링크에서 정식 메뉴로 승격, 관리자 항목보다 위.
+              상태 분기(대시보드/신청)와 라우팅은 기존 로직 그대로 재사용 — 위치·스타일만 변경. */}
+          {user?.isApprovedPartner ? (
+            <Link
+              href="/partner/dashboard"
+              onClick={onClose}
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+            >
+              <StarIcon />
+              파트너 대시보드
+            </Link>
+          ) : (
+            <Link
+              href="/partner/apply"
+              onClick={onClose}
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+            >
+              <StarIcon />
+              유튜버 파트너 신청
+            </Link>
+          )}
+
           {user?.isAdmin && (
             <Link
               href="/admin"
@@ -210,25 +240,8 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
           )}
         </div>
 
-        {/* 푸터 */}
-        <div className="border-t border-border shrink-0 px-4 py-3 space-y-2">
-          {user?.isApprovedPartner ? (
-            <Link
-              href="/partner/dashboard"
-              onClick={onClose}
-              className="block text-xs text-muted hover:text-gray-600 transition"
-            >
-              파트너 대시보드 →
-            </Link>
-          ) : (
-            <Link
-              href="/partner/apply"
-              onClick={onClose}
-              className="block text-xs text-muted hover:text-gray-600 transition"
-            >
-              유튜버이신가요? 파트너 신청하기 →
-            </Link>
-          )}
+        {/* 푸터 — 법적 링크만(파트너 항목은 위 메뉴 리스트로 승격). */}
+        <div className="border-t border-border shrink-0 px-4 py-3">
           <div className="flex gap-3 text-xs text-muted">
             <Link href="/terms" onClick={onClose} className="hover:text-gray-600">이용약관</Link>
             <Link href="/privacy" onClick={onClose} className="hover:text-gray-600">개인정보처리방침</Link>
