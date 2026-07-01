@@ -107,7 +107,7 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
           value={fields.name}
           onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
           onBlur={() => saveField({ name: fields.name })}
-          className="flex-1 text-sm font-medium border-b border-transparent hover:border-gray-200 focus:border-blue-400 outline-none px-1 py-0.5"
+          className="flex-1 text-sm font-medium border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
         />
         <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_BADGE[place.status] ?? 'bg-gray-100 text-gray-500'}`}>
           {STATUS_LABEL[place.status] ?? place.status}
@@ -119,7 +119,7 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
         onChange={(e) => setFields((f) => ({ ...f, address: e.target.value }))}
         onBlur={() => saveField({ address: fields.address })}
         placeholder="주소"
-        className="w-full text-xs text-gray-500 border-b border-transparent hover:border-gray-200 focus:border-blue-400 outline-none px-1 py-0.5"
+        className="w-full text-sm text-gray-600 border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
       />
 
       <div className="flex gap-2">
@@ -128,14 +128,14 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
           onChange={(e) => setFields((f) => ({ ...f, category: e.target.value }))}
           onBlur={() => saveField({ category: fields.category })}
           placeholder="카테고리"
-          className="flex-1 text-xs border-b border-transparent hover:border-gray-200 focus:border-blue-400 outline-none px-1 py-0.5"
+          className="flex-1 text-sm border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
         />
         <input
           value={fields.video_url}
           onChange={(e) => setFields((f) => ({ ...f, video_url: e.target.value }))}
           onBlur={() => saveField({ video_url: fields.video_url })}
           placeholder="연결 영상 URL"
-          className="flex-1 text-xs border-b border-transparent hover:border-gray-200 focus:border-blue-400 outline-none px-1 py-0.5"
+          className="flex-1 text-sm border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
         />
       </div>
 
