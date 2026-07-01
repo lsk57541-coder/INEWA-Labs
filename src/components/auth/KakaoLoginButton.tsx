@@ -5,12 +5,19 @@ import { createClient } from '@/lib/supabase/client'
 interface KakaoLoginButtonProps {
   label?: string
   className?: string
+  next?: string  // 로그인 후 복귀할 내부 경로(예: /partner/apply). 없으면 기존대로 홈.
 }
 
-export default function KakaoLoginButton({ label = '카카오로 시작하기', className = '' }: KakaoLoginButtonProps) {
+export default function KakaoLoginButton({ label = '카카오로 시작하기', className = '', next }: KakaoLoginButtonProps) {
   const supabase = createClient()
 
   const handleLogin = async () => {
+    // 복귀 경로를 단기 쿠키로 넘김(콜백이 read→가드→clear). redirectTo는 그대로 두어 화이트리스트 불변.
+    // SameSite=Lax라 OAuth 왕복(top-level GET redirect)에서 쿠키가 콜백까지 전달됨. 내부경로만 방어 저장.
+    if (next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\')) {
+      const secure = location.protocol === 'https:' ? '; secure' : ''
+      document.cookie = `partner_return_to=${encodeURIComponent(next)}; path=/; max-age=600; samesite=lax${secure}`
+    }
     await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {

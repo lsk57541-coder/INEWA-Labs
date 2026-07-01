@@ -113,7 +113,7 @@ export default async function PartnerApplyPage({
   const { error } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  if (!user) redirect('/login?next=/partner/apply')  // 로그인 후 파트너 신청으로 복귀(콜백이 쿠키로 처리)
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 md:py-10">

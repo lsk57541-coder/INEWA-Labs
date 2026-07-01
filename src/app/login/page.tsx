@@ -5,9 +5,9 @@ import { PinPlayIcon } from '@/components/BrandLogo'
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; desc?: string }>
+  searchParams: Promise<{ error?: string; desc?: string; next?: string }>
 }) {
-  const { error, desc } = await searchParams
+  const { error, desc, next } = await searchParams
 
   const errorMessage = error
     ? (desc?.trim() || '로그인 중 오류가 발생했습니다. 다시 시도해주세요.')
@@ -50,6 +50,7 @@ export default async function LoginPage({
         <KakaoLoginButton
           label="카카오 1초 로그인"
           className="w-full justify-center"
+          next={next}
         />
 
         <Link
