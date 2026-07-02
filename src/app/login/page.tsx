@@ -13,6 +13,9 @@ export default async function LoginPage({
     ? (desc?.trim() || '로그인 중 오류가 발생했습니다. 다시 시도해주세요.')
     : null
 
+  // 파트너 신청으로 튕겨온 경우에만 문맥 배너로 교체(그 외엔 소비자 화면 그대로).
+  const isPartnerFlow = next === '/partner/apply'
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-white">
       <div className="w-full max-w-sm">
@@ -33,18 +36,25 @@ export default async function LoginPage({
           </div>
         )}
 
-        {/* 로그인 혜택 */}
-        <div className="border rounded-lg p-4 mb-6 space-y-2.5">
-          <p className="text-xs font-medium text-gray-500 mb-3">로그인하면 이런 게 가능해요</p>
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <HeartIcon />
-            관심 장소 저장
+        {/* 문맥 안내 — 파트너 신청 흐름이면 파트너 문구, 아니면 소비자 혜택 */}
+        {isPartnerFlow ? (
+          <div className="border rounded-lg p-4 mb-6">
+            <p className="text-sm font-semibold text-gray-800">파트너 신청은 카카오 로그인 후 진행돼요</p>
+            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">로그인 → YouTube 채널 연동, 2단계면 끝나요.</p>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <FlagIcon />
-            가본 곳 기록
+        ) : (
+          <div className="border rounded-lg p-4 mb-6 space-y-2.5">
+            <p className="text-xs font-medium text-gray-500 mb-3">로그인하면 이런 게 가능해요</p>
+            <div className="flex items-center gap-2 text-sm text-gray-700">
+              <HeartIcon />
+              관심 장소 저장
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-700">
+              <FlagIcon />
+              가본 곳 기록
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 카카오 로그인 */}
         <KakaoLoginButton

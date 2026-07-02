@@ -542,6 +542,10 @@ export default function ExtractPlacesForm() {
                     {row.lat.toFixed(5)}, {row.lng.toFixed(5)}
                   </p>
                 )}
+                {/* 좌표 없는 행은 저장에서 빠짐 — 살리는 법을 행에서 바로 안내 */}
+                {row.lat === null && row.lng === null && !row.geocoding && !row.geocodeError && (
+                  <p className="text-xs text-amber-600">주소를 입력하면 저장돼요</p>
+                )}
 
                 {/* 카테고리 */}
                 <input
