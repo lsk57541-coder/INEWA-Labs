@@ -1,10 +1,13 @@
 import Link from 'next/link'
 import { getMyPartner, getDashboardStats } from './actions'
 
+// 전월 대비 증감 표기. 첫 달(previous=0)은 '신규', 이번 달 실적 0은 중립 '–'로
+// '+100%/-100%' 오해(신규인데 폭증처럼·실적0인데 폭락처럼)를 피한다.
 function changeRate(current: number, previous: number): string {
-  if (previous === 0) return current > 0 ? '+100%' : '0%'
+  if (current === 0) return '–'
+  if (previous === 0) return '신규'
   const rate = ((current - previous) / previous) * 100
-  return `${rate >= 0 ? '+' : ''}${rate.toFixed(1)}%`
+  return `전월 대비 ${rate >= 0 ? '+' : ''}${rate.toFixed(1)}%`
 }
 
 function MapPinIcon() {
@@ -79,7 +82,7 @@ export default async function PartnerDashboardPage() {
               <p className="text-2xl font-bold">{stats.activePlaceCount}</p>
               <p className="text-xs text-gray-400 mt-1">이번 달 지도 표시 장소</p>
               <p className="text-xs text-blue-600 mt-1 font-medium">
-                전월 대비 {changeRate(stats.activePlaceCount, stats.activePlaceCountLastMonth)}
+                {changeRate(stats.activePlaceCount, stats.activePlaceCountLastMonth)}
               </p>
             </>
           )}
@@ -88,7 +91,7 @@ export default async function PartnerDashboardPage() {
           <p className="text-2xl font-bold">{stats.clicksThisMonth.toLocaleString()}</p>
           <p className="text-xs text-gray-400 mt-1">이번 달 지도 클릭 수</p>
           <p className="text-xs text-blue-600 mt-1 font-medium">
-            전월 대비 {changeRate(stats.clicksThisMonth, stats.clicksLastMonth)}
+            {changeRate(stats.clicksThisMonth, stats.clicksLastMonth)}
           </p>
         </div>
       </div>

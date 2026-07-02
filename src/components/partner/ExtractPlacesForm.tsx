@@ -335,17 +335,26 @@ export default function ExtractPlacesForm() {
         <p className="font-medium mb-1">등록 완료!</p>
         <p className="text-sm text-gray-500 mb-1">추가한 장소가 지도에 바로 반영됐어요.</p>
         {submitResult.succeeded > 0 && (
-          <p className="text-xs text-gray-400 mt-1">{submitResult.succeeded}개 신규 등록</p>
+          <p className="text-sm text-gray-700 font-medium mt-1.5">{submitResult.succeeded}개 신규 등록</p>
         )}
         {submitResult.updated > 0 && (
-          <p className="text-xs text-gray-400 mt-1">{submitResult.updated}개는 이미 등록된 영상이라 기존 장소를 갱신했어요</p>
+          <p className="text-sm text-gray-700 font-medium mt-1.5">{submitResult.updated}개는 이미 등록된 영상이라 기존 장소를 갱신했어요</p>
         )}
         {submitResult.errors.length > 0 && (
           <p className="text-xs text-red-500 mt-1">{submitResult.errors.length}개 실패</p>
         )}
-        <a href="/partner/dashboard/places" className="inline-block mt-6 text-sm text-blue-600 hover:underline">
-          장소 목록으로 돌아가기
-        </a>
+        {/* 여러 영상 연속 등록 편의 — 재진입 시 폼 리셋되도록 <a>로 전체 네비게이션(리마운트). */}
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <a
+            href="/partner/dashboard/places/extract"
+            className="inline-block bg-black text-white text-sm font-medium px-6 py-2.5 rounded-lg hover:bg-gray-800 transition"
+          >
+            다른 영상 등록하기
+          </a>
+          <a href="/partner/dashboard/places" className="text-sm text-blue-600 hover:underline">
+            장소 목록으로 돌아가기
+          </a>
+        </div>
       </div>
     )
   }
