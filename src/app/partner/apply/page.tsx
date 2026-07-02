@@ -143,9 +143,32 @@ export default async function PartnerApplyPage({
       )}
 
       {/* 2. 상단 CTA */}
-      <div className="mb-8">
+      <div className="mb-4">
         <CtaButton />
         <p className="text-[11px] text-gray-400 text-center mt-2">가입 심사 없음 · 연동하면 바로 활성화</p>
+      </div>
+
+      {/* 2-1. 활용 가이드 (보조 — 주 CTA보다 약한 아웃라인) */}
+      <div className="mb-8 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <p className="text-sm font-medium text-gray-800">📄 파트너 활용 가이드 (PDF)</p>
+        <p className="text-xs text-gray-500 mt-0.5">연동 전에 먼저 살펴보세요.</p>
+        <div className="flex gap-2 mt-3">
+          <a
+            href="/partner-guide.pdf"
+            target="_blank"
+            rel="noopener"
+            className="flex-1 text-center text-xs border border-gray-300 text-gray-700 bg-white rounded-lg py-2 hover:bg-gray-100 transition"
+          >
+            바로 보기
+          </a>
+          <a
+            href="/partner-guide.pdf"
+            download
+            className="flex-1 text-center text-xs border border-gray-300 text-gray-700 bg-white rounded-lg py-2 hover:bg-gray-100 transition"
+          >
+            다운로드
+          </a>
+        </div>
       </div>
 
       {/* 3. 혜택 5개 */}

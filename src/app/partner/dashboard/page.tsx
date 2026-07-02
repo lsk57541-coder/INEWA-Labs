@@ -119,6 +119,29 @@ export default async function PartnerDashboardPage() {
           </div>
         </Link>
       </div>
+
+      {/* 활용 가이드 (PDF) */}
+      <div className="border rounded-lg p-4 mt-3">
+        <p className="text-sm font-medium">📄 활용 가이드 (PDF)</p>
+        <p className="text-xs text-gray-400 mt-1">파트너 기능 사용법을 담았어요</p>
+        <div className="flex gap-2 mt-3">
+          <a
+            href="/partner-guide.pdf"
+            target="_blank"
+            rel="noopener"
+            className="flex-1 text-center text-xs border border-gray-300 text-gray-700 rounded-lg py-2 hover:bg-gray-50 transition"
+          >
+            바로 보기
+          </a>
+          <a
+            href="/partner-guide.pdf"
+            download
+            className="flex-1 text-center text-xs border border-gray-300 text-gray-700 rounded-lg py-2 hover:bg-gray-50 transition"
+          >
+            다운로드
+          </a>
+        </div>
+      </div>
     </div>
   )
 }
