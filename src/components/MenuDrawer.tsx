@@ -119,10 +119,10 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
 
         {/* 서비스 소개 — OG 카드처럼 코랄 짧은 구분선(2px 솔리드 → DPR 무관, 모바일/웹 동일) + 두 줄 슬로건.
             각 줄이 한 덩어리라 "바/로" 같은 단어 중간 끊김 없음. */}
-        <div className="px-4 pt-2 pb-3" style={{ backgroundColor: '#D85A30' }}>
-          <div className="mb-2.5" style={{ width: 28, height: 2, backgroundColor: '#FFFFFF', borderRadius: 1 }} />
-          <p className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.92)' }}>영상 속 장소를 지도로</p>
-          <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>유튜버가 다녀온 그곳, 바로 찾아보세요</p>
+        <div className="px-4 pt-2 pb-3" style={{ backgroundColor: '#FAECE7' }}>
+          <div className="mb-2.5" style={{ width: 28, height: 2, backgroundColor: '#D85A30', borderRadius: 1 }} />
+          <p className="text-xs font-medium" style={{ color: '#993C1D' }}>영상 속 장소를 지도로</p>
+          <p className="text-[11px] mt-0.5" style={{ color: '#8a7a70' }}>유튜버가 다녀온 그곳, 바로 찾아보세요</p>
         </div>
 
         {/* 유저 섹션 */}
