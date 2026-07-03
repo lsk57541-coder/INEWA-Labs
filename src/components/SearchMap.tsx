@@ -1861,7 +1861,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Results list — independent bottom sheet, slides up from the bottom */}
       {allResults.length > 0 && !selectedGroup && !selectedVideo && (
         <div
-          className={`absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col max-h-[50dvh] ${DESKTOP_LEFT_PANEL} md:top-[64px] md:max-h-none md:translate-y-0 ${
+          className={`absolute left-0 right-0 bottom-0 z-10 bg-warm rounded-t-2xl shadow-2xl transition-transform duration-300 flex flex-col max-h-[50dvh] ${DESKTOP_LEFT_PANEL} md:top-[64px] md:max-h-none md:translate-y-0 ${
             listOpen ? 'translate-y-0' : 'translate-y-[calc(100%-56px)]'
           }`}
         >
@@ -1877,7 +1877,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mt-2 mb-1.5 md:hidden" />
             <button
               onClick={() => setListOpen((o) => !o)}
-              className="w-full flex items-center justify-between px-4 pb-3 md:pt-3 text-xs text-gray-500 font-medium border-b border-border"
+              className="w-full flex items-center justify-between px-4 pb-3 md:pt-3 text-xs text-ink-muted font-medium border-b border-line"
             >
               <span className="truncate">
                 {searchMode === 'channel' && selectedChannel ? `🎙 ${selectedChannel.title}` : `"${keyword}"`} 검색결과 {filteredResults.length}개
@@ -1885,7 +1885,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               <span className="shrink-0 ml-2 md:hidden">{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
             </button>
           </div>
-          <div className="flex gap-1.5 px-3 py-2 border-b border-border shrink-0">
+          <div className="flex gap-1.5 px-3 py-2 border-b border-line shrink-0">
             {([['all', '전체'] as const, ['long', null] as const, ['short', null] as const]).map(([key, label]) => (
               <button
                 key={key}
@@ -1907,15 +1907,15 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </button>
             ))}
           </div>
-          <div className="flex gap-1.5 px-3 py-2 border-b border-border shrink-0">
+          <div className="flex gap-1.5 px-3 py-2 border-b border-line shrink-0">
             {([['views', '조회수'], ['duration', '영상길이'], ['distance', '거리(가까운)']] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setSortBy(key)}
                 className={`flex-1 text-xs rounded-full py-1.5 border transition font-medium ${
                   sortBy === key
-                    ? 'bg-accent text-white border-accent'
-                    : 'bg-white text-gray-600 border-border hover:bg-gray-50'
+                    ? 'bg-coral text-white border-coral'
+                    : 'bg-white text-ink-muted border-line hover:bg-surface'
                 }`}
               >
                 {label}
@@ -1931,7 +1931,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 {videoFilter !== 'all' ? (
                   <button
                     onClick={() => setVideoFilter('all')}
-                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    className="text-xs text-coral hover:text-coral-ink font-medium"
                   >
                     전체 보기로 전환
                   </button>
@@ -1945,7 +1945,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 // 모음영상은 같은 videoId가 여러 좌표로 중복 → videoId만으론 React key 충돌이 나서
                 // 필터로 줄 때 옛 DOM이 안 지워졌음. videoId+좌표로 고유화.
                 key={`${v.videoId}:${v.lat}:${v.lng}`}
-                className="flex items-start gap-2 px-3 py-2 hover:bg-gray-50 transition border-b border-border last:border-0"
+                className="flex items-start gap-2 px-3 py-2 hover:bg-surface transition border-b border-line last:border-0"
               >
                 <div className="relative shrink-0 cursor-pointer" onClick={() => setDetailVideo(v)}>
                   <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] md:w-40 md:h-[90px] object-cover rounded" />
@@ -1953,7 +1953,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 </div>
                 <div className="flex-1 overflow-hidden min-w-0">
                   <p
-                    className="text-xs font-medium line-clamp-2 leading-tight cursor-pointer hover:text-blue-600"
+                    className="text-xs font-medium line-clamp-2 leading-tight cursor-pointer hover:text-coral"
                     onClick={() => setDetailVideo(v)}
                   >
                     {decodeHtmlEntities(v.title)}
@@ -1962,7 +1962,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     {v.placeName && (
                       <p className="text-xs font-semibold text-gray-700 truncate">📍 {v.placeName}</p>
                     )}
-                    <span className="shrink-0 text-xs font-bold text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">
+                    <span className="shrink-0 text-xs font-bold text-coral bg-coral-soft rounded px-1.5 py-0.5">
                       {v.distanceKm}km
                     </span>
                   </div>
@@ -2023,13 +2023,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Video list — bottom sheet capped under half the screen, shown when a map marker is clicked */}
       {selectedGroup && (
         <div
-          className="absolute left-0 right-0 bottom-0 z-10 bg-white rounded-t-2xl shadow-2xl flex flex-col md:left-1/2 md:right-auto md:-translate-x-1/2 md:max-w-2xl md:w-full md:rounded-2xl md:bottom-3"
+          className="absolute left-0 right-0 bottom-0 z-10 bg-warm rounded-t-2xl shadow-2xl flex flex-col md:left-1/2 md:right-auto md:-translate-x-1/2 md:max-w-2xl md:w-full md:rounded-2xl md:bottom-3"
           style={{ maxHeight: '45dvh' }}
         >
           <div className="pt-2 pb-0 flex justify-center shrink-0">
             <div className="w-10 h-1.5 bg-gray-200 rounded-full" />
           </div>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-gray-50 shrink-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-surface shrink-0">
             <div>
               <p className="text-sm font-bold">이 위치의 영상</p>
               <p className="text-xs text-gray-400 mt-0.5">{selectedGroup.videos.length}개 · 조회수순</p>
@@ -2045,10 +2045,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             {selectedGroup.videos.map((v) => (
               <div
                 key={`${v.videoId}:${v.lat}:${v.lng}`}
-                className={`flex gap-3 px-3 py-3.5 transition border-b border-border last:border-0 group ${
+                className={`flex gap-3 px-3 py-3.5 transition border-b border-line last:border-0 group ${
                   selectedVideo?.videoId === v.videoId
-                    ? 'border-l-4 border-blue-500 bg-blue-50'
-                    : 'hover:bg-gray-50'
+                    ? 'border-l-4 border-coral bg-coral-soft'
+                    : 'hover:bg-surface'
                 }`}
               >
                 {/* Thumbnail — click to play */}
@@ -2068,7 +2068,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 {/* Info */}
                 <div className="flex-1 overflow-hidden min-w-0">
                   <p
-                    className="text-xs font-medium line-clamp-2 leading-snug cursor-pointer hover:text-blue-600"
+                    className="text-xs font-medium line-clamp-2 leading-snug cursor-pointer hover:text-coral"
                     onClick={() => setDetailVideo(v)}
                   >
                     {decodeHtmlEntities(v.title)}
@@ -2077,7 +2077,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     {v.placeName && (
                       <p className="text-sm font-semibold text-gray-800 truncate">📍 {v.placeName}</p>
                     )}
-                    <span className="shrink-0 text-xs font-bold text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">
+                    <span className="shrink-0 text-xs font-bold text-coral bg-coral-soft rounded px-1.5 py-0.5">
                       {v.distanceKm}km
                     </span>
                   </div>
@@ -2146,7 +2146,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   {selectedVideo.placeName && (
                     <p className="text-base font-bold text-gray-800">📍 {selectedVideo.placeName}</p>
                   )}
-                  <span className="shrink-0 text-xs font-bold text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">
+                  <span className="shrink-0 text-xs font-bold text-coral bg-coral-soft rounded px-1.5 py-0.5">
                     현재 위치에서 {selectedVideo.distanceKm}km
                   </span>
                 </div>
