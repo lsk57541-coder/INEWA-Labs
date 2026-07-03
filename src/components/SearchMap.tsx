@@ -27,6 +27,7 @@ import LoginPromptModal from '@/components/LoginPromptModal'
 import SearchResultModal from '@/components/SearchResultModal'
 import PlaceDetailCard from '@/components/PlaceDetailCard'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
+import { placeKey } from '@/lib/placeKey'
 import { track } from '@/lib/track'
 
 // 검색 로딩 중 순차로 보여주는 단계 라벨(가짜 — /api/search는 단일 JSON 응답이라 실제 단계 진행은
@@ -360,12 +361,6 @@ function PartnerChip() {
 
 // 데스크톱(md+, 768px↑): 하단 바텀시트를 좌측 고정 사이드 패널로(구글맵식). 모바일(≤767px)은 불변.
 const DESKTOP_LEFT_PANEL = 'md:left-3 md:right-auto md:w-[400px] lg:w-[460px] md:bottom-3 md:rounded-2xl md:z-[8]'
-
-// 찜/가본곳 식별키. 모음영상은 같은 videoId가 여러 좌표(가게)로 뜨므로 videoId만으론
-// 한 곳 찜이 전체로 번진다 → videoId+좌표로 장소별 구분(좌표 5자리=약 1m, DB 라운드트립 안전).
-function placeKey(videoId: string, lat: number, lng: number): string {
-  return `${videoId}:${lat.toFixed(5)}:${lng.toFixed(5)}`
-}
 
 function toFavoritePayload(v: VideoResult): FavoriteVideo {
   return {

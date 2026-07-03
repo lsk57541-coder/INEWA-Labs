@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getFavorites, getVisited, getPlaceDetails, type FavoriteVideo } from '@/app/actions'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
+import { placeKey } from '@/lib/placeKey'
 
 interface PlaceDetails {
   name: string
@@ -114,9 +115,12 @@ export default function FavoritesOverlay({
   if (!open) return null
 
   const filtered = items.filter((v) => {
-    if (tab === 'favorited') return favoriteIds.has(v.video_id)
-    if (tab === 'visited') return visitedIds.has(v.video_id)
-    return favoriteIds.has(v.video_id) || visitedIds.has(v.video_id)
+    // ★favoriteIds/visitedIds는 복합키(videoId:lat:lng)로 채워지므로 조회도 placeKey로.
+    //   (raw video_id로 조회하면 절대 매칭 안 돼 목록이 빈 상태가 됨 — 공용 placeKey로 통일.)
+    const key = placeKey(v.video_id, v.lat, v.lng)
+    if (tab === 'favorited') return favoriteIds.has(key)
+    if (tab === 'visited') return visitedIds.has(key)
+    return favoriteIds.has(key) || visitedIds.has(key)
   })
 
   return (
@@ -159,6 +163,7 @@ export default function FavoritesOverlay({
           const d = details[v.video_id]        // undefined = 로딩 중, null = 조회 실패
           const isLoading = !(v.video_id in details)
           const placeName = resolvePlaceName(d?.name, v.place_name, v.channel)
+          const favKey = placeKey(v.video_id, v.lat, v.lng)  // 하트/체크 상태 조회도 복합키로(필터와 동일).
           return (
             <div key={v.video_id} className="mx-3 mb-3 rounded-xl border border-border bg-white shadow-sm overflow-hidden">
               {/* 카드 본문 — 클릭 시 지도로 이동 */}
@@ -208,17 +213,17 @@ export default function FavoritesOverlay({
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => onToggleFavorite(v)}
-                    title={favoriteIds.has(v.video_id) ? '찜 취소' : '찜하기'}
+                    title={favoriteIds.has(favKey) ? '찜 취소' : '찜하기'}
                     className="text-gray-300 hover:text-amber-400 transition-colors duration-150"
                   >
-                    <HeartIcon filled={favoriteIds.has(v.video_id)} />
+                    <HeartIcon filled={favoriteIds.has(favKey)} />
                   </button>
                   <button
                     onClick={() => onToggleVisited(v)}
-                    title={visitedIds.has(v.video_id) ? '방문 취소' : '가봤어요'}
+                    title={visitedIds.has(favKey) ? '방문 취소' : '가봤어요'}
                     className="text-gray-300 hover:text-green-500 transition-colors duration-150"
                   >
-                    <CheckCircleIcon checked={visitedIds.has(v.video_id)} />
+                    <CheckCircleIcon checked={visitedIds.has(favKey)} />
                   </button>
                   <a
                     href={`https://www.youtube.com/watch?v=${v.video_id}`}
