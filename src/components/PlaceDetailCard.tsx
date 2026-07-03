@@ -2,6 +2,17 @@
 
 import type { VideoResult } from '@/app/api/search/route'
 
+// address에서 행정구역(구/군 + 동/읍/면) 토큰만 뽑아 동명 장소 구분용 지역 힌트를 만든다.
+// 예) "광주광역시 남구 양림동 123-4" → "남구 양림동". 도로명 주소면 "남구"까지만 잡힐 수 있음.
+function extractRegion(address?: string): string {
+  if (!address) return ''
+  return address
+    .split(/\s+/)
+    .filter((t) => /(구|군|동|읍|면)$/.test(t))
+    .slice(0, 2)
+    .join(' ')
+}
+
 // 소비자 장소 상세 카드(모바일 우선 바텀시트). 파트너 차별점(PARTNER 배지·채널정보)을
 // 소비자에게 가시화하는 "모집 쇼윈도". 순수 프레젠테이셔널 — 찜/공유/재생은 부모(SearchMap)의
 // 기존 핸들러를 props로 주입받아 재사용한다(재생 로직 PlayerFrame 무변경).
@@ -21,8 +32,11 @@ export default function PlaceDetailCard({
   video, isPartner, favorited, onPlay, onToggleFavorite, onShare, onClose,
 }: PlaceDetailCardProps) {
   const name = video.placeName ?? video.title
-  // 카카오맵 딥링크 — 순수 URL 조립(SDK/REST 미사용 = 무비용). 상호+좌표로 해당 지점 지도 오픈.
-  const kakaoMapUrl = `https://map.kakao.com/link/map/${encodeURIComponent(name)},${video.lat},${video.lng}`
+  // 카카오맵 장소 검색 링크 — 순수 URL 조립(SDK/REST 미사용 = 무비용). 길찾기(link/map) 대신
+  // link/search로 그 장소의 검색 결과를 연다. 상호명 + 지역(구/동)으로 동명 장소 구분.
+  const region = extractRegion(video.address)
+  const kakaoQuery = region ? `${name} ${region}` : name
+  const kakaoMapUrl = `https://map.kakao.com/link/search/${encodeURIComponent(kakaoQuery)}`
   const isConfirmed = video.verificationStatus === 'confirmed'
 
   return (
