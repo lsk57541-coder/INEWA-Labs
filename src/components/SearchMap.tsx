@@ -1338,7 +1338,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       <button
         onClick={handleLocateButtonClick}
         title="현재 위치로 이동"
-        className={`absolute ${locateButtonBottomClass} left-3 z-20 md:left-auto md:right-6 md:bottom-6 w-11 h-11 bg-white rounded-full shadow-lg flex items-center justify-center text-blue-600 hover:bg-gray-50 transition`}
+        className={`absolute ${locateButtonBottomClass} left-3 z-20 md:left-auto md:right-6 md:bottom-6 w-11 h-11 bg-white rounded-full shadow-lg flex items-center justify-center text-coral hover:bg-gray-50 transition`}
       >
         <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
           <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
@@ -1545,17 +1545,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               onFocus={() => setOptionsOpen(true)}
               placeholder="키워드 검색 (예: 한강 카페, 제주 맛집)"
-              className="w-full text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
+              className="w-full text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-coral/40 bg-white placeholder-gray-400"
             />
           ) : selectedChannel ? (
             <div
-              className="flex items-center gap-1.5 text-xs font-medium text-blue-700 border border-border rounded-lg px-3 py-2 bg-white min-w-0 cursor-pointer"
+              className="flex items-center gap-1.5 text-xs font-medium text-coral border border-line rounded-lg px-3 py-2 bg-white min-w-0 cursor-pointer"
               onClick={() => setOptionsOpen(true)}
             >
               <span className="flex-1 truncate">{selectedChannel.title} 채널만 검색</span>
               <button
                 onClick={(e) => { e.stopPropagation(); setSelectedChannel(null); setChannelQuery('') }}
-                className="shrink-0 text-blue-400 hover:text-blue-600"
+                className="shrink-0 text-ink-muted hover:text-coral"
                 title="채널 선택 해제"
               >
                 ✕
@@ -1571,11 +1571,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 onKeyDown={(e) => e.key === 'Enter' && runChannelSearch()}
                 onFocus={() => setOptionsOpen(true)}
                 placeholder="유튜버 채널명으로 검색"
-                className="flex-1 min-w-0 text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white placeholder-gray-400"
+                className="flex-1 min-w-0 text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-coral/40 bg-white placeholder-gray-400"
               />
               <button
                 onClick={runChannelSearch}
-                className="shrink-0 text-sm bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 transition"
+                className="shrink-0 text-sm bg-coral text-white rounded-lg px-4 py-2 font-medium hover:brightness-95 transition"
               >
                 검색
               </button>
@@ -1588,13 +1588,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
         {/* 확장 섹션 — 입력창 클릭(포커스) 시 펼쳐짐, 검색 완료 후 닫힘 */}
         <div className={`overflow-hidden transition-all duration-200 ${optionsOpen ? 'max-h-[500px]' : 'max-h-0'}`}>
-          <div className="border-t border-border">
+          <div className="border-t border-line">
             {/* 탭 */}
             <div className="flex gap-1 px-3 pt-3">
               <button
                 onClick={() => setSearchMode('keyword')}
                 className={`flex-1 text-xs py-1.5 rounded-full font-medium transition ${
-                  searchMode === 'keyword' ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  searchMode === 'keyword' ? 'bg-coral text-white' : 'bg-surface text-ink-muted hover:bg-line-strong'
                 }`}
               >
                 🔎 키워드 검색
@@ -1603,7 +1603,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 ref={channelTabRef}
                 onClick={() => setSearchMode('channel')}
                 className={`flex-1 text-xs py-1.5 rounded-full font-medium transition ${
-                  searchMode === 'channel' ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  searchMode === 'channel' ? 'bg-coral text-white' : 'bg-surface text-ink-muted hover:bg-line-strong'
                 }`}
               >
                 🎙 채널 검색
@@ -1619,8 +1619,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     onClick={() => setRadius(r)}
                     className={`flex-1 text-xs rounded-full py-1.5 border transition font-medium ${
                       radius === r
-                        ? 'bg-accent text-white border-accent'
-                        : 'bg-white text-gray-600 border-border hover:bg-gray-50'
+                        ? 'bg-coral text-white border-coral'
+                        : 'bg-white text-ink-muted border-line hover:bg-surface'
                     }`}
                   >
                     {r}km
@@ -1649,7 +1649,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
             {/* 고급 설정 — advancedOpen일 때만 */}
             <div className={`overflow-hidden transition-all duration-200 ${advancedOpen ? 'max-h-[420px]' : 'max-h-0'}`}>
-              <div className="px-3 pb-3 border-t border-border pt-3 space-y-3">
+              <div className="px-3 pb-3 border-t border-line pt-3 space-y-3">
                 {/* 위치 직접입력 — 키워드 모드만 (채널은 위치무관, 전국 표시) */}
                 {searchMode === 'keyword' && (
                 <div>
@@ -1661,14 +1661,14 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     onChange={(e) => handleAddressInputChange(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && runLocationSearch()}
                     placeholder="지역명 또는 주소 입력"
-                    className="w-full text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                    className="w-full text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-coral/40 bg-white text-gray-900 placeholder-gray-400"
                   />
                   {addressInput.trim() && (
                     <div className="flex gap-2 mt-2">
                       <button
                         onClick={runLocationSearch}
                         disabled={addressLoading}
-                        className="flex-1 text-sm bg-blue-600 text-white rounded-lg py-2 font-medium hover:bg-blue-700 disabled:opacity-40 transition"
+                        className="flex-1 text-sm bg-coral text-white rounded-lg py-2 font-medium hover:brightness-95 disabled:opacity-40 transition"
                       >
                         {addressLoading ? '검색 중…' : '🔍 검색'}
                       </button>
@@ -1682,7 +1682,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   )}
                   {posLabel !== '위치 미설정' && (
                     <div className="flex items-center gap-1.5 mt-1.5">
-                      <p className="text-xs text-blue-600 truncate font-medium flex-1 min-w-0">{posLabel}</p>
+                      <p className="text-xs text-coral truncate font-medium flex-1 min-w-0">{posLabel}</p>
                       {isManualLocation && (
                         <button
                           onClick={getLocation}
@@ -1705,7 +1705,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     step={0.05}
                     value={panelOpacity}
                     onChange={(e) => setPanelOpacity(parseFloat(e.target.value))}
-                    className="flex-1 accent-blue-600"
+                    className="flex-1 accent-coral"
                     title="검색창 투명도"
                   />
                 </div>
