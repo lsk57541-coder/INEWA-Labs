@@ -859,12 +859,15 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             track(pid, 'place_click')
           }
           if (group.videos.length === 1) {
+            // 단일영상: 상세 카드 먼저(재생은 카드 [영상 보기]에서). 기존 재생 상태 정리(잔여 플레이어 방지).
             setSelectedGroup(null)
-            setSelectedVideo(group.videos[0])
+            setSelectedVideo(null)
+            setDetailVideo(group.videos[0])
             panTo(group.lat, group.lng, 0)
           } else {
+            // 다중영상: 그룹 리스트를 '영상 선택' 단계로 연다. 자동재생 없음 — 리스트 탭 → 상세 카드 → 재생.
             setSelectedGroup(group)
-            setSelectedVideo(group.videos[0])
+            setSelectedVideo(null)
             panTo(group.lat, group.lng, 0.45)
           }
         }
@@ -1949,14 +1952,14 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 key={`${v.videoId}:${v.lat}:${v.lng}`}
                 className="flex items-start gap-2 px-3 py-2 hover:bg-gray-50 transition border-b border-border last:border-0"
               >
-                <div className="relative shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
+                <div className="relative shrink-0 cursor-pointer" onClick={() => setDetailVideo(v)}>
                   <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] md:w-40 md:h-[90px] object-cover rounded" />
                   <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-0.5 right-0.5" />
                 </div>
                 <div className="flex-1 overflow-hidden min-w-0">
                   <p
                     className="text-xs font-medium line-clamp-2 leading-tight cursor-pointer hover:text-blue-600"
-                    onClick={() => setSelectedVideo(v)}
+                    onClick={() => setDetailVideo(v)}
                   >
                     {decodeHtmlEntities(v.title)}
                   </p>
@@ -2056,7 +2059,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 {/* Thumbnail — click to play */}
                 <div
                   className="relative shrink-0 cursor-pointer"
-                  onClick={() => setSelectedVideo(v)}
+                  onClick={() => setDetailVideo(v)}
                 >
                   <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] object-cover rounded-lg" />
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -2071,7 +2074,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 <div className="flex-1 overflow-hidden min-w-0">
                   <p
                     className="text-xs font-medium line-clamp-2 leading-snug cursor-pointer hover:text-blue-600"
-                    onClick={() => setSelectedVideo(v)}
+                    onClick={() => setDetailVideo(v)}
                   >
                     {decodeHtmlEntities(v.title)}
                   </p>
@@ -2116,38 +2119,6 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       )}
 
-      {/* ★단계 2 임시 트리거: 검색결과·DB와 무관하게 항상 뜨는 2버튼. 각 버튼은 해당 플래그를
-          강제한 샘플을 열어 배지를 확실히 점등한다(배지는 isPartner/verificationStatus로만 결정 —
-          placeId 불필요). 결과가 있으면 첫 장소를 베이스로 복제해 재생/카카오맵도 실동작.
-          단계 3에서 이 블록 전체 제거 → 마커/리스트 클릭이 setDetailVideo를 호출. */}
-      {(() => {
-        const base = sortedResults[0]
-        const sampleDefaults: VideoResult = {
-          videoId: 'dQw4w9WgXcQ', title: '샘플 장소', thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-          channel: '샘플 채널', lat: 37.5665, lng: 126.978, distanceKm: 1.2, source: 'geotag',
-          viewCount: 0, placeName: '샘플 장소', placeNameSource: 'correction', duration: '', isShort: false,
-          subscriberTier: null, subscriberCount: 0, category: '카페',
-        }
-        const makeSample = (over: Partial<VideoResult>): VideoResult => ({
-          ...sampleDefaults, ...(base ?? {}), ...over,
-        })
-        return (
-          <div className="absolute left-3 bottom-3 z-[9] flex flex-col gap-1.5 items-start">
-            <button
-              onClick={() => setDetailVideo(makeSample({ isPartner: true, placeName: '파트너 장소(샘플)', verificationStatus: undefined }))}
-              className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg"
-            >
-              임시A · PARTNER 배지
-            </button>
-            <button
-              onClick={() => setDetailVideo(makeSample({ verificationStatus: 'confirmed', placeName: '확인 장소(샘플)', isPartner: false }))}
-              className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg"
-            >
-              임시B · 확인 배지
-            </button>
-          </div>
-        )
-      })()}
       {detailVideo && (
         <PlaceDetailCard
           video={detailVideo}
