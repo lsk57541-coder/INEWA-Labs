@@ -234,6 +234,9 @@ export interface VideoResult {
   isPartner?: boolean // 실제 파트너(places.partner_id) 장소 → 금색 마커/PARTNER 배지/상위노출
   partnerThumbnail?: string | null // 파트너 채널 아바타(마커 썸네일). NULL이면 클라가 금색 핀으로 폴백
   placeId?: string // places.id. 파트너 셀프등록 장소 결과에만 실림(admin locations/videos 경로엔 없음). 계측(/api/track)의 장소↔영상 유입 귀속용.
+  verificationStatus?: 'unverified' | 'confirmed' | 'rejected' | null // places 검증상태. 파트너가 confirm한 장소만 'confirmed'. 상세 카드 "확인" 배지용. admin locations 경로엔 없음(undefined).
+  address?: string // places.address. 상세 카드용. admin locations 경로엔 없음.
+  category?: string // places.category(장소 카테고리). channel 폴백과 별개로 독립 노출용. admin locations 경로엔 없음.
 }
 
 // Fire-and-forget log of how each video's place name was resolved. Upserts by
@@ -608,7 +611,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   // 2) places (status=active) — 파트너 셀프 등록 장소
   const { data: places } = await db
     .from('places')
-    .select('id, name, video_url, latitude, longitude, category, status, view_count, subscriber_count, published_at, partner_id')
+    .select('id, name, video_url, latitude, longitude, category, address, status, view_count, subscriber_count, published_at, partner_id, verification_status')
     .eq('status', 'active')
 
   // 파트너 정보(채널명·아바타·구독자수) 일괄 조회 → 금색 마커/PARTNER 배지/상위노출용.
@@ -628,7 +631,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
     if (dist > radius) continue
     const vid = extractYoutubeId(p.video_url ?? '')
     if (!vid) continue
-    const pr = p as { view_count?: number | null; subscriber_count?: number | null; published_at?: string | null; partner_id?: string | null }
+    const pr = p as { view_count?: number | null; subscriber_count?: number | null; published_at?: string | null; partner_id?: string | null; address?: string | null; category?: string | null; verification_status?: string | null }
     const partner = pr.partner_id ? partnerMap.get(pr.partner_id) : undefined
     const subs = partner?.subscriber_count ?? pr.subscriber_count ?? 0
     out.push({
@@ -642,6 +645,9 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
       isPartner: !!partner,
       partnerThumbnail: partner?.avatar_url ?? null,
       placeId: (p as { id?: string }).id, // 계측(/api/track)이 "어느 places 행에서 영상 유입인지" 식별용. places 경로에만 실림(admin locations/videos 경로엔 없음).
+      verificationStatus: (pr.verification_status ?? undefined) as VideoResult['verificationStatus'], // 파트너 confirm 장소만 'confirmed'. 상세 카드 확인 배지용. admin locations 경로엔 없음.
+      address: pr.address ?? undefined, // 상세 카드용. admin locations 경로엔 없음.
+      category: pr.category ?? undefined, // 장소 카테고리(channel 폴백과 별개로 독립 노출용).
     })
   }
 
