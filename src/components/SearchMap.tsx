@@ -1640,7 +1640,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               <button
                 onClick={() => handleSearch()}
                 disabled={loading || !mapReady}
-                className="flex-1 flex items-center justify-center gap-1.5 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 disabled:opacity-40 transition"
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm bg-coral text-white rounded-lg py-2 font-medium hover:brightness-95 disabled:opacity-40 transition"
               >
                 {loading && <Spinner />}
                 {loading ? LOADING_STAGES[loadingStage] : '검색하기'}
@@ -1893,8 +1893,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 title={key === 'long' ? '롱폼' : key === 'short' ? '쇼츠' : '전체'}
                 className={`flex-1 flex items-center justify-center gap-1 text-xs rounded-lg py-1.5 border transition font-medium ${
                   videoFilter === key
-                    ? 'bg-black text-white border-black'
-                    : 'bg-white text-gray-600 border-border hover:bg-gray-50'
+                    ? 'bg-coral text-white border-coral'
+                    : 'bg-white text-ink-muted border-line hover:bg-surface'
                 }`}
               >
                 {key === 'long' ? (
@@ -2281,7 +2281,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   (reportReason === 'wrong_address' &&
                     (!reportSelected || (!reportFixAddress && !reportFixName)))
                 }
-                className="flex-1 flex items-center justify-center gap-1.5 text-sm bg-black text-white rounded-lg py-2 font-medium hover:bg-gray-800 transition disabled:opacity-40"
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm bg-coral text-white rounded-lg py-2 font-medium hover:brightness-95 transition disabled:opacity-40"
               >
                 {reportSubmitting && <Spinner />}
                 {reportSubmitting ? '제출 중…' : '제출'}

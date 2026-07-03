@@ -9,7 +9,7 @@
 | 토큰 | 값 | 역할 | 쓰지 말 것 |
 |---|---|---|---|
 | `accent` (`bg-accent`/`text-accent`/`border-accent`) | `blue-600` | **선택/활성 상태 표시 전용** — 탭/칩이 선택됐을 때, 인풋 포커스 링 | 클릭 가능한 액션 버튼에 쓰지 말 것 (지금 검색 패널의 작은 "검색" 버튼이 이 규칙을 어기고 있음 — 4단계에서 수정 대상) |
-| `primary` (그냥 `bg-black`/`text-white`) | `black` | **1차 액션 버튼** (제출, 승인, 주요 CTA) | 보조 액션엔 쓰지 말 것 → `bg-gray-100` 사용 |
+| `primary` — 소비자=`bg-coral`, admin/partner=`bg-black` | coral / black | **1차 액션 버튼·선택탭** (검색하기·적용·제출·채널검색·영상보기·선택된 탭). 소비자 화면은 **코랄**, admin/partner는 검정 레거시 | 보조 액션엔 쓰지 말 것 → `bg-surface`(소비자)/`bg-gray-100`; 본문·제목의 검정 텍스트는 그대로(버튼 아님) |
 | `favorite` (`text-favorite`/`bg-favorite`) | `amber-400` (금색) | 찜/즐겨찾기 표시 (하트, 마커) | 일반 강조 색으로 쓰지 말 것 |
 | `navigate` (`bg-navigate`/`text-navigate`) | `amber-500` | 길찾기/내비 버튼 (카카오내비 톤 유지) | favorite와 헷갈리지 않게 둘을 같은 화면에 쓸 때 형태(원형 vs 하트)로 구분 |
 | `danger` (`text-danger`/`bg-danger`) | `red-500` | 신고, 경고, 삭제 | 즐겨찾기 표시엔 쓰지 말 것(현재 즐겨찾기 탭 활성색이 red인 화면이 있음 — 4단계에서 favorite 토큰으로 교체 대상) |

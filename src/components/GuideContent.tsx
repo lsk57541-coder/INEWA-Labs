@@ -14,14 +14,14 @@ function NaviGlyph() {
 }
 
 // 채널 검색 흐름 도식(실제 스크린샷 아님). ①탭 → ②채널명 입력 → ③전국에 핀.
-// AGENTS.md: 그라데이션 X, blue-600 액센트, 반응형 viewBox.
+// AGENTS.md: 그라데이션 X, 웜 미니멀 코랄 포인트, 반응형 viewBox.
 function ChannelFlowDiagram() {
-  const BLUE = '#2563eb'
+  const BLUE = '#D85A30'
   return (
     <svg viewBox="0 0 320 104" className="w-full h-auto mt-2" role="img" aria-label="채널 검색 흐름: 채널 검색 탭 선택 → 채널명 입력 → 전국 지도에 핀 표시">
       {/* ① 탭 */}
       <g>
-        <rect x="8" y="20" width="80" height="26" rx="13" fill="#eff6ff" stroke={BLUE} strokeWidth="1.5" />
+        <rect x="8" y="20" width="80" height="26" rx="13" fill="#FAECE7" stroke={BLUE} strokeWidth="1.5" />
         <text x="48" y="37" textAnchor="middle" fontSize="11" fill={BLUE} fontWeight="600">🎙 채널 검색</text>
         <circle cx="14" cy="16" r="8" fill={BLUE} />
         <text x="14" y="20" textAnchor="middle" fontSize="10" fill="#fff" fontWeight="700">1</text>
@@ -85,7 +85,7 @@ const ITEMS: GuideItem[] = [
         <strong>“강남 맛집”, “제주 카페”</strong>처럼 지역과 키워드를 함께 검색하세요.
         <br />
         고급 설정에서 <strong>검색 위치를 직접 지정</strong>할 수도 있어요.
-        <span className="block mt-2 text-xs text-gray-500 bg-blue-50 rounded-lg px-3 py-2 leading-relaxed">
+        <span className="block mt-2 text-xs text-ink-muted bg-coral-soft rounded-lg px-3 py-2 leading-relaxed">
           💡 유튜버가 영상에서 직접 소개한 장소를 모아 보여줘요. <strong>인기 장소가 강점</strong>이고,
           영상에 안 나온 곳은 결과가 적을 수 있어요.
         </span>
@@ -201,18 +201,18 @@ function Accordion({ items, defaultOpen = -1, qa = false }: { items: GuideItem[]
       {items.map((item, i) => {
         const open = openIdx === i
         return (
-          <div key={i} className={`border border-gray-200 rounded-lg overflow-hidden ${qa ? 'bg-gray-50/60' : ''}`}>
+          <div key={i} className="border border-line rounded-lg overflow-hidden bg-white">
             <button
               type="button"
               onClick={() => setOpenIdx(open ? -1 : i)}
               aria-expanded={open}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-gray-50 transition"
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-surface transition"
             >
               {qa && (
-                <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-md bg-blue-600 text-white text-[11px] font-bold">Q</span>
+                <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-md bg-coral text-white text-[11px] font-bold">Q</span>
               )}
               {item.icon && <span className="shrink-0 flex items-center justify-center w-6">{item.icon}</span>}
-              <span className="flex-1 text-sm font-semibold text-gray-900">{item.title}</span>
+              <span className="flex-1 text-sm font-semibold text-ink">{item.title}</span>
               <span className="shrink-0 text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
             </button>
             {open && (
@@ -240,13 +240,13 @@ export default function GuideContent() {
       {/* 기능 안내 — 1번(채널 검색) 기본 펼침 */}
       <Accordion items={ITEMS} defaultOpen={0} />
 
-      <p className="mt-6 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 leading-relaxed">
+      <p className="mt-6 text-sm text-ink-muted bg-white border border-line rounded-lg px-4 py-3 leading-relaxed">
         💡 지도 위 <strong>마커(핀)를 탭</strong>하면 그 장소가 나온 <strong>유튜브 영상</strong>이 바로 열려요.
       </p>
 
       {/* 자주 묻는 질문 — 기능 안내와 구분되는 별도 섹션 */}
-      <div className="mt-8 pt-6 border-t border-gray-200">
-        <h2 className="text-sm font-bold text-gray-900 mb-3">자주 묻는 질문</h2>
+      <div className="mt-8 pt-6 border-t border-line">
+        <h2 className="text-sm font-bold text-ink mb-3">자주 묻는 질문</h2>
         <Accordion items={FAQ_ITEMS} qa />
       </div>
     </div>
