@@ -25,6 +25,7 @@ import GuideOverlay from '@/components/GuideOverlay'
 import InquiryOverlay from '@/components/InquiryOverlay'
 import LoginPromptModal from '@/components/LoginPromptModal'
 import SearchResultModal from '@/components/SearchResultModal'
+import PlaceDetailCard from '@/components/PlaceDetailCard'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 import { track } from '@/lib/track'
 
@@ -553,6 +554,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null)
   const [selectedGroup, setSelectedGroup] = useState<MarkerGroup | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<VideoResult | null>(null)
+  // ★단계 2 임시: 상세 카드 렌더 확인용 상태. 단계 3에서 마커/리스트 클릭이 이 상태를 연다.
+  const [detailVideo, setDetailVideo] = useState<VideoResult | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const [restoreDone, setRestoreDone] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -2111,6 +2114,28 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             ))}
           </div>
         </div>
+      )}
+
+      {/* ★단계 2 임시 트리거: 상세 카드 렌더 확인용. 첫 등록장소(placeId 보유=새 필드 있음)를
+          연다. 단계 3에서 이 버튼은 제거하고 마커/리스트 클릭이 setDetailVideo를 호출한다. */}
+      {sortedResults.length > 0 && (
+        <button
+          onClick={() => setDetailVideo(sortedResults.find((r) => r.placeId) ?? sortedResults[0])}
+          className="absolute left-3 bottom-3 z-[9] rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg"
+        >
+          상세카드 미리보기(임시)
+        </button>
+      )}
+      {detailVideo && (
+        <PlaceDetailCard
+          video={detailVideo}
+          isPartner={isPartnerVideo(detailVideo)}
+          favorited={favoriteIds.has(placeKey(detailVideo.videoId, detailVideo.lat, detailVideo.lng))}
+          onPlay={() => { const v = detailVideo; setDetailVideo(null); setSelectedVideo(v) }}
+          onToggleFavorite={() => handleToggleFavorite(detailVideo)}
+          onShare={() => handleShare(detailVideo)}
+          onClose={() => setDetailVideo(null)}
+        />
       )}
 
       {/* Video player modal — single-video marker only (multi-video uses compact player above) */}
