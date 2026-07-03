@@ -1349,7 +1349,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       <button
         ref={hamburgerRef}
         onClick={() => setMenuOpen(true)}
-        className="absolute top-3 left-3 z-20 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-lg hover:bg-gray-50 transition md:hidden"
+        className="absolute top-3 left-3 z-20 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-lg text-coral hover:bg-gray-50 transition md:hidden"
       >
         ☰
       </button>
@@ -1501,7 +1501,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           ref={hamburgerInlineRef}
           onClick={() => setMenuOpen(true)}
           aria-label="메뉴"
-          className="hidden md:flex shrink-0 w-10 h-10 bg-white rounded-full shadow-lg items-center justify-center text-lg hover:bg-gray-50 transition"
+          className="hidden md:flex shrink-0 w-10 h-10 bg-white rounded-full shadow-lg items-center justify-center text-lg text-coral hover:bg-gray-50 transition"
         >
           ☰
         </button>
@@ -2240,7 +2240,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     value={reportSelected ? `${reportSelected.name} (${reportSelected.address})` : reportQuery}
                     onChange={(e) => handleReportQueryChange(e.target.value)}
                     placeholder="정확한 장소명이나 주소를 검색해보세요 (예: 엄마네돼지찌개)"
-                    className="w-full text-sm border border-border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-900 placeholder-gray-400"
+                    className="w-full text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-coral/40 bg-white text-gray-900 placeholder-gray-400"
                   />
                   {addressSearching && (
                     <p className="text-xs text-gray-400 mt-1">검색 중…</p>

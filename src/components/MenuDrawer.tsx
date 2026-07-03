@@ -99,17 +99,17 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
   return (
     <div className="absolute inset-0 z-30 flex items-start">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-72 max-h-screen overflow-y-auto shadow-2xl flex flex-col" style={{ backgroundColor: '#F8FAFF' }}>
+      <div className="relative w-72 max-h-screen overflow-y-auto shadow-2xl flex flex-col" style={{ backgroundColor: '#FBF8F5' }}>
 
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-4 h-14 shrink-0" style={{ backgroundColor: '#0F1C2E' }}>
+        <div className="flex items-center justify-between px-4 h-14 shrink-0" style={{ backgroundColor: '#FFFFFF' }}>
           <div className="flex items-center gap-2">
             <PinPlayIcon size={20} />
-            <span className="font-bold text-white tracking-wide">MAPTUBE</span>
+            <span className="font-bold text-ink tracking-wide">MAPTUBE</span>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface text-ink-muted transition"
           >
             ✕
           </button>
@@ -117,14 +117,14 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
 
         {/* 서비스 소개 — OG 카드처럼 코랄 짧은 구분선(2px 솔리드 → DPR 무관, 모바일/웹 동일) + 두 줄 슬로건.
             각 줄이 한 덩어리라 "바/로" 같은 단어 중간 끊김 없음. */}
-        <div className="px-4 pt-2 pb-3" style={{ backgroundColor: '#0F1C2E' }}>
+        <div className="px-4 pt-2 pb-3" style={{ backgroundColor: '#FFFFFF' }}>
           <div className="mb-2.5" style={{ width: 28, height: 2, backgroundColor: '#FF5C5C', borderRadius: 1 }} />
-          <p className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.88)' }}>영상 속 장소를 지도로</p>
-          <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.45)' }}>유튜버가 다녀온 그곳, 바로 찾아보세요</p>
+          <p className="text-xs font-medium" style={{ color: '#6b5d54' }}>영상 속 장소를 지도로</p>
+          <p className="text-[11px] mt-0.5" style={{ color: '#8a7a70' }}>유튜버가 다녀온 그곳, 바로 찾아보세요</p>
         </div>
 
         {/* 유저 섹션 */}
-        <div className="px-4 py-4 border-b border-border">
+        <div className="px-4 py-4 border-b border-line">
           {user ? (
             <div className="flex items-center gap-3">
               {user.avatarUrl ? (
@@ -175,7 +175,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
           {user && (
             <button
               onClick={() => { onShowFavorites(); onClose() }}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-surface transition text-left"
             >
               <HeartIcon />
               관심목록
@@ -184,7 +184,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
 
           <button
             onClick={() => { onRestartOnboarding(); onClose() }}
-            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-surface transition text-left"
           >
             <CompassIcon />
             앱 소개 다시보기
@@ -192,7 +192,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
 
           <button
             onClick={() => { onShowGuide(); onClose() }}
-            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-surface transition text-left"
           >
             <BookIcon />
             사용법
@@ -200,7 +200,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
 
           <button
             onClick={() => { onShowInquiry(); onClose() }}
-            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-surface transition text-left"
           >
             <MailIcon />
             문의하기
@@ -212,7 +212,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
             <Link
               href="/partner/dashboard"
               onClick={onClose}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-surface transition text-left"
             >
               <StarIcon />
               파트너 대시보드
@@ -221,7 +221,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
             <Link
               href="/partner/apply"
               onClick={onClose}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-surface transition text-left"
             >
               <StarIcon />
               유튜버 파트너
@@ -232,7 +232,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
             <Link
               href="/admin"
               onClick={onClose}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm hover:bg-surface transition text-left"
             >
               <SettingsIcon />
               관리자
@@ -241,7 +241,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
         </div>
 
         {/* 푸터 — 법적 링크만(파트너 항목은 위 메뉴 리스트로 승격). */}
-        <div className="border-t border-border shrink-0 px-4 py-3">
+        <div className="border-t border-line shrink-0 px-4 py-3">
           <div className="flex gap-3 text-xs text-muted">
             <Link href="/terms" onClick={onClose} className="hover:text-gray-600">이용약관</Link>
             <Link href="/privacy" onClick={onClose} className="hover:text-gray-600">개인정보처리방침</Link>

@@ -79,32 +79,32 @@ export default function InquiryOverlay({ open, onClose }: InquiryOverlayProps) {
       className="absolute inset-0 z-30 flex flex-col justify-end bg-black/40 md:items-center md:justify-center md:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) close() }}
     >
-      <div className="w-full bg-white rounded-t-2xl max-h-[85dvh] flex flex-col shadow-2xl md:max-w-lg md:rounded-2xl md:max-h-[80dvh]">
+      <div className="w-full bg-warm rounded-t-2xl max-h-[85dvh] flex flex-col shadow-2xl md:max-w-lg md:rounded-2xl md:max-h-[80dvh]">
         {/* 모바일 드래그 핸들 바 */}
         <div className="md:hidden flex justify-center pt-2.5 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-300" />
         </div>
 
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-5 h-12 border-b border-gray-200 shrink-0">
-          <span className="font-bold">문의하기</span>
+        <div className="flex items-center justify-between px-5 h-12 border-b border-line shrink-0">
+          <span className="font-bold text-ink">문의하기</span>
           <button
             onClick={close}
             aria-label="닫기"
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 transition"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface text-ink-muted transition"
           >
             ✕
           </button>
         </div>
 
         {/* 탭 */}
-        <div className="flex border-b border-gray-200 shrink-0">
+        <div className="flex border-b border-line shrink-0">
           {([['write', '문의하기'], ['history', '내 문의 내역']] as const).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               className={`flex-1 py-3 text-sm font-medium transition border-b-2 -mb-px ${
-                tab === key ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'
+                tab === key ? 'border-coral text-coral' : 'border-transparent text-ink-muted hover:text-ink'
               }`}
             >
               {label}
@@ -122,7 +122,7 @@ export default function InquiryOverlay({ open, onClose }: InquiryOverlayProps) {
                 <p className="text-sm text-gray-500">확인 후 반영할게요.</p>
                 <button
                   onClick={() => { setTitle(''); setContent(''); setDone(false); setTab('history') }}
-                  className="mt-6 text-sm bg-black text-white rounded-lg px-5 py-2.5 hover:bg-gray-800 transition"
+                  className="mt-6 text-sm bg-coral text-white rounded-lg px-5 py-2.5 hover:brightness-95 transition"
                 >
                   내 문의 내역 보기
                 </button>
@@ -130,25 +130,25 @@ export default function InquiryOverlay({ open, onClose }: InquiryOverlayProps) {
             ) : (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">제목</label>
+                  <label className="block text-xs font-medium text-ink-muted mb-1">제목</label>
                   <input
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="문의 제목"
                     maxLength={100}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-coral/40"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">내용</label>
+                  <label className="block text-xs font-medium text-ink-muted mb-1">내용</label>
                   <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder="어떤 점이 궁금하거나 불편하셨나요? 장소 오류라면 어떤 장소인지 함께 적어주시면 도움이 돼요."
                     rows={6}
                     maxLength={2000}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-coral/40 resize-none"
                   />
                 </div>
 
@@ -157,7 +157,7 @@ export default function InquiryOverlay({ open, onClose }: InquiryOverlayProps) {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || !title.trim() || !content.trim()}
-                  className="w-full bg-black text-white text-sm font-medium py-3 rounded-lg hover:bg-gray-800 disabled:opacity-40 transition"
+                  className="w-full bg-coral text-white text-sm font-medium py-3 rounded-lg hover:brightness-95 disabled:opacity-40 transition"
                 >
                   {submitting ? '접수 중…' : '문의 보내기'}
                 </button>
@@ -174,9 +174,9 @@ export default function InquiryOverlay({ open, onClose }: InquiryOverlayProps) {
             ) : (
               <div className="space-y-3">
                 {items.map((q) => (
-                  <div key={q.id} className="border border-gray-200 rounded-lg p-3">
+                  <div key={q.id} className="border border-line rounded-lg p-3 bg-white">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-semibold text-gray-900 flex-1 min-w-0">{q.title}</span>
+                      <span className="text-sm font-semibold text-ink flex-1 min-w-0">{q.title}</span>
                       {q.reply ? (
                         <span className="shrink-0 text-[10px] font-medium text-green-700 bg-green-50 rounded px-1.5 py-0.5">답변 완료</span>
                       ) : (
@@ -188,8 +188,8 @@ export default function InquiryOverlay({ open, onClose }: InquiryOverlayProps) {
 
                     {q.reply ? (
                       <div className="mt-2.5 border-t border-gray-100 pt-2.5">
-                        <div className="bg-blue-50 rounded-lg px-3 py-2">
-                          <p className="text-xs font-semibold text-blue-700 mb-1">답변</p>
+                        <div className="bg-coral-soft rounded-lg px-3 py-2">
+                          <p className="text-xs font-semibold text-coral mb-1">답변</p>
                           <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{q.reply}</p>
                           {q.replied_at && (
                             <p className="text-[10px] text-gray-400 mt-1.5">{new Date(q.replied_at).toLocaleString('ko-KR')}</p>

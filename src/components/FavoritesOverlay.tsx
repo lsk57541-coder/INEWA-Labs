@@ -126,14 +126,14 @@ export default function FavoritesOverlay({
   return (
     // 모바일: 풀스크린 흰 배경. 데스크톱(md+): 백드롭 + 중앙 카드.
     <div
-      className="absolute inset-0 z-30 flex flex-col bg-white md:bg-black/40 md:items-center md:justify-center md:p-4"
+      className="absolute inset-0 z-30 flex flex-col bg-warm md:bg-black/40 md:items-center md:justify-center md:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-    <div className="flex flex-col flex-1 w-full bg-white md:flex-none md:w-full md:max-w-2xl md:h-[80dvh] md:rounded-2xl md:shadow-2xl md:overflow-hidden">
+    <div className="flex flex-col flex-1 w-full bg-warm md:flex-none md:w-full md:max-w-2xl md:h-[80dvh] md:rounded-2xl md:shadow-2xl md:overflow-hidden">
       {/* 헤더 */}
-      <div className="flex items-center gap-3 px-4 h-14 border-b border-border shrink-0">
-        <button onClick={onClose} className="text-2xl text-gray-600 px-1">‹</button>
-        <span className="font-bold">관심 목록</span>
+      <div className="flex items-center gap-3 px-4 h-14 border-b border-line shrink-0">
+        <button onClick={onClose} className="text-2xl text-ink-muted px-1">‹</button>
+        <span className="font-bold text-ink">관심 목록</span>
       </div>
 
       {/* 언더라인 탭 */}
@@ -144,8 +144,8 @@ export default function FavoritesOverlay({
             onClick={() => setTab(key)}
             className={`flex-1 py-3 text-sm font-medium transition border-b-2 -mb-px ${
               tab === key
-                ? 'border-black text-black'
-                : 'border-transparent text-gray-400 hover:text-gray-600'
+                ? 'border-coral text-coral'
+                : 'border-transparent text-ink-muted hover:text-ink'
             }`}
           >
             {label}
@@ -165,7 +165,7 @@ export default function FavoritesOverlay({
           const placeName = resolvePlaceName(d?.name, v.place_name, v.channel)
           const favKey = placeKey(v.video_id, v.lat, v.lng)  // 하트/체크 상태 조회도 복합키로(필터와 동일).
           return (
-            <div key={v.video_id} className="mx-3 mb-3 rounded-xl border border-border bg-white shadow-sm overflow-hidden">
+            <div key={v.video_id} className="mx-3 mb-3 rounded-xl border border-line bg-white shadow-sm overflow-hidden">
               {/* 카드 본문 — 클릭 시 지도로 이동 */}
               <button
                 className="flex items-start gap-3 w-full p-3 text-left hover:bg-gray-50 transition"
@@ -190,7 +190,7 @@ export default function FavoritesOverlay({
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-bold leading-snug">{placeName}</p>
                         {d?.category && (
-                          <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-medium shrink-0">
+                          <span className="text-[10px] text-coral bg-coral-soft px-1.5 py-0.5 rounded font-medium shrink-0">
                             {d.category.split(' > ').at(-1)}
                           </span>
                         )}
@@ -205,7 +205,7 @@ export default function FavoritesOverlay({
               </button>
 
               {/* 액션 버튼 영역 */}
-              <div className="border-t border-border bg-gray-50 px-3 pt-2 pb-2">
+              <div className="border-t border-line bg-surface px-3 pt-2 pb-2">
                 {/* 영상 제목 */}
                 <p className="text-xs text-gray-400 truncate mb-2 leading-tight">
                   {decodeHtmlEntities(v.title)}
