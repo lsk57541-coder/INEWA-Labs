@@ -2116,16 +2116,33 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       )}
 
-      {/* ★단계 2 임시 트리거: 상세 카드 렌더 확인용. 첫 등록장소(placeId 보유=새 필드 있음)를
-          연다. 단계 3에서 이 버튼은 제거하고 마커/리스트 클릭이 setDetailVideo를 호출한다. */}
-      {sortedResults.length > 0 && (
-        <button
-          onClick={() => setDetailVideo(sortedResults.find((r) => r.placeId) ?? sortedResults[0])}
-          className="absolute left-3 bottom-3 z-[9] rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg"
-        >
-          상세카드 미리보기(임시)
-        </button>
-      )}
+      {/* ★단계 2 임시 트리거: 배지 점등 확인용 2버튼. (a)파트너 장소 → PARTNER 배지,
+          (b)confirmed 장소 → 확인 배지. 없으면 해당 버튼 미표시. 단계 3에서 이 블록은
+          제거하고 마커/리스트 클릭이 setDetailVideo를 호출한다. */}
+      {sortedResults.length > 0 && (() => {
+        const partnerPick = sortedResults.find((r) => isPartnerVideo(r))
+        const confirmedPick = sortedResults.find((r) => r.verificationStatus === 'confirmed')
+        const fallbackPick = sortedResults.find((r) => r.placeId) ?? sortedResults[0]
+        return (
+          <div className="absolute left-3 bottom-3 z-[9] flex flex-col gap-1.5 items-start">
+            {partnerPick && (
+              <button onClick={() => setDetailVideo(partnerPick)} className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg">
+                임시(a) 파트너 장소
+              </button>
+            )}
+            {confirmedPick && (
+              <button onClick={() => setDetailVideo(confirmedPick)} className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg">
+                임시(b) 확인 장소
+              </button>
+            )}
+            {!partnerPick && !confirmedPick && (
+              <button onClick={() => setDetailVideo(fallbackPick)} className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg">
+                임시 상세카드
+              </button>
+            )}
+          </div>
+        )
+      })()}
       {detailVideo && (
         <PlaceDetailCard
           video={detailVideo}
