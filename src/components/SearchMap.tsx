@@ -2116,30 +2116,35 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       )}
 
-      {/* ★단계 2 임시 트리거: 배지 점등 확인용 2버튼. (a)파트너 장소 → PARTNER 배지,
-          (b)confirmed 장소 → 확인 배지. 없으면 해당 버튼 미표시. 단계 3에서 이 블록은
-          제거하고 마커/리스트 클릭이 setDetailVideo를 호출한다. */}
-      {sortedResults.length > 0 && (() => {
-        const partnerPick = sortedResults.find((r) => isPartnerVideo(r))
-        const confirmedPick = sortedResults.find((r) => r.verificationStatus === 'confirmed')
-        const fallbackPick = sortedResults.find((r) => r.placeId) ?? sortedResults[0]
+      {/* ★단계 2 임시 트리거: 검색결과·DB와 무관하게 항상 뜨는 2버튼. 각 버튼은 해당 플래그를
+          강제한 샘플을 열어 배지를 확실히 점등한다(배지는 isPartner/verificationStatus로만 결정 —
+          placeId 불필요). 결과가 있으면 첫 장소를 베이스로 복제해 재생/카카오맵도 실동작.
+          단계 3에서 이 블록 전체 제거 → 마커/리스트 클릭이 setDetailVideo를 호출. */}
+      {(() => {
+        const base = sortedResults[0]
+        const sampleDefaults: VideoResult = {
+          videoId: 'dQw4w9WgXcQ', title: '샘플 장소', thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
+          channel: '샘플 채널', lat: 37.5665, lng: 126.978, distanceKm: 1.2, source: 'geotag',
+          viewCount: 0, placeName: '샘플 장소', placeNameSource: 'correction', duration: '', isShort: false,
+          subscriberTier: null, subscriberCount: 0, category: '카페',
+        }
+        const makeSample = (over: Partial<VideoResult>): VideoResult => ({
+          ...sampleDefaults, ...(base ?? {}), ...over,
+        })
         return (
           <div className="absolute left-3 bottom-3 z-[9] flex flex-col gap-1.5 items-start">
-            {partnerPick && (
-              <button onClick={() => setDetailVideo(partnerPick)} className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg">
-                임시(a) 파트너 장소
-              </button>
-            )}
-            {confirmedPick && (
-              <button onClick={() => setDetailVideo(confirmedPick)} className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg">
-                임시(b) 확인 장소
-              </button>
-            )}
-            {!partnerPick && !confirmedPick && (
-              <button onClick={() => setDetailVideo(fallbackPick)} className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg">
-                임시 상세카드
-              </button>
-            )}
+            <button
+              onClick={() => setDetailVideo(makeSample({ isPartner: true, placeName: '파트너 장소(샘플)', verificationStatus: undefined }))}
+              className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg"
+            >
+              임시A · PARTNER 배지
+            </button>
+            <button
+              onClick={() => setDetailVideo(makeSample({ verificationStatus: 'confirmed', placeName: '확인 장소(샘플)', isPartner: false }))}
+              className="rounded-lg bg-purple-600 text-white text-xs font-bold px-3 py-2 shadow-lg"
+            >
+              임시B · 확인 배지
+            </button>
           </div>
         )
       })()}
