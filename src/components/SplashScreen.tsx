@@ -9,11 +9,11 @@ function MapGridBg() {
     <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <pattern id="minor" width="32" height="32" patternUnits="userSpaceOnUse">
-          <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#4A7FA5" strokeWidth="0.4" strokeOpacity="0.5" />
+          <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#D85A30" strokeWidth="0.4" strokeOpacity="0.5" />
         </pattern>
         <pattern id="major" width="160" height="160" patternUnits="userSpaceOnUse">
           <rect width="160" height="160" fill="url(#minor)" />
-          <path d="M 160 0 L 0 0 0 160" fill="none" stroke="#4A7FA5" strokeWidth="1" strokeOpacity="0.9" />
+          <path d="M 160 0 L 0 0 0 160" fill="none" stroke="#D85A30" strokeWidth="1" strokeOpacity="0.9" />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill="url(#major)" opacity="0.09" />
@@ -47,7 +47,7 @@ export default function SplashScreen() {
       className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center select-none transition-opacity duration-500 ${
         phase === 'fade' ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
-      style={{ backgroundColor: '#0F1C2E' }}
+      style={{ backgroundColor: '#FBF8F5' }}
     >
       <MapGridBg />
 
@@ -73,7 +73,7 @@ export default function SplashScreen() {
           {/* 서비스명 */}
           <h1
             className="text-3xl font-bold"
-            style={{ color: '#FFFFFF', letterSpacing: '0.2em' }}
+            style={{ color: '#2a2320', letterSpacing: '0.2em' }}
           >
             MAPTUBE
           </h1>
@@ -84,7 +84,7 @@ export default function SplashScreen() {
           {/* 메인 카피 */}
           <p
             className="text-base font-medium"
-            style={{ color: 'rgba(255,255,255,0.90)' }}
+            style={{ color: '#6b5d54' }}
           >
             영상 속 장소를 지도로
           </p>
@@ -92,7 +92,7 @@ export default function SplashScreen() {
           {/* 서브 카피 */}
           <p
             className="text-xs text-center leading-5"
-            style={{ color: 'rgba(255,255,255,0.38)', maxWidth: 220 }}
+            style={{ color: '#8a7a70', maxWidth: 220 }}
           >
             맛집 · 카페 · 여행 · 숙소<br />
             유튜버 콘텐츠를 지도에서 발견하세요
@@ -103,7 +103,7 @@ export default function SplashScreen() {
       {/* 하단 버전 */}
       <div
         className="absolute bottom-10 text-xs"
-        style={{ color: 'rgba(255,255,255,0.18)' }}
+        style={{ color: 'rgba(42,35,32,0.30)' }}
       >
         v{VERSION}
       </div>
