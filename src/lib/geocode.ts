@@ -6,13 +6,27 @@ export interface GeoResult {
   categoryGroup: string
 }
 
+// Kakao Local REST 공통 fetch — 4초 타임아웃(AbortController). 초과/네트워크 실패 시 null 반환
+// → 각 호출부의 기존 null 폴백 경로로 흐른다(Kakao 무응답 시 무한 pending 방지).
+async function kakaoFetch(url: string, key: string): Promise<Response | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 4000)
+  try {
+    return await fetch(url, { headers: { Authorization: `KakaoAK ${key}` }, signal: controller.signal })
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
   const key = process.env.KAKAO_REST_API_KEY
   if (!key) return null
 
   const url = `https://dapi.kakao.com/v2/local/geo/coord2address.json?x=${lng}&y=${lat}`
-  const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })
-  if (!res.ok) return null
+  const res = await kakaoFetch(url, key)
+  if (!res || !res.ok) return null
 
   const json = await res.json() as {
     documents: {
@@ -98,8 +112,8 @@ export async function searchPlaceInfo(queryText: string, lat: number, lng: numbe
   if (!key || !query) return null
 
   const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&x=${lng}&y=${lat}&radius=300&sort=distance&size=1`
-  const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })
-  if (!res.ok) return null
+  const res = await kakaoFetch(url, key)
+  if (!res || !res.ok) return null
 
   const json = await res.json() as {
     documents: {
