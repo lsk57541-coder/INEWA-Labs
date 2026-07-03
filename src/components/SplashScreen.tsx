@@ -29,11 +29,11 @@ export default function SplashScreen() {
       setPhase('done');
       return;
     }
-    const t1 = setTimeout(() => setPhase('fade'), 4000); // 임시: 톤 확인용 4초(원래 2200)
+    const t1 = setTimeout(() => setPhase('fade'), 2200);
     const t2 = setTimeout(() => {
       setPhase('done');
       sessionStorage.setItem('splash_shown', '1');
-    }, 4500); // 임시: 원래 2700
+    }, 2700);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
