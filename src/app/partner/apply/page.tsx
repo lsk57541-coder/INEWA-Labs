@@ -116,20 +116,21 @@ export default async function PartnerApplyPage({
   if (!user) redirect('/login?next=/partner/apply')  // 로그인 후 파트너 신청으로 복귀(콜백이 쿠키로 처리)
 
   return (
+    <div className="min-h-screen bg-warm">
     <div className="max-w-2xl mx-auto px-4 py-8 md:py-10">
-      <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← 메인으로</Link>
+      <Link href="/" className="text-xs text-ink-muted hover:text-ink">← 메인으로</Link>
 
       {/* 1. 헤더 + MAPTUBE 소개 */}
       <div className="mt-5 mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold leading-snug" style={{ color: '#0F1C2E' }}>
+        <h1 className="text-2xl md:text-3xl font-bold leading-snug" style={{ color: '#2a2320' }}>
           내 영상 속 장소를 지도로
         </h1>
         <p className="text-sm text-gray-500 mt-2 leading-relaxed">
           채널 연동 한 번으로 시청자가 영상 속 장소를 바로 찾아갈 수 있어요.
         </p>
-        <div className="mt-4 rounded-lg border-l-4 border-[#0F1C2E] bg-gray-50 px-4 py-3">
-          <p className="text-xs font-bold text-[#0F1C2E] mb-0.5">MAPTUBE는?</p>
-          <p className="text-sm text-gray-600 leading-relaxed">
+        <div className="mt-4 rounded-lg border-l-4 border-coral bg-white px-4 py-3">
+          <p className="text-xs font-bold text-coral mb-0.5">MAPTUBE는?</p>
+          <p className="text-sm text-ink-muted leading-relaxed">
             유튜브 영상 속 맛집·카페·여행지를 지도에서 바로 찾아주는 서비스예요.
           </p>
         </div>
@@ -149,22 +150,22 @@ export default async function PartnerApplyPage({
       </div>
 
       {/* 2-1. 활용 가이드 (보조 — 주 CTA보다 약한 아웃라인) */}
-      <div className="mb-8 rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <p className="text-sm font-medium text-gray-800">📄 파트너 활용 가이드 (PDF)</p>
-        <p className="text-xs text-gray-500 mt-0.5">연동 전에 먼저 살펴보세요.</p>
+      <div className="mb-8 rounded-lg border border-line bg-white p-4">
+        <p className="text-sm font-medium text-ink">📄 파트너 활용 가이드 (PDF)</p>
+        <p className="text-xs text-ink-muted mt-0.5">연동 전에 먼저 살펴보세요.</p>
         <div className="flex gap-2 mt-3">
           <a
             href="/partner-guide.pdf"
             target="_blank"
             rel="noopener"
-            className="flex-1 text-center text-xs border border-gray-300 text-gray-700 bg-white rounded-lg py-2 hover:bg-gray-100 transition"
+            className="flex-1 text-center text-xs border border-line text-ink-muted bg-white rounded-lg py-2 hover:bg-surface transition"
           >
             바로 보기
           </a>
           <a
             href="/partner-guide.pdf"
             download
-            className="flex-1 text-center text-xs border border-gray-300 text-gray-700 bg-white rounded-lg py-2 hover:bg-gray-100 transition"
+            className="flex-1 text-center text-xs border border-line text-ink-muted bg-white rounded-lg py-2 hover:bg-surface transition"
           >
             다운로드
           </a>
@@ -173,16 +174,16 @@ export default async function PartnerApplyPage({
 
       {/* 3. 혜택 5개 */}
       <section className="mb-8">
-        <h2 className="text-sm font-bold mb-3 pl-3 border-l-4 border-[#0F1C2E]">파트너 혜택</h2>
+        <h2 className="text-sm font-bold mb-3 pl-3 border-l-4 border-coral">파트너 혜택</h2>
         <div className="grid gap-3 md:grid-cols-2">
           {BENEFITS.map((b) => (
             <div
               key={b.title}
               className={`flex items-start gap-3 rounded-lg p-4 ${
-                b.highlight ? 'border border-blue-600 bg-blue-50' : 'bg-gray-50'
+                b.highlight ? 'border border-coral bg-coral-soft' : 'bg-white border border-line'
               }`}
             >
-              <span className={`shrink-0 mt-0.5 ${b.highlight ? 'text-blue-600' : 'text-gray-700'}`}>{b.icon}</span>
+              <span className={`shrink-0 mt-0.5 ${b.highlight ? 'text-coral' : 'text-ink-muted'}`}>{b.icon}</span>
               <div>
                 <p className="text-sm font-semibold leading-snug">{b.title}</p>
                 <p className="text-xs text-gray-500 mt-1 leading-relaxed">{b.body}</p>
@@ -194,11 +195,11 @@ export default async function PartnerApplyPage({
 
       {/* 4. 연동 방법 3단계 */}
       <section className="mb-8">
-        <h2 className="text-sm font-bold mb-3 pl-3 border-l-4 border-[#0F1C2E]">연동 방법</h2>
+        <h2 className="text-sm font-bold mb-3 pl-3 border-l-4 border-coral">연동 방법</h2>
         <div className="space-y-3">
           {STEPS.map((s, i) => (
             <div key={i} className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[#0F1C2E] text-white text-xs font-bold flex items-center justify-center shrink-0">
+              <span className="w-6 h-6 rounded-full bg-coral text-white text-xs font-bold flex items-center justify-center shrink-0">
                 {i + 1}
               </span>
               <div>
@@ -212,10 +213,10 @@ export default async function PartnerApplyPage({
 
       {/* 5. Q&A */}
       <section className="mb-8">
-        <h2 className="text-sm font-bold mb-3 pl-3 border-l-4 border-[#0F1C2E]">자주 묻는 질문</h2>
+        <h2 className="text-sm font-bold mb-3 pl-3 border-l-4 border-coral">자주 묻는 질문</h2>
         <div className="space-y-2">
           {QA.map((item) => (
-            <details key={item.q} className="group rounded-lg border border-border bg-white overflow-hidden">
+            <details key={item.q} className="group rounded-lg border border-line bg-white overflow-hidden">
               <summary className="flex items-center justify-between cursor-pointer list-none px-4 py-3 text-sm font-medium text-gray-800">
                 <span>Q. {item.q}</span>
                 <span className="text-gray-400 transition-transform group-open:rotate-180 shrink-0 ml-2">▾</span>
@@ -232,6 +233,7 @@ export default async function PartnerApplyPage({
         채널 연동 시 영상 자막 데이터를 장소 추출 목적으로만 활용하며,<br className="hidden sm:block" />
         언제든 설정에서 해제할 수 있습니다.
       </p>
+    </div>
     </div>
   )
 }
