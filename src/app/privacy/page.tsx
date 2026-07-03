@@ -147,7 +147,7 @@ export default function PrivacyPage() {
           <li>
             카카오 — 소셜 로그인 인증, 지도 표시, 카카오톡 공유 (
             <a
-              href="https://policy.kakao.com/kr/privacy"
+              href="https://www.kakao.com/policy/privacy"
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-500 underline"
