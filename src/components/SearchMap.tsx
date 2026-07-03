@@ -1362,7 +1362,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           aria-label="검색결과 필터"
           className={`absolute top-3 right-3 z-20 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition ${filterActive ? 'gap-1.5 px-3' : 'w-10'}`}
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={filterActive ? 'text-blue-600' : 'text-gray-700'}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={filterActive ? 'text-coral' : 'text-gray-700'}>
             <line x1="4" y1="7" x2="20" y2="7" />
             <circle cx="9" cy="7" r="2.4" fill="white" />
             <line x1="4" y1="12" x2="20" y2="12" />
@@ -1371,7 +1371,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             <circle cx="11" cy="17" r="2.4" fill="white" />
           </svg>
           {filterActive && (
-            <span className="text-xs font-bold text-blue-600 tabular-nums">{allResults.length}→{filteredResults.length}</span>
+            <span className="text-xs font-bold text-coral tabular-nums">{allResults.length}→{filteredResults.length}</span>
           )}
         </button>
       )}
@@ -1380,48 +1380,48 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {filterPanelOpen && (
         <div className="absolute inset-0 z-30 flex flex-col justify-end md:items-center md:justify-center md:p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setFilterPanelOpen(false)} />
-          <div className="relative bg-white rounded-t-2xl shadow-2xl px-5 pt-3 pb-6 max-h-[80dvh] overflow-y-auto md:w-full md:max-w-md md:rounded-2xl">
+          <div className="relative bg-warm rounded-t-2xl shadow-2xl px-5 pt-3 pb-6 max-h-[80dvh] overflow-y-auto md:w-full md:max-w-md md:rounded-2xl">
             <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mb-3 md:hidden" />
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-bold text-gray-900">필터</h3>
-              <button onClick={() => setFilterPanelOpen(false)} aria-label="닫기" className="text-gray-400 text-xl leading-none px-1">✕</button>
+              <h3 className="text-base font-bold text-ink">필터</h3>
+              <button onClick={() => setFilterPanelOpen(false)} aria-label="닫기" className="text-ink-muted text-xl leading-none px-1">✕</button>
             </div>
 
             {/* 최소 조회수 */}
             <div className="mb-5">
               <div className="flex justify-between items-baseline mb-2">
-                <label className="text-sm font-semibold text-gray-800">최소 조회수</label>
-                <span className="text-sm font-bold text-blue-600">{draftViewIdx === 0 ? '전체' : `${formatCountKo(VIEW_STEPS[draftViewIdx])} 이상`}</span>
+                <label className="text-sm font-semibold text-ink">최소 조회수</label>
+                <span className="text-sm font-bold text-coral">{draftViewIdx === 0 ? '전체' : `${formatCountKo(VIEW_STEPS[draftViewIdx])} 이상`}</span>
               </div>
               <input
                 type="range" min={0} max={VIEW_STEPS.length - 1} step={1} value={draftViewIdx}
                 onChange={(e) => setDraftViewIdx(Number(e.target.value))}
-                className="w-full h-2 accent-blue-600"
+                className="w-full h-2 accent-coral"
               />
             </div>
 
             {/* 최소 구독자수 */}
             <div className="mb-5">
               <div className="flex justify-between items-baseline mb-2">
-                <label className="text-sm font-semibold text-gray-800">최소 구독자수</label>
-                <span className="text-sm font-bold text-blue-600">{draftSubIdx === 0 ? '전체' : `${formatCountKo(SUB_STEPS[draftSubIdx])} 이상`}</span>
+                <label className="text-sm font-semibold text-ink">최소 구독자수</label>
+                <span className="text-sm font-bold text-coral">{draftSubIdx === 0 ? '전체' : `${formatCountKo(SUB_STEPS[draftSubIdx])} 이상`}</span>
               </div>
               <input
                 type="range" min={0} max={SUB_STEPS.length - 1} step={1} value={draftSubIdx}
                 onChange={(e) => setDraftSubIdx(Number(e.target.value))}
-                className="w-full h-2 accent-blue-600"
+                className="w-full h-2 accent-coral"
               />
             </div>
 
             {/* 업로드 날짜 (구간 칩) */}
             <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-800 mb-2">업로드 날짜</label>
+              <label className="block text-sm font-semibold text-ink mb-2">업로드 날짜</label>
               <div className="flex gap-2">
                 {DATE_RANGES.map((r) => (
                   <button
                     key={r.key}
                     onClick={() => setDraftDateRange(r.key)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${draftDateRange === r.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${draftDateRange === r.key ? 'bg-coral text-white border-coral' : 'bg-white text-ink-muted border-line hover:bg-surface'}`}
                   >
                     {r.label}
                   </button>
@@ -1433,13 +1433,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             <div className="flex gap-2">
               <button
                 onClick={resetDraftFilters}
-                className="flex-1 py-3 rounded-lg text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
+                className="flex-1 py-3 rounded-lg text-sm font-semibold text-ink-muted bg-surface hover:bg-line-strong transition"
               >
                 초기화
               </button>
               <button
                 onClick={applyFilters}
-                className="flex-[2] py-3 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition"
+                className="flex-[2] py-3 rounded-lg text-sm font-semibold text-white bg-coral hover:brightness-95 transition"
               >
                 적용
               </button>
