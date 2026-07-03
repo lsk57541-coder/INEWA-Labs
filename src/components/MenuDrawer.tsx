@@ -102,14 +102,16 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
       <div className="relative w-72 max-h-screen overflow-y-auto shadow-2xl flex flex-col" style={{ backgroundColor: '#FBF8F5' }}>
 
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-4 h-14 shrink-0" style={{ backgroundColor: '#FFFFFF' }}>
+        <div className="flex items-center justify-between px-4 h-14 shrink-0" style={{ backgroundColor: '#D85A30' }}>
           <div className="flex items-center gap-2">
-            <PinPlayIcon size={20} />
-            <span className="font-bold text-ink tracking-wide">MAPTUBE</span>
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-white shrink-0">
+              <PinPlayIcon size={15} />
+            </span>
+            <span className="font-bold text-white tracking-wide">MAPTUBE</span>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface text-ink-muted transition"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/15 text-white transition"
           >
             ✕
           </button>
@@ -117,10 +119,10 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
 
         {/* 서비스 소개 — OG 카드처럼 코랄 짧은 구분선(2px 솔리드 → DPR 무관, 모바일/웹 동일) + 두 줄 슬로건.
             각 줄이 한 덩어리라 "바/로" 같은 단어 중간 끊김 없음. */}
-        <div className="px-4 pt-2 pb-3" style={{ backgroundColor: '#FFFFFF' }}>
-          <div className="mb-2.5" style={{ width: 28, height: 2, backgroundColor: '#FF5C5C', borderRadius: 1 }} />
-          <p className="text-xs font-medium" style={{ color: '#6b5d54' }}>영상 속 장소를 지도로</p>
-          <p className="text-[11px] mt-0.5" style={{ color: '#8a7a70' }}>유튜버가 다녀온 그곳, 바로 찾아보세요</p>
+        <div className="px-4 pt-2 pb-3" style={{ backgroundColor: '#D85A30' }}>
+          <div className="mb-2.5" style={{ width: 28, height: 2, backgroundColor: '#FFFFFF', borderRadius: 1 }} />
+          <p className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.92)' }}>영상 속 장소를 지도로</p>
+          <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>유튜버가 다녀온 그곳, 바로 찾아보세요</p>
         </div>
 
         {/* 유저 섹션 */}
