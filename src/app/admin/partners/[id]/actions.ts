@@ -87,7 +87,12 @@ export async function rejectPartner(id: string, reason: string) {
 
 export async function resetPartnerStatus(id: string, status: 'approved' | 'withdrawn' | 'pending') {
   const supabase = await requireAdmin()
-  const { error } = await supabase.from('partners').update({ status }).eq('id', id)
+  // 관리자 해제(withdrawn)도 파트너 본인 탈퇴와 동일하게 OAuth 토큰 파기.
+  // approved/pending 복원 시엔 토큰을 건드리지 않는다(기존 연동 유지).
+  const patch = status === 'withdrawn'
+    ? { status, youtube_access_token: null, youtube_refresh_token: null }
+    : { status }
+  const { error } = await supabase.from('partners').update(patch).eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/partners/${id}`)
   revalidatePath('/admin/partners')

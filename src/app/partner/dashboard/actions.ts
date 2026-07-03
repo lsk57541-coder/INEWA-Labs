@@ -107,7 +107,12 @@ export async function withdrawPartner() {
   const { error: hideError } = await supabase.from('places').update({ status: 'hidden' }).eq('partner_id', partner.id)
   if (hideError) throw new Error(hideError.message)
 
-  const { error } = await supabase.from('partners').update({ status: 'withdrawn' }).eq('id', partner.id)
+  // 탈퇴 = soft-delete(행·이력 보존)이되 OAuth 토큰은 즉시 파기(방침 8조 "탈퇴 시 즉시 삭제"
+  // 일치). 재가입 시 재연동(OAuth)에서 토큰이 다시 채워지므로 복귀 무손상.
+  const { error } = await supabase
+    .from('partners')
+    .update({ status: 'withdrawn', youtube_access_token: null, youtube_refresh_token: null })
+    .eq('id', partner.id)
   if (error) throw new Error(error.message)
 
   redirect('/')

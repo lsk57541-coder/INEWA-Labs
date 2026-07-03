@@ -1944,10 +1944,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 // 모음영상은 같은 videoId가 여러 좌표로 중복 → videoId만으론 React key 충돌이 나서
                 // 필터로 줄 때 옛 DOM이 안 지워졌음. videoId+좌표로 고유화.
                 key={`${v.videoId}:${v.lat}:${v.lng}`}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition border-b border-border last:border-0"
+                className="flex items-start gap-2 px-3 py-2 hover:bg-gray-50 transition border-b border-border last:border-0"
               >
                 <div className="relative shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
-                  <img src={v.thumbnail} alt="" className="w-14 h-8 md:w-24 md:h-14 object-cover rounded" />
+                  <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] md:w-40 md:h-[90px] object-cover rounded" />
                   <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-0.5 right-0.5" />
                 </div>
                 <div className="flex-1 overflow-hidden min-w-0">
@@ -2055,7 +2055,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   className="relative shrink-0 cursor-pointer"
                   onClick={() => setSelectedVideo(v)}
                 >
-                  <img src={v.thumbnail} alt="" className="w-28 h-[68px] object-cover rounded-lg" />
+                  <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] object-cover rounded-lg" />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center shadow-sm">
                       <div className="w-0 h-0 border-y-[7px] border-y-transparent border-l-[13px] border-l-white ml-1" />
