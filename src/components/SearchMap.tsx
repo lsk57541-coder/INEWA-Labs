@@ -2119,8 +2119,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           video={detailVideo}
           isPartner={isPartnerVideo(detailVideo)}
           favorited={favoriteIds.has(placeKey(detailVideo.videoId, detailVideo.lat, detailVideo.lng))}
+          visited={visitedIds.has(placeKey(detailVideo.videoId, detailVideo.lat, detailVideo.lng))}
           onPlay={() => { const v = detailVideo; setDetailVideo(null); setSelectedVideo(v) }}
           onToggleFavorite={() => handleToggleFavorite(detailVideo)}
+          onToggleVisited={() => handleToggleVisitedVideo(detailVideo)}
           onShare={() => handleShare(detailVideo)}
           onClose={() => setDetailVideo(null)}
         />
