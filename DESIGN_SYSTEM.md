@@ -16,6 +16,23 @@
 | `muted` (`text-muted`) | `gray-400` | 보조 텍스트, 캡션, placeholder | 본문 텍스트엔 쓰지 말 것 |
 | `border` (`border-border`) | `gray-200` | 기본 테두리 — 명시적 색 지정 없는 모든 `border`는 이걸로 통일 | — |
 
+### 웜 미니멀 소비자 톤 (2차 — 소비자 UI 전역 통일)
+
+`PlaceDetailCard`에서 확정한 웜 미니멀 팔레트를 소비자 UI 전역 포인트로 승격. Tailwind v4 `@theme`에 등록돼 유틸이 자동 생성된다. **라이트 전용**(앱 다크모드 미지원 — 한 벌). 화면 단위로 점진 적용.
+
+| 토큰 | 값 | 역할 |
+|---|---|---|
+| `coral` (`bg-coral`/`text-coral`/`border-coral`) | `#D85A30` | **소비자 1차 포인트** — 선택/활성 상태, 주요 CTA. 소비자 화면에서 `accent`(blue-600) 대체 |
+| `coral-soft` (`bg-coral-soft`) / `coral-ink` (`text-coral-ink`) | `#FAECE7` / `#993C1D` | 연코랄 배경 + 그 위 텍스트(보조 버튼·태그) |
+| `confirm` (`text-confirm`/`bg-confirm`) | `#1D9E75` | 파트너 확인 배지 초록 |
+| `partner` (`bg-partner`/`text-partner`) | `#E8B84B` | 파트너 골드 표식 |
+| `warm` (`bg-warm`) | `#FBF8F5` | 화면 배경(미묘한 웜). 카드는 흰색 유지 |
+| `surface` (`bg-surface`) | `#faf7f5` | 중립 표면(보조 버튼 배경 등) |
+| `line` / `line-strong` (`border-line`) | `#f0e9e3` / `#ede4de` | 웜 톤 테두리 |
+| `ink` / `ink-muted` (`text-ink`) | `#2a2320` / `#8a7a70` | 웜 톤 본문/보조 텍스트 |
+
+**제외(웜 톤으로 바꾸지 말 것):** 지도 마커색, 파트너 랜딩 레드(YouTube 맥락), 헤더 네이비(`header-dark`), 하트(`favorite`)·가본곳(초록). `accent`(blue-600)는 admin/partner + 미마이그레이션 소비자 잔여에만 남는 레거시.
+
 ## 타이포그래피
 
 - 폰트: Geist Sans 사용 (body의 `font-family`가 Arial로 하드코딩되어 Geist 변수가 죽은 코드였던 버그를 `globals.css`에서 수정함 — `var(--font-sans)`를 우선 적용하고 Arial/Helvetica는 fallback으로만 남김)
