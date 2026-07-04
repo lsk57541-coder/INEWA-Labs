@@ -350,12 +350,31 @@ function partnerThumbOf(v: VideoResult): string | null {
   return v.partnerThumbnail ?? getDemoPartner(v.channel)?.thumbnail ?? null
 }
 
-// 파트너 채널 표식 — 마커 금색(#FFD700)과 통일한 작은 칩.
-function PartnerChip() {
+// 리스트 카드 상단 배지 줄 — PARTNER(파트너 장소) + 카테고리 태그. 둘 다 없으면 줄 자체를 렌더 안 함.
+// 검색결과 리스트·마커 그룹 리스트 양쪽 공용. (액션 아이콘/PlaceInfoPanel과 무관.)
+function CardBadgeRow({ v }: { v: VideoResult }) {
+  const partner = isPartnerVideo(v)
+  const category = Array.isArray(v.category) ? v.category[0] : v.category
+  if (!partner && !category) return null
   return (
-    <span className="ml-1 align-[1px] inline-block rounded bg-[#FFD700] px-1 py-px text-[9px] font-extrabold leading-none text-[#5c4600] tracking-wide">
-      PARTNER
-    </span>
+    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+      {partner && (
+        <span
+          className="inline-block leading-none"
+          style={{ background: '#E8B84B', color: '#4A1B0C', borderRadius: 20, fontSize: 11, fontWeight: 500, padding: '2px 8px', letterSpacing: '0.3px' }}
+        >
+          PARTNER
+        </span>
+      )}
+      {category && (
+        <span
+          className="inline-block leading-none"
+          style={{ background: '#FAECE7', color: '#993C1D', borderRadius: 20, fontSize: 11, fontWeight: 500, padding: '2px 8px' }}
+        >
+          {category}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -1955,6 +1974,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-0.5 right-0.5" />
                 </div>
                 <div className="flex-1 overflow-hidden min-w-0">
+                  <CardBadgeRow v={v} />
                   <p
                     className="text-xs font-medium line-clamp-2 leading-tight cursor-pointer hover:text-coral"
                     onClick={() => setSelectedVideo(v)}
@@ -1975,7 +1995,6 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     <p className="text-xs text-gray-400 truncate flex-1 min-w-0 md:flex md:items-center md:gap-1 md:overflow-visible md:whitespace-normal">
                       {v.subscriberTier && <TierButton tier={v.subscriberTier} />}
                       {v.channel && <span className="md:truncate md:min-w-0">{' '}{v.channel}</span>}
-                      {isPartnerVideo(v) && <PartnerChip />}
                       <span className="md:shrink-0 md:whitespace-nowrap"> · {formatViews(v.viewCount)}</span>
                     </p>
                     <a
@@ -2070,6 +2089,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
                 {/* Info */}
                 <div className="flex-1 overflow-hidden min-w-0">
+                  <CardBadgeRow v={v} />
                   <p
                     className="text-xs font-medium line-clamp-2 leading-snug cursor-pointer hover:text-coral"
                     onClick={() => setSelectedVideo(v)}
@@ -2085,7 +2105,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">
-                    {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel}{isPartnerVideo(v) && <PartnerChip />}
+                    {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {formatViews(v.viewCount)}
