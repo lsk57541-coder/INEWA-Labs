@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { normName } from '@/lib/normName'
 
 // 재등록 중복 판정용 헬퍼 2종.
 // ① videoId 추출 — video-info/route.ts의 매칭 방식(watch?v= / youtu.be 둘 다 커버)과 동일.
@@ -15,11 +16,8 @@ function extractVideoIdFromUrl(url: string | null | undefined): string | null {
     return null
   } catch { return null }
 }
-// ② 이름 정규화 — ExtractPlacesForm.tsx의 normName과 동일(공백·기호 제거, 소문자).
+// ② 이름 정규화(normName)는 '@/lib/normName' 공용 유틸로 이전.
 //    ★매칭키에 name을 넣어 "1영상 다장소(다른 이름)"는 미매칭 → 각각 insert(정상)되게 함.
-function normName(s: string): string {
-  return s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()
-}
 
 async function requireMyPartnerId(): Promise<string> {
   const supabase = await createClient()

@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { haversineKm } from '@/lib/haversine'
+import { normName } from '@/lib/normName'
 import { geocodeKorean, reverseGeocode, searchPlaceInfo, getRegionName, getCityName } from '@/lib/geocode'
 import { buildHeuristicPlaceQueries, extractPlaceByAI, extractStatedBusinessName } from '@/lib/extractLocation'
 import { isCompilationVideo, resolveCompilationPlaces } from '@/lib/extractPlaces'
@@ -652,15 +653,52 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
     })
   }
 
-  // 같은 videoId+좌표 중복(같은 영상을 두 번 임포트한 경우) 제거 — 지도엔 1번만.
-  // 다른 좌표(같은 영상의 다른 장소)로 등장하는 건 좌표가 달라 유지됨.
-  const seen = new Set<string>()
-  return out.filter((r) => {
-    const k = `${r.videoId}:${r.lat.toFixed(4)}:${r.lng.toFixed(4)}`
-    if (seen.has(k)) return false
-    seen.add(k)
-    return true
-  })
+  // 병합/중복 처리 — 키 = videoId + 정규화 장소명. (좌표 키 폐기: admin 수기 좌표와 파트너
+  // 지오코딩 좌표가 미세하게 달라 "같은 장소"를 놓치고 중복 표시하던 문제 해소.)
+  // 같은 키에 admin(locations)·partner(places)가 함께 오면 필드별로 머지한다.
+  // 이름이 다르면(예: "양림빵집" vs "양림빵집 본점") 키가 달라 각각 유지(정상).
+  const byKey = new Map<string, VideoResult>()
+  for (const r of out) {
+    const key = `${r.videoId}:${normName(r.placeName ?? r.title)}`
+    const prev = byKey.get(key)
+    byKey.set(key, prev ? mergeRegistered(prev, r) : r)
+  }
+  return [...byKey.values()]
+}
+
+// admin locations 결과와 partner places 결과가 "같은 장소"(videoId+정규화명 일치)로 겹칠 때 하나로 합친다.
+// 소스 판별은 placeId 유무(places 경로에만 실림)로 — 인자 순서에 무관하게 동작.
+// 규칙: 파트너 권위 필드(verificationStatus/isPartner/partnerThumbnail/placeId/address)=places 값 사용,
+//       큐레이션 필드(lat/lng/placeName/category)=admin 값이 있으면 admin 우선, 없으면 places 값.
+function mergeRegistered(a: VideoResult, b: VideoResult): VideoResult {
+  const nonEmpty = (v?: string | null): string | undefined => (v != null && v.trim() !== '') ? v : undefined
+  const aIsPlaces = a.placeId != null
+  const bIsPlaces = b.placeId != null
+
+  // 같은 소스끼리 겹침(admin+admin 또는 places+places): 기존 "먼저 것 유지" + 빈 값만 보완.
+  if (aIsPlaces === bIsPlaces) {
+    return {
+      ...a,
+      placeName: nonEmpty(a.placeName) ?? b.placeName,
+      category: nonEmpty(a.category) ?? b.category,
+      address: nonEmpty(a.address) ?? b.address,
+      partnerThumbnail: a.partnerThumbnail ?? b.partnerThumbnail,
+      placeId: a.placeId ?? b.placeId,
+      verificationStatus: a.verificationStatus ?? b.verificationStatus,
+      isPartner: a.isPartner || b.isPartner,
+    }
+  }
+
+  const admin = aIsPlaces ? b : a
+  const partner = aIsPlaces ? a : b
+  return {
+    ...partner, // 파트너 권위 필드 베이스(verificationStatus/isPartner/partnerThumbnail/placeId/address 포함)
+    lat: admin.lat,               // 등록 결과는 항상 좌표 있음 → admin 수기 좌표 우선
+    lng: admin.lng,
+    distanceKm: admin.distanceKm, // 좌표를 admin 것으로 채택 → 거리도 admin 기준
+    placeName: nonEmpty(admin.placeName) ?? partner.placeName, // 큐레이션명 우선, 없으면 partner
+    category: nonEmpty(admin.category) ?? partner.category,     // admin category 있으면 우선, 없으면 partner
+  }
 }
 
 export async function GET(req: NextRequest) {
