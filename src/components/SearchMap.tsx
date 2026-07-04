@@ -566,8 +566,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [allResults, setAllResults] = useState<VideoResult[]>([])
   const [videoFilter, setVideoFilter] = useState<'all' | 'short' | 'long'>('all')
   const [sortBy, setSortBy] = useState<'views' | 'duration' | 'distance'>('views')
-  // 대분류 카테고리 필터(가로 스크롤 칩). 'all' 또는 MAJOR_CATEGORIES의 key 하나(단일 선택).
+  // 대분류 카테고리 필터. 'all' 또는 MAJOR_CATEGORIES의 key 하나(단일 선택).
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  // 지도 위 카테고리 버튼 → 펼침 그리드 패널 표시 여부.
+  const [categoryPanelOpen, setCategoryPanelOpen] = useState(false)
   // 적용된 필터(거르기): 마커+리스트를 줄인다. 0/all = 미적용. 데이터 없는(0/미상) 등록장소는 항상 통과.
   const [minViews, setMinViews] = useState(0)
   const [minSubs, setMinSubs] = useState(0)
@@ -1394,6 +1396,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     </div>
   )
 
+  // 지도 위 카테고리 버튼에 표시할 현재 선택(기본 '전체'). 선택 시 그 이모지+라벨로 바뀜.
+  const currentCat = categoryFilter === 'all'
+    ? { emoji: '🍽️', label: '전체' }
+    : (MAJOR_CATEGORIES.find((c) => c.key === categoryFilter) ?? { emoji: '🍽️', label: '전체' })
+
   const locateButtonBottomClass = (selectedGroup && selectedVideo)
     ? 'bottom-[calc(45dvh+56.25vw+60px)]'
     : selectedGroup
@@ -1471,6 +1478,52 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             <span className="text-xs font-bold text-coral tabular-nums">{allResults.length}→{filteredResults.length}</span>
           )}
         </button>
+      )}
+
+      {/* 카테고리 필터 (지도 우측, 결과 필터 버튼 아래) — 버튼 탭 → 그리드 패널 펼침 */}
+      {allResults.length > 0 && (
+        <>
+          <button
+            onClick={() => setCategoryPanelOpen((o) => !o)}
+            aria-label="카테고리 필터"
+            className={`absolute top-16 right-3 z-20 h-10 px-3 rounded-full shadow-lg flex items-center gap-1 text-sm font-semibold transition ${
+              categoryFilter !== 'all' ? 'bg-coral text-white' : 'bg-white text-ink hover:bg-gray-50'
+            }`}
+          >
+            <span className="leading-none">{currentCat.emoji}</span>
+            <span className="whitespace-nowrap">{currentCat.label}</span>
+          </button>
+          {categoryPanelOpen && (
+            <>
+              {/* 바깥 탭 → 닫힘(선택 없이) */}
+              <div className="absolute inset-0 z-20" onClick={() => setCategoryPanelOpen(false)} />
+              <div className="absolute top-[108px] right-3 z-30 w-60 max-w-[calc(100vw-24px)] bg-warm rounded-2xl shadow-2xl border border-line p-3">
+                <button
+                  onClick={() => { setCategoryFilter('all'); setCategoryPanelOpen(false) }}
+                  className={`w-full mb-2 h-10 rounded-xl flex items-center justify-center gap-1.5 text-sm font-semibold border transition ${
+                    categoryFilter === 'all' ? 'bg-coral text-white border-coral' : 'bg-white text-ink border-line hover:bg-surface'
+                  }`}
+                >
+                  🍽️ 전체
+                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  {MAJOR_CATEGORIES.map((c) => (
+                    <button
+                      key={c.key}
+                      onClick={() => { setCategoryFilter(c.key); setCategoryPanelOpen(false) }}
+                      className={`h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 border transition ${
+                        categoryFilter === c.key ? 'bg-coral text-white border-coral' : 'bg-white text-ink border-line hover:bg-surface'
+                      }`}
+                    >
+                      <span className="text-lg leading-none">{c.emoji}</span>
+                      <span className="text-xs font-medium">{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {/* 필터 패널 (슬라이드업 시트) */}
@@ -1981,22 +2034,6 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </span>
               <span className="shrink-0 ml-2 md:hidden">{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
             </button>
-          </div>
-          {/* 대분류 카테고리 필터 — 가로 스크롤 칩(전체 + 8개). 클라측 필터, warm minimal 톤. */}
-          <div className="flex gap-1.5 px-3 py-2 border-b border-line shrink-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-            {[{ key: 'all', label: '전체', emoji: '' }, ...MAJOR_CATEGORIES].map((c) => (
-              <button
-                key={c.key}
-                onClick={() => setCategoryFilter(c.key)}
-                className={`shrink-0 flex items-center gap-1 text-xs rounded-full px-3 py-1.5 border transition font-medium whitespace-nowrap ${
-                  categoryFilter === c.key
-                    ? 'bg-coral text-white border-coral'
-                    : 'bg-white text-ink-muted border-line hover:bg-surface'
-                }`}
-              >
-                {c.emoji && <span>{c.emoji}</span>}{c.label}
-              </button>
-            ))}
           </div>
           <div className="flex gap-1.5 px-3 py-2 border-b border-line shrink-0">
             {([['all', '전체'] as const, ['long', null] as const, ['short', null] as const]).map(([key, label]) => (
