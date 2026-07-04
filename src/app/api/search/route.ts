@@ -581,7 +581,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   const out: VideoResult[] = []
 
   // 1) locations + videos
-  const { data: locations } = await db.from('locations').select('id, name, lat, lng')
+  const { data: locations } = await db.from('locations').select('id, name, lat, lng, category')
   const nearby = (locations ?? []).filter(
     (l) => l.lat != null && l.lng != null && haversineKm(lat, lng, l.lat, l.lng) <= radius
   )
@@ -604,6 +604,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
         placeNameSource: 'correction', duration: '', isShort: false,
         subscriberTier: tierForSubscriberCount(subs), subscriberCount: subs,
         publishedAt: row.published_at ?? undefined,
+        category: (loc as { category?: string | null }).category ?? undefined, // 장소 카테고리(partner places 경로 650줄과 동일 형태). admin bulk가 locations.category에 저장.
       })
     }
   }
