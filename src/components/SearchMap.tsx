@@ -350,6 +350,19 @@ function partnerThumbOf(v: VideoResult): string | null {
   return v.partnerThumbnail ?? getDemoPartner(v.channel)?.thumbnail ?? null
 }
 
+// 리스트/그룹 공통 정렬 — 거리/영상길이 탭이면 그 기준, 기본(조회수) 탭에서만 파트너 우선노출.
+// sortedResults(리스트)와 그룹 마커 자동재생 [0]·나머지 리스트가 같은 순서를 쓰도록 단일 출처화.
+function sortVideos(videos: VideoResult[], sortBy: 'views' | 'duration' | 'distance'): VideoResult[] {
+  return videos.slice().sort((a, b) => {
+    if (sortBy === 'distance') return a.distanceKm - b.distanceKm
+    if (sortBy === 'duration') return parseDurationLabel(b.duration) - parseDurationLabel(a.duration)
+    const ap = isPartnerVideo(a) ? 1 : 0
+    const bp = isPartnerVideo(b) ? 1 : 0
+    if (ap !== bp) return bp - ap
+    return b.viewCount - a.viewCount
+  })
+}
+
 // 리스트 카드 상단 배지 줄 — PARTNER(파트너 장소) + 카테고리 태그. 둘 다 없으면 줄 자체를 렌더 안 함.
 // 검색결과 리스트·마커 그룹 리스트 양쪽 공용. (액션 아이콘/PlaceInfoPanel과 무관.)
 function CardBadgeRow({ v }: { v: VideoResult }) {
@@ -733,6 +746,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     if (selectedVideo?.placeId) track(selectedVideo.placeId, 'embed_play')
   }, [selectedVideo])
 
+  // 그룹 마커가 열려 있는데 재생 중 영상이 없으면(그룹 진입 직후, 또는 재생 중 영상이 숨김/제거됨)
+  // 정렬 기준(sortBy) 첫 영상을 자동 선택 → "마커 클릭 즉시 자동재생". 컴포넌트 스코프라 sortBy 최신 보장.
+  // (마커 onGroupClick 클로저는 sortBy가 stale이라, 선택을 여기 효과에서 처리.)
+  useEffect(() => {
+    if (selectedGroup && !selectedVideo) {
+      const ordered = sortVideos(selectedGroup.videos, sortBy)
+      if (ordered.length > 0) setSelectedVideo(ordered[0])
+      else setSelectedGroup(null)
+    }
+  }, [selectedGroup, selectedVideo, sortBy])
+
   // sheetFraction is how much of the map's height a bottom sheet currently
   // covers (0–1). Without it, setCenter puts the point at the geometric
   // center of the whole container, which sits behind/just above the sheet
@@ -876,10 +900,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             setSelectedVideo(group.videos[0])
             panTo(group.lat, group.lng, 0)
           } else {
-            // 다중영상: 그룹 리스트를 '영상 선택' 단계로 연다. 자동재생 없음 — 리스트 탭 → 상세 카드 → 재생.
+            // 다중영상: 그룹을 연다. selectedVideo=null로 두면 consistency 효과가 정렬 첫 영상을
+            // 자동 선택 → 즉시 자동재생(watch 모달 + 카드 + 아래 나머지 리스트).
             setSelectedGroup(group)
             setSelectedVideo(null)
-            panTo(group.lat, group.lng, 0.45)
+            panTo(group.lat, group.lng, 0)
           }
         }
 
@@ -1256,17 +1281,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   )
 
   // 리스트 표시는 정렬 적용본. (마커는 filteredResults를 써서 정렬 변경 시 불필요 재렌더 방지.)
-  const sortedResults = filteredResults
-    .slice()
-    .sort((a, b) => {
-      if (sortBy === 'distance') return a.distanceKm - b.distanceKm
-      if (sortBy === 'duration') return parseDurationLabel(b.duration) - parseDurationLabel(a.duration)
-      // 기본(조회수) 정렬에서만 파트너 영상 우선노출. 사용자가 정렬 탭을 누르면(거리/길이) 해제.
-      const ap = isPartnerVideo(a) ? 1 : 0
-      const bp = isPartnerVideo(b) ? 1 : 0
-      if (ap !== bp) return bp - ap
-      return b.viewCount - a.viewCount
-    })
+  // 정렬 로직은 sortVideos로 단일화 — 그룹 마커 자동재생/나머지 리스트도 동일 comparator 사용.
+  const sortedResults = sortVideos(filteredResults, sortBy)
 
   // 적용 필터값이 기본이 아니면 활성 — 아이콘 배지/카운트 표시용.
   const filterActive = minViews > 0 || minSubs > 0 || dateRange !== 'all'
@@ -1313,6 +1329,65 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   // Keep the locate-me button clear of whichever bottom sheet is currently
   // showing (results list or a marker group's video list), instead of
   // floating on top of it.
+  // 그룹 watch 모달의 "이 위치의 다른 영상" 리스트 행. (구 그룹 바텀시트 행 마크업을 이전·재사용.)
+  const renderGroupVideoRow = (v: VideoResult) => (
+    <div
+      key={`${v.videoId}:${v.lat}:${v.lng}`}
+      className="flex gap-3 px-3 py-3.5 transition border-b border-line last:border-0 group hover:bg-surface"
+    >
+      <div className="relative shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
+        <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] object-cover rounded-lg" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center shadow-sm">
+            <div className="w-0 h-0 border-y-[7px] border-y-transparent border-l-[13px] border-l-white ml-1" />
+          </div>
+        </div>
+        <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-1 right-1" />
+      </div>
+      <div className="flex-1 overflow-hidden min-w-0">
+        <CardBadgeRow v={v} />
+        <p
+          className="text-xs font-medium line-clamp-2 leading-snug cursor-pointer hover:text-coral"
+          onClick={() => setSelectedVideo(v)}
+        >
+          {decodeHtmlEntities(v.title)}
+        </p>
+        <div className="flex items-center gap-1.5 mt-1">
+          {v.placeName && (
+            <p className="text-sm font-semibold text-gray-800 truncate">📍 {v.placeName}</p>
+          )}
+          <span className="shrink-0 text-xs font-bold text-coral bg-coral-soft rounded px-1.5 py-0.5">
+            {v.distanceKm}km
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 mt-0.5 truncate">
+          {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel}
+        </p>
+        <p className="text-xs text-gray-400 mt-0.5">{formatViews(v.viewCount)}</p>
+        <div className="flex items-center gap-2 mt-1.5">
+          <a
+            href={navUrl(v, userPos ? { ...userPos, label: posLabel } : null)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="길찾기"
+          >
+            <NaviIcon className="w-7 h-7" />
+          </a>
+          <VideoActionRow
+            favorited={favoriteIds.has(placeKey(v.videoId, v.lat, v.lng))}
+            visited={visitedIds.has(placeKey(v.videoId, v.lat, v.lng))}
+            reported={reportedIds.has(v.videoId)}
+            onToggleFavorite={() => handleToggleFavorite(v)}
+            onToggleVisited={() => handleToggleVisitedVideo(v)}
+            onShare={() => handleShare(v)}
+            onReport={() => handleReport(v)}
+            onHide={() => handleHideVideo(v)}
+          />
+        </div>
+      </div>
+    </div>
+  )
+
   const locateButtonBottomClass = (selectedGroup && selectedVideo)
     ? 'bottom-[calc(45dvh+56.25vw+60px)]'
     : selectedGroup
@@ -2024,130 +2099,21 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       )}
 
-      {/* Compact video player — shown above group list when multi-video marker auto-plays */}
-      {selectedGroup && selectedVideo && (
-        <div
-          className="absolute left-0 right-0 z-20 shadow-2xl md:max-w-2xl md:mx-auto"
-          style={{ bottom: 'calc(45dvh + 6px)' }}
-        >
-          <div className="relative">
-            <PlayerFrame video={selectedVideo} portraitMaxVh={50} />
-            <button
-              onClick={() => setSelectedVideo(null)}
-              className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition text-xs"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
+      {/* (구 컴팩트 플레이어 + 그룹 바텀시트는 옵션 A 통합 watch 모달로 대체됨 —
+          그룹 마커도 아래 watch 모달에서 자동재생 + 카드 + 나머지 리스트로 처리한다.) */}
 
-      {/* Video list — bottom sheet capped under half the screen, shown when a map marker is clicked */}
-      {selectedGroup && (
-        <div
-          className="absolute left-0 right-0 bottom-0 z-10 bg-warm rounded-t-2xl shadow-2xl flex flex-col md:left-1/2 md:right-auto md:-translate-x-1/2 md:max-w-2xl md:w-full md:rounded-2xl md:bottom-3"
-          style={{ maxHeight: '45dvh' }}
-        >
-          <div className="pt-2 pb-0 flex justify-center shrink-0">
-            <div className="w-10 h-1.5 bg-gray-200 rounded-full" />
-          </div>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-surface shrink-0">
-            <div>
-              <p className="text-sm font-bold">이 위치의 영상</p>
-              <p className="text-xs text-gray-400 mt-0.5">{selectedGroup.videos.length}개 · 조회수순</p>
-            </div>
-            <button
-              onClick={() => setSelectedGroup(null)}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-500 transition text-sm"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {selectedGroup.videos.map((v) => (
-              <div
-                key={`${v.videoId}:${v.lat}:${v.lng}`}
-                className={`flex gap-3 px-3 py-3.5 transition border-b border-line last:border-0 group ${
-                  selectedVideo?.videoId === v.videoId
-                    ? 'border-l-4 border-coral bg-coral-soft'
-                    : 'hover:bg-surface'
-                }`}
-              >
-                {/* Thumbnail — click to play */}
-                <div
-                  className="relative shrink-0 cursor-pointer"
-                  onClick={() => setSelectedVideo(v)}
-                >
-                  <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] object-cover rounded-lg" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center shadow-sm">
-                      <div className="w-0 h-0 border-y-[7px] border-y-transparent border-l-[13px] border-l-white ml-1" />
-                    </div>
-                  </div>
-                  <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-1 right-1" />
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 overflow-hidden min-w-0">
-                  <CardBadgeRow v={v} />
-                  <p
-                    className="text-xs font-medium line-clamp-2 leading-snug cursor-pointer hover:text-coral"
-                    onClick={() => setSelectedVideo(v)}
-                  >
-                    {decodeHtmlEntities(v.title)}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    {v.placeName && (
-                      <p className="text-sm font-semibold text-gray-800 truncate">📍 {v.placeName}</p>
-                    )}
-                    <span className="shrink-0 text-xs font-bold text-coral bg-coral-soft rounded px-1.5 py-0.5">
-                      {v.distanceKm}km
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">
-                    {v.subscriberTier && <TierButton tier={v.subscriberTier} />} {v.channel}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {formatViews(v.viewCount)}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <a
-                      href={navUrl(v, userPos ? { ...userPos, label: posLabel } : null)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="길찾기"
-                    >
-                      <NaviIcon className="w-7 h-7" />
-                    </a>
-                    <VideoActionRow
-                      favorited={favoriteIds.has(placeKey(v.videoId, v.lat, v.lng))}
-                      visited={visitedIds.has(placeKey(v.videoId, v.lat, v.lng))}
-                      reported={reportedIds.has(v.videoId)}
-                      onToggleFavorite={() => handleToggleFavorite(v)}
-                      onToggleVisited={() => handleToggleVisitedVideo(v)}
-                      onShare={() => handleShare(v)}
-                      onReport={() => handleReport(v)}
-                      onHide={() => handleHideVideo(v)}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Video player modal — single-video marker only (multi-video uses compact player above) */}
-      {!selectedGroup && selectedVideo && (
+      {/* Watch 모달 — 단일 마커 + 그룹 마커 공통(옵션 A 통합형). selectedVideo가 있으면 재생.
+          그룹이면 카드 아래에 "이 위치의 다른 영상" 리스트를 붙여 한 스크롤로 전환 가능. */}
+      {selectedVideo && (
         <div
           className="absolute inset-0 z-20 flex items-center justify-center bg-black/60"
-          onClick={() => setSelectedVideo(null)}
+          onClick={() => { setSelectedGroup(null); setSelectedVideo(null) }}
         >
           <div
             className="relative bg-white rounded-2xl overflow-hidden shadow-2xl w-full max-w-lg md:max-w-2xl mx-4 max-h-[90dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 상단 영상(고정) + 하단 정보(세로 스크롤). 정보부는 PlaceInfoPanel 재사용. */}
+            {/* 상단 영상(고정) + 하단 정보·나머지 리스트(세로 스크롤). */}
             <div className="shrink-0">
               <PlayerFrame video={selectedVideo} portraitMaxVh={65} />
             </div>
@@ -2165,9 +2131,18 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 onReport={() => handleReport(selectedVideo)}
                 onHide={() => handleHideVideo(selectedVideo)}
               />
+              {/* 그룹 마커: 같은 위치의 다른 영상(정렬 동일, 현재 재생중 제외). 행 클릭 → 재생/카드 전환. */}
+              {selectedGroup && selectedGroup.videos.length > 1 && (
+                <div className="border-t border-line mt-1">
+                  <p className="px-4 pt-3 pb-1.5 text-[13px] font-bold" style={{ color: '#2a2320' }}>이 위치의 다른 영상</p>
+                  {sortVideos(selectedGroup.videos, sortBy)
+                    .filter((v) => v.videoId !== selectedVideo.videoId)
+                    .map(renderGroupVideoRow)}
+                </div>
+              )}
             </div>
             <button
-              onClick={() => setSelectedVideo(null)}
+              onClick={() => { setSelectedGroup(null); setSelectedVideo(null) }}
               className="absolute top-3 right-3 bg-white/80 rounded-full w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-white shadow"
             >
               ✕
