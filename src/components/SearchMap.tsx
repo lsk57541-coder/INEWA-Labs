@@ -29,6 +29,7 @@ import PlaceInfoPanel from '@/components/PlaceInfoPanel'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 import { placeKey } from '@/lib/placeKey'
 import { track } from '@/lib/track'
+import { MAJOR_CATEGORIES, mapToMajorCategory } from '@/lib/categoryMapping'
 
 // 검색 로딩 중 순차로 보여주는 단계 라벨(가짜 — /api/search는 단일 JSON 응답이라 실제 단계 진행은
 // 받을 수 없음). 실제 파이프라인 순서(YT 검색 → geocode/추출 → dedupe/정렬)에 맞춰 체감만 개선.
@@ -153,8 +154,11 @@ function stepIndexForValue(steps: number[], value: number): number {
 // "데이터 없음 → 항상 통과"로 둔다(1단계 임시정책). 2·3단계 backfill로 데이터 채우면 정상 적용됨.
 function passesFilters(
   v: VideoResult,
-  f: { videoFilter: 'all' | 'short' | 'long'; minViews: number; minSubs: number; dateMin: number }
+  f: { videoFilter: 'all' | 'short' | 'long'; minViews: number; minSubs: number; dateMin: number; category: string }
 ): boolean {
+  // 대분류 카테고리 필터 — 데이터(조회수/구독자) 유무와 무관하게 항상 적용(등록장소도 대상).
+  // category 없는 결과(추출 geotag/ai)는 mapToMajorCategory에서 '기타' → 특정 칩 선택 시 자연 제외.
+  if (f.category !== 'all' && mapToMajorCategory(v.category) !== f.category) return false
   if (f.videoFilter === 'short' && !v.isShort) return false
   if (f.videoFilter === 'long' && v.isShort) return false
   // 데이터 없는 등록장소/데모: 조회수/구독자/날짜 필터 전부 통과(항상 표시).
@@ -562,6 +566,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [allResults, setAllResults] = useState<VideoResult[]>([])
   const [videoFilter, setVideoFilter] = useState<'all' | 'short' | 'long'>('all')
   const [sortBy, setSortBy] = useState<'views' | 'duration' | 'distance'>('views')
+  // 대분류 카테고리 필터(가로 스크롤 칩). 'all' 또는 MAJOR_CATEGORIES의 key 하나(단일 선택).
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
   // 적용된 필터(거르기): 마커+리스트를 줄인다. 0/all = 미적용. 데이터 없는(0/미상) 등록장소는 항상 통과.
   const [minViews, setMinViews] = useState(0)
   const [minSubs, setMinSubs] = useState(0)
@@ -1277,7 +1283,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
 
   // 거르기(필터): 마커+리스트 공통 집합. 정렬 전 단계라 마커 그룹핑에 그대로 쓴다.
   const filteredResults = allResults.filter((v) =>
-    passesFilters(v, { videoFilter, minViews, minSubs, dateMin: dateCutoff(dateRange) })
+    passesFilters(v, { videoFilter, minViews, minSubs, dateMin: dateCutoff(dateRange), category: categoryFilter })
   )
 
   // 리스트 표시는 정렬 적용본. (마커는 filteredResults를 써서 정렬 변경 시 불필요 재렌더 방지.)
@@ -1324,7 +1330,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     )
     // filteredResults는 아래 입력들로 파생되므로 그 입력들을 의존성으로 둔다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allResults, videoFilter, minViews, minSubs, dateRange, favoriteIds, visitedIds])
+  }, [allResults, videoFilter, minViews, minSubs, dateRange, categoryFilter, favoriteIds, visitedIds])
 
   // Keep the locate-me button clear of whichever bottom sheet is currently
   // showing (results list or a marker group's video list), instead of
@@ -1975,6 +1981,22 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </span>
               <span className="shrink-0 ml-2 md:hidden">{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
             </button>
+          </div>
+          {/* 대분류 카테고리 필터 — 가로 스크롤 칩(전체 + 8개). 클라측 필터, warm minimal 톤. */}
+          <div className="flex gap-1.5 px-3 py-2 border-b border-line shrink-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            {[{ key: 'all', label: '전체', emoji: '' }, ...MAJOR_CATEGORIES].map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setCategoryFilter(c.key)}
+                className={`shrink-0 flex items-center gap-1 text-xs rounded-full px-3 py-1.5 border transition font-medium whitespace-nowrap ${
+                  categoryFilter === c.key
+                    ? 'bg-coral text-white border-coral'
+                    : 'bg-white text-ink-muted border-line hover:bg-surface'
+                }`}
+              >
+                {c.emoji && <span>{c.emoji}</span>}{c.label}
+              </button>
+            ))}
           </div>
           <div className="flex gap-1.5 px-3 py-2 border-b border-line shrink-0">
             {([['all', '전체'] as const, ['long', null] as const, ['short', null] as const]).map(([key, label]) => (
