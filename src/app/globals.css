@@ -6,7 +6,7 @@
   color-scheme: light;
 
   /* 웜 미니멀 소비자 톤 (라이트 전용 — 앱은 다크모드 미지원이라 한 벌만 정의).
-     PlaceDetailCard에서 확정한 팔레트를 소비자 UI 전역 포인트로 승격. 화면 단위로 단계 적용.
+     PlaceInfoPanel에서 확정한 팔레트를 소비자 UI 전역 포인트로 승격. 화면 단위로 단계 적용.
      ※ 제외(기존 유지): 지도 마커색, 파트너 랜딩 레드(YouTube 맥락), 헤더 네이비(header-dark),
        하트(amber/favorite)·가본곳(초록). */
   --warm-bg: #FBF8F5;          /* 화면 배경(미묘한 웜) */

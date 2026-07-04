@@ -25,7 +25,7 @@ import GuideOverlay from '@/components/GuideOverlay'
 import InquiryOverlay from '@/components/InquiryOverlay'
 import LoginPromptModal from '@/components/LoginPromptModal'
 import SearchResultModal from '@/components/SearchResultModal'
-import PlaceDetailCard from '@/components/PlaceDetailCard'
+import PlaceInfoPanel from '@/components/PlaceInfoPanel'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 import { placeKey } from '@/lib/placeKey'
 import { track } from '@/lib/track'
@@ -549,8 +549,6 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null)
   const [selectedGroup, setSelectedGroup] = useState<MarkerGroup | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<VideoResult | null>(null)
-  // ★단계 2 임시: 상세 카드 렌더 확인용 상태. 단계 3에서 마커/리스트 클릭이 이 상태를 연다.
-  const [detailVideo, setDetailVideo] = useState<VideoResult | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const [restoreDone, setRestoreDone] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -854,10 +852,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             track(pid, 'place_click')
           }
           if (group.videos.length === 1) {
-            // 단일영상: 상세 카드 먼저(재생은 카드 [영상 보기]에서). 기존 재생 상태 정리(잔여 플레이어 방지).
+            // 단일영상: 썸네일/마커 탭 → 즉시 재생(전체화면 플레이어 + 하단 정보 패널).
             setSelectedGroup(null)
-            setSelectedVideo(null)
-            setDetailVideo(group.videos[0])
+            setSelectedVideo(group.videos[0])
             panTo(group.lat, group.lng, 0)
           } else {
             // 다중영상: 그룹 리스트를 '영상 선택' 단계로 연다. 자동재생 없음 — 리스트 탭 → 상세 카드 → 재생.
@@ -1947,14 +1944,20 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 key={`${v.videoId}:${v.lat}:${v.lng}`}
                 className="flex items-start gap-2 px-3 py-2 hover:bg-surface transition border-b border-line last:border-0"
               >
-                <div className="relative shrink-0 cursor-pointer" onClick={() => setDetailVideo(v)}>
+                <div className="relative shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
                   <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] md:w-40 md:h-[90px] object-cover rounded" />
+                  {/* ▶ 오버레이 — 탭 시 즉시 재생(YouTube 정책 C: 재생 트리거 썸네일 표시) */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-9 h-9 bg-black/50 rounded-full flex items-center justify-center shadow-sm">
+                      <div className="w-0 h-0 border-y-[6px] border-y-transparent border-l-[11px] border-l-white ml-0.5" />
+                    </div>
+                  </div>
                   <DurationBadge duration={v.duration} isShort={v.isShort} className="bottom-0.5 right-0.5" />
                 </div>
                 <div className="flex-1 overflow-hidden min-w-0">
                   <p
                     className="text-xs font-medium line-clamp-2 leading-tight cursor-pointer hover:text-coral"
-                    onClick={() => setDetailVideo(v)}
+                    onClick={() => setSelectedVideo(v)}
                   >
                     {decodeHtmlEntities(v.title)}
                   </p>
@@ -2054,7 +2057,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 {/* Thumbnail — click to play */}
                 <div
                   className="relative shrink-0 cursor-pointer"
-                  onClick={() => setDetailVideo(v)}
+                  onClick={() => setSelectedVideo(v)}
                 >
                   <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] object-cover rounded-lg" />
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -2069,7 +2072,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 <div className="flex-1 overflow-hidden min-w-0">
                   <p
                     className="text-xs font-medium line-clamp-2 leading-snug cursor-pointer hover:text-coral"
-                    onClick={() => setDetailVideo(v)}
+                    onClick={() => setSelectedVideo(v)}
                   >
                     {decodeHtmlEntities(v.title)}
                   </p>
@@ -2114,20 +2117,6 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         </div>
       )}
 
-      {detailVideo && (
-        <PlaceDetailCard
-          video={detailVideo}
-          isPartner={isPartnerVideo(detailVideo)}
-          favorited={favoriteIds.has(placeKey(detailVideo.videoId, detailVideo.lat, detailVideo.lng))}
-          visited={visitedIds.has(placeKey(detailVideo.videoId, detailVideo.lat, detailVideo.lng))}
-          onPlay={() => { const v = detailVideo; setDetailVideo(null); setSelectedVideo(v) }}
-          onToggleFavorite={() => handleToggleFavorite(detailVideo)}
-          onToggleVisited={() => handleToggleVisitedVideo(detailVideo)}
-          onShare={() => handleShare(detailVideo)}
-          onClose={() => setDetailVideo(null)}
-        />
-      )}
-
       {/* Video player modal — single-video marker only (multi-video uses compact player above) */}
       {!selectedGroup && selectedVideo && (
         <div
@@ -2138,44 +2127,24 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             className="relative bg-white rounded-2xl overflow-hidden shadow-2xl w-full max-w-lg md:max-w-2xl mx-4 max-h-[90dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <PlayerFrame video={selectedVideo} portraitMaxVh={65} />
-            <div className="flex items-start justify-between p-3 gap-3">
-              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-semibold line-clamp-2">{decodeHtmlEntities(selectedVideo.title)}</p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  {selectedVideo.placeName && (
-                    <p className="text-base font-bold text-gray-800">📍 {selectedVideo.placeName}</p>
-                  )}
-                  <span className="shrink-0 text-xs font-bold text-coral bg-coral-soft rounded px-1.5 py-0.5">
-                    현재 위치에서 {selectedVideo.distanceKm}km
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {selectedVideo.subscriberTier && <TierButton tier={selectedVideo.subscriberTier} />} {selectedVideo.channel} · {formatViews(selectedVideo.viewCount)}
-                  {selectedVideo.duration && <> · {selectedVideo.duration}</>}
-                  <span className="ml-1">{selectedVideo.isShort ? '📱' : '🎬'}</span>
-                </p>
-              </div>
-              <div className="shrink-0 flex items-center gap-3">
-                <a
-                  href={navUrl(selectedVideo, userPos ? { ...userPos, label: posLabel } : null)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="길찾기"
-                >
-                  <NaviIcon className="w-8 h-8" />
-                </a>
-                <VideoActionRow
-                  favorited={favoriteIds.has(placeKey(selectedVideo.videoId, selectedVideo.lat, selectedVideo.lng))}
-                  visited={visitedIds.has(placeKey(selectedVideo.videoId, selectedVideo.lat, selectedVideo.lng))}
-                  reported={reportedIds.has(selectedVideo.videoId)}
-                  onToggleFavorite={() => handleToggleFavorite(selectedVideo)}
-                  onToggleVisited={() => handleToggleVisitedVideo(selectedVideo)}
-                  onShare={() => handleShare(selectedVideo)}
-                  onReport={() => handleReport(selectedVideo)}
-                  onHide={() => handleHideVideo(selectedVideo)}
-                />
-              </div>
+            {/* 상단 영상(고정) + 하단 정보(세로 스크롤). 정보부는 PlaceInfoPanel 재사용. */}
+            <div className="shrink-0">
+              <PlayerFrame video={selectedVideo} portraitMaxVh={65} />
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <PlaceInfoPanel
+                video={selectedVideo}
+                isPartner={isPartnerVideo(selectedVideo)}
+                favorited={favoriteIds.has(placeKey(selectedVideo.videoId, selectedVideo.lat, selectedVideo.lng))}
+                visited={visitedIds.has(placeKey(selectedVideo.videoId, selectedVideo.lat, selectedVideo.lng))}
+                reported={reportedIds.has(selectedVideo.videoId)}
+                navUrl={navUrl(selectedVideo, userPos ? { ...userPos, label: posLabel } : null)}
+                onToggleFavorite={() => handleToggleFavorite(selectedVideo)}
+                onToggleVisited={() => handleToggleVisitedVideo(selectedVideo)}
+                onShare={() => handleShare(selectedVideo)}
+                onReport={() => handleReport(selectedVideo)}
+                onHide={() => handleHideVideo(selectedVideo)}
+              />
             </div>
             <button
               onClick={() => setSelectedVideo(null)}
