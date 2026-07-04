@@ -2039,11 +2039,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             {filteredResults.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-2 py-10 text-center px-6">
                 <p className="text-sm text-gray-400">
-                  {videoFilter === 'all' ? '조건에 맞는 영상이 없어요' : '이 필터에 맞는 영상이 없어요'}
+                  {videoFilter === 'all' && categoryFilter === 'all' ? '조건에 맞는 영상이 없어요' : '이 필터에 맞는 영상이 없어요'}
                 </p>
-                {videoFilter !== 'all' ? (
+                {videoFilter !== 'all' || categoryFilter !== 'all' ? (
                   <button
-                    onClick={() => setVideoFilter('all')}
+                    onClick={() => { setVideoFilter('all'); setCategoryFilter('all') }}
                     className="text-xs text-coral hover:text-coral-ink font-medium"
                   >
                     전체 보기로 전환
