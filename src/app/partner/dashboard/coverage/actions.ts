@@ -88,7 +88,7 @@ export async function getVideoPlaces(videoId: string): Promise<Place[]> {
   const supabase = await createClient()
   const { data } = await supabase
     .from('places')
-    .select('id, name, address, category, video_url, status, click_count, rejection_reason, verification_status, source, video_title')
+    .select('id, name, address, category, video_url, status, click_count, latitude, longitude, rejection_reason, verification_status, source, video_title')
     .eq('partner_id', partner.id)
     .neq('status', 'deleted')
     .ilike('video_url', `%${videoId}%`)

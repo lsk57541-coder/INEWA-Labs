@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { updatePlace, hidePlace, unhidePlace, deletePlace, confirmPlace, rejectPlace, type PlaceInput } from './actions'
+import PlaceSearchModal, { type PlaceSearchResult } from '@/components/partner/PlaceSearchModal'
 
 export interface Place {
   id: string
@@ -11,6 +12,8 @@ export interface Place {
   video_url: string | null
   status: 'active' | 'reviewing' | 'hidden' | 'rejected' | 'deleted'
   click_count: number
+  latitude?: number | null
+  longitude?: number | null
   rejection_reason?: string | null
   verification_status?: 'unverified' | 'confirmed' | 'rejected' | null
   source?: 'coords' | 'timestamp' | 'ai' | 'list' | null
@@ -40,6 +43,13 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
   })
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  // 좌표는 편집 input이 아니라 검색 모달로만 채운다. 채운 뒤 즉시 뱃지가 바뀌게 로컬 상태로 추적.
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    place.latitude != null && place.longitude != null ? { lat: place.latitude, lng: place.longitude } : null,
+  )
+  const [searchOpen, setSearchOpen] = useState(false)
+  // 좌표대기 = 공개(active) 상태인데 좌표가 없어 실제로는 지도에 안 뜨는 장소.
+  const isCoordPending = place.status === 'active' && coords === null
 
   const saveField = (patch: Partial<PlaceInput>) => {
     setError(null)
@@ -48,6 +58,30 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
         await updatePlace(place.id, patch)
       } catch (e) {
         setError(e instanceof Error ? e.message : '저장 실패')
+      }
+    })
+  }
+
+  // 좌표 채우기 — 검색 결과 선택 시 좌표 저장(+주소/카테고리는 비어있을 때만 보정, 상호명은 유지).
+  // status는 그대로 active → 좌표가 채워지는 순간 노출 조건(active+좌표)을 만족해 지도에 뜬다.
+  const handleSelectPlace = (r: PlaceSearchResult) => {
+    setSearchOpen(false)
+    setError(null)
+    const patch: Partial<PlaceInput> = { latitude: r.lat, longitude: r.lng }
+    const next = { ...fields }
+    if (!fields.address?.trim() && r.address) { patch.address = r.address; next.address = r.address }
+    if (!fields.category?.trim() && r.category) {
+      const cat = r.category.split('>').pop()?.trim()
+      if (cat) { patch.category = cat; next.category = cat }
+    }
+    setFields(next)
+    setCoords({ lat: r.lat, lng: r.lng })
+    startTransition(async () => {
+      try {
+        await updatePlace(place.id, patch)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '저장 실패')
+        setCoords(null) // 실패 시 뱃지 원복(실제 저장 안 됐으므로)
       }
     })
   }
@@ -122,8 +156,8 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
           onBlur={() => saveField({ name: fields.name })}
           className="flex-1 text-sm font-medium border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
         />
-        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_BADGE[place.status] ?? 'bg-gray-100 text-gray-500'}`}>
-          {STATUS_LABEL[place.status] ?? place.status}
+        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${isCoordPending ? 'bg-amber-100 text-amber-700' : (STATUS_BADGE[place.status] ?? 'bg-gray-100 text-gray-500')}`}>
+          {isCoordPending ? '좌표대기' : (STATUS_LABEL[place.status] ?? place.status)}
         </span>
       </div>
 
@@ -161,6 +195,23 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
         >
           ▶ 영상 보기
         </a>
+      )}
+
+      {/* 좌표대기 — 상호명만 있고 좌표가 없어 지도에 안 뜨는 장소. 좌표를 채우면 즉시 노출된다. */}
+      {isCoordPending && (
+        <div className="flex items-center gap-2 bg-amber-50 rounded-lg px-2.5 py-2">
+          <span className="text-xs text-amber-700 flex-1">
+            좌표가 없어 지도에 표시되지 않아요. 좌표를 채우면 바로 노출됩니다.
+          </span>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => setSearchOpen(true)}
+            className="shrink-0 text-xs font-medium bg-black text-white px-2.5 py-1 rounded-lg hover:bg-gray-800 disabled:opacity-40 transition"
+          >
+            좌표 채우기
+          </button>
+        </div>
       )}
 
       {/* 검증 — AI가 찾은 미검증 장소는 확인 유도, 확인/거부 결과는 상태로 표시 */}
@@ -253,6 +304,14 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
         </p>
       )}
       {error && <p className="text-xs text-red-600">{error}</p>}
+
+      {searchOpen && (
+        <PlaceSearchModal
+          initialQuery={fields.name || place.name}
+          onSelect={handleSelectPlace}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
     </div>
   )
 }
