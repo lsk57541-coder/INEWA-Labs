@@ -51,10 +51,16 @@ export default function PlaceInfoPanel({
   onToggleFavorite, onToggleVisited, onShare, onReport, onHide,
 }: PlaceInfoPanelProps) {
   const name = video.placeName ?? video.title
-  // 카카오맵 장소 검색 링크 — 순수 URL 조립(SDK/REST 미사용 = 무비용). 상호명 + 지역(구/동)으로 동명 구분.
+  // 카카오맵 딥링크 — 순수 URL 조립(SDK/REST 미사용 = 무비용).
+  // ★좌표가 있으면 link/map으로 정확 위치에 핀을 찍어 직행(길찾기 navUrl과 동일 좌표 딥링크 패턴) →
+  //   사용자가 카카오에서 다시 고를 필요 없음(재검색 2단계 이탈 제거).
+  // 좌표가 없거나 유효하지 않으면(좌표대기 등) 기존 상호명+지역 키워드 검색으로 폴백(깨진 링크 방지).
   const region = extractRegion(video.address)
-  const kakaoQuery = region ? `${name} ${region}` : name
-  const kakaoMapUrl = `https://map.kakao.com/link/search/${encodeURIComponent(kakaoQuery)}`
+  const hasCoords =
+    Number.isFinite(video.lat) && Number.isFinite(video.lng) && !(video.lat === 0 && video.lng === 0)
+  const kakaoMapUrl = hasCoords
+    ? `https://map.kakao.com/link/map/${encodeURIComponent(name)},${video.lat},${video.lng}`
+    : `https://map.kakao.com/link/search/${encodeURIComponent(region ? `${name} ${region}` : name)}`
   const isConfirmed = video.verificationStatus === 'confirmed'
   const [moreOpen, setMoreOpen] = useState(false)
 
