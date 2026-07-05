@@ -17,9 +17,9 @@ export async function GET(req: NextRequest) {
 
   const json = await res.json() as {
     documents: {
-      y: string; x: string
+      id: string; y: string; x: string
       place_name: string; address_name: string; road_address_name: string
-      category_name: string; phone: string
+      category_name: string; category_group_code: string; phone: string
     }[]
   }
 
@@ -32,6 +32,9 @@ export async function GET(req: NextRequest) {
         address: doc.road_address_name || doc.address_name,
         category: doc.category_name || undefined,
         phone: doc.phone || undefined,
+        // 카카오 상세 딥링크·대분류 저장용(place_url은 저장 안 함 → id로 조립). 소비 측 선택적 사용.
+        kakaoPlaceId: doc.id || undefined,
+        categoryGroupCode: doc.category_group_code || undefined,
       })),
     })
   }

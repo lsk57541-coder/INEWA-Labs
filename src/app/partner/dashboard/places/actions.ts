@@ -68,6 +68,9 @@ export interface PlaceInput {
   video_url?: string
   latitude?: number
   longitude?: number
+  phone?: string               // 카카오 전화(공식 필드)
+  kakao_place_id?: string      // 카카오 place id(상세 딥링크 조립·저장용)
+  category_group_code?: string // 카카오 대분류(FD6/CE7/AD5 등)
 }
 
 export async function addPlace(data: PlaceInput) {
@@ -84,6 +87,9 @@ export async function addPlace(data: PlaceInput) {
     video_url: data.video_url?.trim() || null,
     latitude: data.latitude ?? null,
     longitude: data.longitude ?? null,
+    phone: data.phone?.trim() || null,
+    kakao_place_id: data.kakao_place_id?.trim() || null,
+    category_group_code: data.category_group_code?.trim() || null,
     status: 'active', // 즉시 공개(바로 가입 취지). 사후 가드는 hide(숨김) 유지.
   })
   if (error) throw new Error(error.message)
@@ -104,6 +110,9 @@ export async function updatePlace(id: string, data: Partial<PlaceInput>) {
   if (data.video_url !== undefined) update.video_url = data.video_url?.trim() || null
   if (data.latitude !== undefined) update.latitude = data.latitude
   if (data.longitude !== undefined) update.longitude = data.longitude
+  if (data.phone !== undefined) update.phone = data.phone?.trim() || null
+  if (data.kakao_place_id !== undefined) update.kakao_place_id = data.kakao_place_id?.trim() || null
+  if (data.category_group_code !== undefined) update.category_group_code = data.category_group_code?.trim() || null
   update.updated_at = new Date().toISOString() // 파트너 콘텐츠 수정 시점 기록
 
   const { error } = await supabase.from('places').update(update).eq('id', id).eq('partner_id', partnerId)
@@ -240,6 +249,9 @@ export interface BulkPlaceInput {
   published_at?: string     // 영상 업로드일(2단계 저장 → 검색 필터)
   source?: 'coords' | 'timestamp' | 'ai' | 'list'  // 추출 출처(엔진 반환값). 수동 행은 생략 → null 저장.
   video_title?: string      // 영상 제목(등록 시 videoInfo.title에서. 장소관리 영상별 그룹 헤더용).
+  phone?: string               // 카카오 전화(공식 필드)
+  kakao_place_id?: string      // 카카오 place id(상세 딥링크 조립·저장용)
+  category_group_code?: string // 카카오 대분류(FD6/CE7/AD5 등)
 }
 
 // 반환: succeeded=신규 insert 수, updated=기존 행 갱신 수(재등록). 중복 방지의 핵심 경로.
@@ -317,6 +329,9 @@ export async function bulkRequestPlaces(places: BulkPlaceInput[]): Promise<{ suc
       published_at: p.published_at ?? null,
       source: p.source ?? null,  // 추출 출처(coords/timestamp/ai/list). 수동 추가 행은 null.
       video_title: p.video_title?.trim() || null,  // 영상 제목(영상별 그룹 헤더용). 수동 행은 null.
+      phone: p.phone?.trim() || null,                                // 카카오 전화
+      kakao_place_id: p.kakao_place_id?.trim() || null,              // 카카오 place id
+      category_group_code: p.category_group_code?.trim() || null,    // 카카오 대분류
     })
     if (error) {
       errors.push(`${p.name}: ${error.message}`)

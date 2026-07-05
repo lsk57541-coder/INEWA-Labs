@@ -34,6 +34,9 @@ interface PlaceRow {
   source: PlaceSource         // 추출 출처(places.source로 저장). 수동 추가 행은 null.
   lat: number | null
   lng: number | null
+  phone?: string | null              // 카카오 전화(저장용)
+  kakaoPlaceId?: string | null       // 카카오 place id(상세 딥링크 조립·저장용)
+  categoryGroupCode?: string | null  // 카카오 대분류(FD6/CE7/AD5)
   geocoding: boolean
   geocodeError: string | null
   autoFilled: boolean
@@ -46,6 +49,8 @@ interface PlaceSearchResult {
   phone?: string
   lat: number
   lng: number
+  kakaoPlaceId?: string
+  categoryGroupCode?: string
 }
 
 interface SearchModal {
@@ -186,6 +191,9 @@ export default function ExtractPlacesForm() {
       return {
         lat: hit.lat, lng: hit.lng, address: hit.address,
         category: hit.category ? hit.category.split('>').pop()?.trim() ?? '' : '',
+        phone: hit.phone ?? null,
+        kakaoPlaceId: hit.kakaoPlaceId ?? null,
+        categoryGroupCode: hit.categoryGroupCode ?? null,
         autoFilled: true, geocodeError: null,
       }
     } catch { return null }
@@ -299,6 +307,9 @@ export default function ExtractPlacesForm() {
       category: result.category ? result.category.split('>').pop()?.trim() ?? r.category : r.category,
       lat: result.lat,
       lng: result.lng,
+      phone: result.phone ?? null,
+      kakaoPlaceId: result.kakaoPlaceId ?? null,
+      categoryGroupCode: result.categoryGroupCode ?? null,
       geocodeError: null,
       autoFilled: false,
     } : r))
@@ -317,6 +328,9 @@ export default function ExtractPlacesForm() {
       video_url: videoUrl || undefined,
       latitude: r.lat ?? undefined,
       longitude: r.lng ?? undefined,
+      phone: r.phone ?? undefined,
+      kakao_place_id: r.kakaoPlaceId ?? undefined,
+      category_group_code: r.categoryGroupCode ?? undefined,
       view_count: videoInfo?.viewCount,
       published_at: videoInfo?.publishedAt,
       source: r.source ?? undefined,  // 추출 출처(수동 행은 undefined → insert에서 null)

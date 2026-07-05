@@ -10,6 +10,8 @@ export interface PlaceSearchResult {
   address: string
   category?: string
   phone?: string
+  kakaoPlaceId?: string       // 카카오 place id — 상세 딥링크 조립·저장용
+  categoryGroupCode?: string  // 카카오 대분류(FD6/CE7/AD5 등)
 }
 
 // 상호명/주소로 카카오 장소를 검색해 선택하는 모달.

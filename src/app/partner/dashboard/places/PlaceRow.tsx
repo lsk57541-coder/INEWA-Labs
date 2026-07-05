@@ -68,6 +68,10 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     setSearchOpen(false)
     setError(null)
     const patch: Partial<PlaceInput> = { latitude: r.lat, longitude: r.lng }
+    // 좌표를 채우는 카카오 장소가 권위 소스 → phone/place id/대분류도 함께 저장(있을 때만).
+    if (r.phone) patch.phone = r.phone
+    if (r.kakaoPlaceId) patch.kakao_place_id = r.kakaoPlaceId
+    if (r.categoryGroupCode) patch.category_group_code = r.categoryGroupCode
     const next = { ...fields }
     if (!fields.address?.trim() && r.address) { patch.address = r.address; next.address = r.address }
     if (!fields.category?.trim() && r.category) {
