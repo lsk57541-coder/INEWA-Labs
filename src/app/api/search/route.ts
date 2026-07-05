@@ -238,6 +238,8 @@ export interface VideoResult {
   verificationStatus?: 'unverified' | 'confirmed' | 'rejected' | null // places 검증상태. 파트너가 confirm한 장소만 'confirmed'. 상세 카드 "확인" 배지용. admin locations 경로엔 없음(undefined).
   address?: string // places.address. 상세 카드용. admin locations 경로엔 없음.
   category?: string // places.category(장소 카테고리). channel 폴백과 별개로 독립 노출용. admin locations 경로엔 없음.
+  phone?: string // places.phone. 카드 '전화하기'용. 값 있을 때만 버튼 노출. locations 경로엔 없음(undefined).
+  kakaoPlaceId?: string // places.kakao_place_id. 카드 카카오 상세 딥링크용. 없으면 좌표 딥링크 폴백.
 }
 
 // Fire-and-forget log of how each video's place name was resolved. Upserts by
@@ -613,7 +615,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   // 2) places (status=active) — 파트너 셀프 등록 장소
   const { data: places } = await db
     .from('places')
-    .select('id, name, video_url, latitude, longitude, category, address, status, view_count, subscriber_count, published_at, partner_id, verification_status')
+    .select('id, name, video_url, latitude, longitude, category, address, status, view_count, subscriber_count, published_at, partner_id, verification_status, phone, kakao_place_id')
     .eq('status', 'active')
 
   // 파트너 정보(채널명·아바타·구독자수) 일괄 조회 → 금색 마커/PARTNER 배지/상위노출용.
@@ -633,7 +635,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
     if (dist > radius) continue
     const vid = extractYoutubeId(p.video_url ?? '')
     if (!vid) continue
-    const pr = p as { view_count?: number | null; subscriber_count?: number | null; published_at?: string | null; partner_id?: string | null; address?: string | null; category?: string | null; verification_status?: string | null }
+    const pr = p as { view_count?: number | null; subscriber_count?: number | null; published_at?: string | null; partner_id?: string | null; address?: string | null; category?: string | null; verification_status?: string | null; phone?: string | null; kakao_place_id?: string | null }
     const partner = pr.partner_id ? partnerMap.get(pr.partner_id) : undefined
     const subs = partner?.subscriber_count ?? pr.subscriber_count ?? 0
     out.push({
@@ -650,6 +652,8 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
       verificationStatus: (pr.verification_status ?? undefined) as VideoResult['verificationStatus'], // 파트너 confirm 장소만 'confirmed'. 상세 카드 확인 배지용. admin locations 경로엔 없음.
       address: pr.address ?? undefined, // 상세 카드용. admin locations 경로엔 없음.
       category: pr.category ?? undefined, // 장소 카테고리(channel 폴백과 별개로 독립 노출용).
+      phone: pr.phone ?? undefined, // 카드 '전화하기'용(값 있을 때만 버튼).
+      kakaoPlaceId: pr.kakao_place_id ?? undefined, // 카드 카카오 상세 딥링크용(없으면 좌표 딥링크 폴백).
     })
   }
 
@@ -686,6 +690,8 @@ function mergeRegistered(a: VideoResult, b: VideoResult): VideoResult {
       placeId: a.placeId ?? b.placeId,
       verificationStatus: a.verificationStatus ?? b.verificationStatus,
       isPartner: a.isPartner || b.isPartner,
+      phone: nonEmpty(a.phone) ?? b.phone,                       // 병합 시 소실 방지(carry)
+      kakaoPlaceId: nonEmpty(a.kakaoPlaceId) ?? b.kakaoPlaceId,  // 병합 시 소실 방지(carry)
     }
   }
 

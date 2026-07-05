@@ -61,6 +61,13 @@ export default function PlaceInfoPanel({
   const kakaoMapUrl = hasCoords
     ? `https://map.kakao.com/link/map/${encodeURIComponent(name)},${video.lat},${video.lng}`
     : `https://map.kakao.com/link/search/${encodeURIComponent(region ? `${name} ${region}` : name)}`
+  // ★소스(places/locations) 무관, kakao_place_id 유무로만 분기 —
+  //   있으면 카카오 상세(리뷰·영업시간·주차) 1탭 직행, 없으면 위 좌표 딥링크(P1)로 폴백.
+  const kakaoDetailUrl = video.kakaoPlaceId
+    ? `https://place.map.kakao.com/${video.kakaoPlaceId}`
+    : kakaoMapUrl
+  const kakaoLabel = video.kakaoPlaceId ? '카카오맵 상세' : '카카오맵으로 열기'
+  const phone = video.phone?.trim() // 있을 때만 '전화하기' 버튼 노출
   const isConfirmed = video.verificationStatus === 'confirmed'
   const [moreOpen, setMoreOpen] = useState(false)
 
@@ -126,16 +133,25 @@ export default function PlaceInfoPanel({
         </div>
       </div>
 
-      {/* 4. 주요 액션: 카카오맵 + ··· 더보기(길찾기·신고·숨기기) */}
+      {/* 4. 주요 액션: (전화하기) + 카카오맵 상세 + ··· 더보기(길찾기·신고·숨기기) */}
       <div className="mt-4 flex items-center gap-2">
+        {phone && (
+          <a
+            href={`tel:${phone}`}
+            className="flex-1 h-12 rounded-[12px] text-sm font-bold flex items-center justify-center transition active:scale-[0.99]"
+            style={{ backgroundColor: C.coral, color: '#fff' }}
+          >
+            전화하기
+          </a>
+        )}
         <a
-          href={kakaoMapUrl}
+          href={kakaoDetailUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex-1 h-12 rounded-[12px] text-sm font-bold flex items-center justify-center transition active:scale-[0.99]"
           style={{ backgroundColor: C.coralBg, color: C.coral }}
         >
-          카카오맵으로 열기
+          {kakaoLabel}
         </a>
         <button
           onClick={() => setMoreOpen((o) => !o)}
