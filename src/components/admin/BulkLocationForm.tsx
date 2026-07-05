@@ -22,6 +22,9 @@ interface PlaceRow {
   timestampInput: string
   lat: number | null
   lng: number | null
+  phone?: string | null              // 카카오 전화(저장용)
+  kakaoPlaceId?: string | null       // 카카오 place id(상세 딥링크 조립·저장용)
+  categoryGroupCode?: string | null  // 카카오 대분류(FD6/CE7/AD5)
   geocoding: boolean
   geocodeError: string | null
   autoFilled: boolean
@@ -34,6 +37,8 @@ interface PlaceSearchResult {
   phone?: string
   lat: number
   lng: number
+  kakaoPlaceId?: string
+  categoryGroupCode?: string
 }
 
 interface SearchModal {
@@ -155,6 +160,9 @@ export default function BulkLocationForm() {
       return {
         lat: hit.lat, lng: hit.lng, address: hit.address,
         category: hit.category ? hit.category.split('>').pop()?.trim() ?? '' : '',
+        phone: hit.phone ?? null,
+        kakaoPlaceId: hit.kakaoPlaceId ?? null,
+        categoryGroupCode: hit.categoryGroupCode ?? null,
         autoFilled: true, geocodeError: null,
       }
     } catch { return null }
@@ -169,7 +177,13 @@ export default function BulkLocationForm() {
       const json = await res.json() as { results?: PlaceSearchResult[] }
       const hit = (json.results ?? [])[0]
       if (!hit) return null
-      return { lat: hit.lat, lng: hit.lng, autoFilled: true, geocodeError: null }
+      return {
+        lat: hit.lat, lng: hit.lng,
+        phone: hit.phone ?? null,
+        kakaoPlaceId: hit.kakaoPlaceId ?? null,
+        categoryGroupCode: hit.categoryGroupCode ?? null,
+        autoFilled: true, geocodeError: null,
+      }
     } catch { return null }
   }, [])
 
@@ -285,6 +299,9 @@ export default function BulkLocationForm() {
       category: result.category ? result.category.split('>').pop()?.trim() ?? result.category : r.category,
       lat: result.lat,
       lng: result.lng,
+      phone: result.phone ?? null,
+      kakaoPlaceId: result.kakaoPlaceId ?? null,
+      categoryGroupCode: result.categoryGroupCode ?? null,
       geocodeError: null,
       autoFilled: false,
     } : r))
@@ -319,6 +336,9 @@ export default function BulkLocationForm() {
           lat: r.lat!,
           lng: r.lng!,
           timestamp_sec: parseTimestamp(r.timestampInput),
+          phone: r.phone ?? undefined,
+          kakao_place_id: r.kakaoPlaceId ?? undefined,
+          category_group_code: r.categoryGroupCode ?? undefined,
         })),
         { replace }
       )

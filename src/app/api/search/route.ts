@@ -584,7 +584,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   const out: VideoResult[] = []
 
   // 1) locations + videos
-  const { data: locations } = await db.from('locations').select('id, name, lat, lng, category')
+  const { data: locations } = await db.from('locations').select('id, name, lat, lng, category, phone, kakao_place_id')
   const nearby = (locations ?? []).filter(
     (l) => l.lat != null && l.lng != null && haversineKm(lat, lng, l.lat, l.lng) <= radius
   )
@@ -608,6 +608,8 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
         subscriberTier: tierForSubscriberCount(subs), subscriberCount: subs,
         publishedAt: row.published_at ?? undefined,
         category: (loc as { category?: string | null }).category ?? undefined, // 장소 카테고리(partner places 경로 650줄과 동일 형태). admin bulk가 locations.category에 저장.
+        phone: (loc as { phone?: string | null }).phone ?? undefined, // 카드 '전화하기'용(백필/신규 데모부터 채워짐).
+        kakaoPlaceId: (loc as { kakao_place_id?: string | null }).kakao_place_id ?? undefined, // 카드 카카오 상세 딥링크용(없으면 좌표 딥링크 폴백).
       })
     }
   }

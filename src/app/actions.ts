@@ -142,7 +142,7 @@ export async function deleteVideo(videoId: string, locationId: string) {
 
 export async function bulkAddLocations(
   video: { youtube_id: string; title: string; thumbnail: string; channel: string; published_at: string; view_count?: number; subscriber_count?: number },
-  places: { name: string; address: string; category?: string; lat: number; lng: number; timestamp_sec?: number }[],
+  places: { name: string; address: string; category?: string; lat: number; lng: number; timestamp_sec?: number; phone?: string; kakao_place_id?: string; category_group_code?: string }[],
   opts?: { replace?: boolean }
 ): Promise<{ succeeded: number; errors: string[]; duplicate?: { existingPlaces: number } }> {
   const supabase = await requireAdmin()
@@ -178,6 +178,9 @@ export async function bulkAddLocations(
         lng: place.lng,
         category: place.category ?? null,
         description: place.category ?? null,
+        phone: place.phone?.trim() || null,
+        kakao_place_id: place.kakao_place_id?.trim() || null,
+        category_group_code: place.category_group_code?.trim() || null,
       })
       .select('id')
       .single()
