@@ -19,6 +19,20 @@ function MapPinIcon() {
   )
 }
 
+function CoverageIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="18" rx="2" />
+      <line x1="7" y1="3" x2="7" y2="21" />
+      <line x1="17" y1="3" x2="17" y2="21" />
+      <line x1="2" y1="9" x2="7" y2="9" />
+      <line x1="2" y1="15" x2="7" y2="15" />
+      <line x1="17" y1="9" x2="22" y2="9" />
+      <line x1="17" y1="15" x2="22" y2="15" />
+    </svg>
+  )
+}
+
 function SettingsIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -98,6 +112,16 @@ export default async function PartnerDashboardPage() {
 
       {/* 네비 카드 */}
       <div className="grid grid-cols-2 gap-3">
+        <Link
+          href="/partner/dashboard/coverage"
+          className="border rounded-lg p-4 hover:bg-gray-50 transition flex items-start gap-3"
+        >
+          <span className="text-gray-500 shrink-0 mt-0.5"><CoverageIcon /></span>
+          <div>
+            <p className="text-sm font-medium">영상 커버리지</p>
+            <p className="text-xs text-gray-400 mt-1">영상별 장소·노출 상태 확인</p>
+          </div>
+        </Link>
         <Link
           href="/partner/dashboard/places"
           className="border rounded-lg p-4 hover:bg-gray-50 transition flex items-start gap-3"
