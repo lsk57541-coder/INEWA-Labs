@@ -4,6 +4,8 @@ export interface GeoResult {
   address: string
   name: string
   categoryGroup: string
+  phone?: string        // 카카오 전화(순수 검색 카드 '전화하기'용). 저장 안 함 — 런타임 표시 전용.
+  kakaoPlaceId?: string // 카카오 place id(카드 상세 딥링크용). 응답에 이미 옴 → 파싱만 추가(호출 0).
 }
 
 // Kakao Local REST 공통 fetch — 4초 타임아웃(AbortController). 초과/네트워크 실패 시 null 반환
@@ -85,6 +87,7 @@ export interface PlaceDetails {
   category: string
   address: string
   phone?: string
+  kakaoPlaceId?: string // 카카오 place id(카드 상세 딥링크용). 응답에 이미 옴 → 파싱만 추가(호출 0).
 }
 
 // Strips hashtags/emoji/punctuation from a video title so it works as Kakao
@@ -117,6 +120,7 @@ export async function searchPlaceInfo(queryText: string, lat: number, lng: numbe
 
   const json = await res.json() as {
     documents: {
+      id: string
       place_name: string
       category_name: string
       road_address_name: string
@@ -136,6 +140,7 @@ export async function searchPlaceInfo(queryText: string, lat: number, lng: numbe
     category: doc.category_name,
     address: doc.road_address_name || doc.address_name,
     phone: doc.phone || undefined,
+    kakaoPlaceId: doc.id || undefined,
   }
 }
 
@@ -147,9 +152,14 @@ export async function geocodeKorean(place: string): Promise<GeoResult | null> {
   const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })
   if (!res.ok) return null
 
-  const json = await res.json() as { documents: { y: string; x: string; address_name: string; place_name: string; category_group_code: string }[] }
+  const json = await res.json() as { documents: { id: string; y: string; x: string; address_name: string; place_name: string; category_group_code: string; phone: string }[] }
   const doc = json.documents?.[0]
   if (!doc) return null
 
-  return { lat: parseFloat(doc.y), lng: parseFloat(doc.x), address: doc.address_name, name: doc.place_name, categoryGroup: doc.category_group_code }
+  return {
+    lat: parseFloat(doc.y), lng: parseFloat(doc.x), address: doc.address_name, name: doc.place_name,
+    categoryGroup: doc.category_group_code,
+    phone: doc.phone || undefined,
+    kakaoPlaceId: doc.id || undefined,
+  }
 }

@@ -287,7 +287,7 @@ export async function getVideoSnippet(videoId: string): Promise<YouTubeSnippet |
   }
 }
 
-export interface ResolvedPlace { name: string; lat: number; lng: number; distanceKm: number; startSec?: number }
+export interface ResolvedPlace { name: string; lat: number; lng: number; distanceKm: number; startSec?: number; phone?: string; kakaoPlaceId?: string }
 
 export async function resolveCompilationPlaces(opts: {
   videoId: string; title: string; description: string
@@ -301,6 +301,9 @@ export async function resolveCompilationPlaces(opts: {
   const out: ResolvedPlace[] = []
   for (const place of await extractMultiPlaces(videoId, title, description)) {
     let pLat: number, pLng: number
+    // 순수검색 원스톱: geocode 경로면 geo2의 phone/kakaoPlaceId를 실어 카드까지(미저장). 좌표내장은 원천 없음 → undefined.
+    let pPhone: string | undefined
+    let pKakaoId: string | undefined
     if (place.lat != null && place.lng != null) {
       pLat = place.lat; pLng = place.lng        // 0순위 좌표내장 → (a)반경만. TODO: (c)카테고리 미적용(0.4%)
     } else {
@@ -311,10 +314,11 @@ export async function resolveCompilationPlaces(opts: {
       if (adminDesc) { if (!opts.withinAdminArea(adminDesc, geo2.address)) continue }   // (b)
       else if (!opts.addressCorroborated(geo2.address, videoText)) continue            // (b)
       if (!allowedGroups.includes(geo2.categoryGroup)) continue                        // (c)
+      pPhone = geo2.phone; pKakaoId = geo2.kakaoPlaceId
     }
     const dist = haversineKm(lat, lng, pLat, pLng)
     if (dist > radius) continue                                                        // (a)
-    out.push({ name: place.name, lat: pLat, lng: pLng, distanceKm: Math.round(dist * 10) / 10, startSec: place.timestamp_seconds ?? undefined })
+    out.push({ name: place.name, lat: pLat, lng: pLng, distanceKm: Math.round(dist * 10) / 10, startSec: place.timestamp_seconds ?? undefined, phone: pPhone, kakaoPlaceId: pKakaoId })
   }
   return out
 }

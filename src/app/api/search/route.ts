@@ -874,6 +874,9 @@ export async function GET(req: NextRequest) {
           const usableLocDesc = locDesc && !isAdministrativeArea(locDesc) ? locDesc : null
           let placeName: string | undefined
           let placeNameSource: PlaceNameSource
+          // 순수검색 원스톱: searchPlaceInfo가 준 phone/kakaoPlaceId를 카드까지 전달(미저장·표시전용).
+          let placePhone: string | undefined
+          let placeKakaoId: string | undefined
           if (correction?.placeName) {
             placeName = correction.placeName
             placeNameSource = 'correction'
@@ -902,6 +905,8 @@ export async function GET(req: NextRequest) {
               : commentMatch?.name
                 ? 'comment_match'
                 : 'address_fallback'
+            placePhone = titleMatch?.phone ?? commentMatch?.phone
+            placeKakaoId = titleMatch?.kakaoPlaceId ?? commentMatch?.kakaoPlaceId
           }
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (!meetsConfidence(placeNameSource, minConfidence)) return
@@ -925,9 +930,11 @@ export async function GET(req: NextRequest) {
             subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
             subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
             publishedAt: v.snippet.publishedAt,
+            phone: placePhone,
+            kakaoPlaceId: placeKakaoId,
           })
         }
-      }),
+}),
 
     // 비-geotag 추출(첫 40개) + 행정구역 geotag 재라우팅(adminDesc 있으면 가드레일 적용).
     // adminGeo는 centroid 좌표를 버리고 제목 추출로 실제 장소를 재산출한다.
@@ -944,6 +951,8 @@ export async function GET(req: NextRequest) {
           const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
           let placeName: string | undefined
           let placeNameSource: PlaceNameSource
+          let placePhone: string | undefined
+          let placeKakaoId: string | undefined
           if (correction.placeName) {
             placeName = correction.placeName
             placeNameSource = 'correction'
@@ -964,6 +973,8 @@ export async function GET(req: NextRequest) {
               : commentMatch?.name
                 ? 'comment_match'
                 : 'address_fallback'
+            placePhone = titleMatch?.phone ?? commentMatch?.phone
+            placeKakaoId = titleMatch?.kakaoPlaceId ?? commentMatch?.kakaoPlaceId
           }
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (meetsConfidence(placeNameSource, minConfidence)) {
@@ -986,6 +997,8 @@ export async function GET(req: NextRequest) {
               subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
               subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
               publishedAt: v.snippet.publishedAt,
+              phone: placePhone,
+              kakaoPlaceId: placeKakaoId,
             })
           }
         }
@@ -1019,6 +1032,9 @@ export async function GET(req: NextRequest) {
         const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
         let resolvedName: string
         let placeNameSource: PlaceNameSource
+        // 순수검색 원스톱: 기본은 geo2(geocodeKorean)의 phone/id, else 분기는 searchPlaceInfo 우선(미저장·표시전용).
+        let placePhone: string | undefined = geo2.phone
+        let placeKakaoId: string | undefined = geo2.kakaoPlaceId
         if (statedName) {
           resolvedName = statedName
           placeNameSource = 'explicit_description'
@@ -1041,6 +1057,8 @@ export async function GET(req: NextRequest) {
             : commentMatch?.name
               ? 'comment_match'
               : 'address_fallback'
+          placePhone = titleMatch?.phone ?? commentMatch?.phone ?? geo2.phone
+          placeKakaoId = titleMatch?.kakaoPlaceId ?? commentMatch?.kakaoPlaceId ?? geo2.kakaoPlaceId
         }
         logPlaceNameResolution(v.id, placeNameSource, resolvedName)
         if (!meetsConfidence(placeNameSource, minConfidence)) return false
@@ -1064,6 +1082,8 @@ export async function GET(req: NextRequest) {
           subscriberTier: tierForSubscriberCount(subscriberCounts.get(v.snippet.channelId) ?? 0),
           subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
           publishedAt: v.snippet.publishedAt,
+          phone: placePhone,
+          kakaoPlaceId: placeKakaoId,
         })
         return true
       }
@@ -1101,6 +1121,8 @@ export async function GET(req: NextRequest) {
               subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
               startSec: r.startSec,
               publishedAt: v.snippet.publishedAt,
+              phone: r.phone,
+              kakaoPlaceId: r.kakaoPlaceId,
             })
           }
         }
