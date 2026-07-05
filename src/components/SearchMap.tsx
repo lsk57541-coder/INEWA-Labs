@@ -2174,7 +2174,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           >
             {/* 상단 영상(고정) + 하단 정보·나머지 리스트(세로 스크롤). */}
             <div className="shrink-0">
-              <PlayerFrame video={selectedVideo} portraitMaxVh={65} />
+              <PlayerFrame video={selectedVideo} portraitMaxVh={44} />
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">
               <PlaceInfoPanel
