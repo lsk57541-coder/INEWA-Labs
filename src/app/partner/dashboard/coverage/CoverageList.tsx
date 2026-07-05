@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import PlaceRow, { type Place } from '../places/PlaceRow'
-import { getVideoPlaces, type VideoCoverage } from './actions'
+import { getVideoPlaces, syncMyChannel, type VideoCoverage } from './actions'
 
 type Filter = 'all' | 'empty' | 'pendingCoord'
 const PAGE_SIZE = 30
@@ -29,6 +30,34 @@ export default function CoverageList({ videos }: { videos: VideoCoverage[] }) {
   const [selected, setSelected] = useState<VideoCoverage | null>(null)
   const [places, setPlaces] = useState<Place[] | null>(null)
   const [loading, startLoad] = useTransition()
+  const router = useRouter()
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const autoTried = useRef(false)
+
+  const runSync = async () => {
+    if (syncing) return
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const r = await syncMyChannel()
+      setSyncMsg(r.synced > 0 ? `${r.synced}개 영상을 불러왔어요` : '새로 불러올 영상이 없어요')
+      router.refresh()
+    } catch (e) {
+      setSyncMsg(e instanceof Error ? e.message : '불러오기에 실패했어요')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // partner_videos 0행(첫 사용)일 때만 1회 자동 전체 동기화. 이미 영상이 있으면 자동 실행 안 함.
+  useEffect(() => {
+    if (videos.length === 0 && !autoTried.current) {
+      autoTried.current = true
+      void runSync()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos.length])
 
   const counts = useMemo(
     () => ({
@@ -112,6 +141,18 @@ export default function CoverageList({ videos }: { videos: VideoCoverage[] }) {
 
   return (
     <div>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <button
+          type="button"
+          onClick={runSync}
+          disabled={syncing}
+          className="text-sm bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-40 transition"
+        >
+          {syncing ? '불러오는 중…' : '새 영상 불러오기'}
+        </button>
+        {syncMsg && <span className="text-xs text-gray-500 truncate">{syncMsg}</span>}
+      </div>
+
       <div className="flex gap-1.5 mb-4 flex-wrap">
         {FILTERS.map((f) => (
           <button
@@ -132,12 +173,14 @@ export default function CoverageList({ videos }: { videos: VideoCoverage[] }) {
       {filtered.length === 0 ? (
         <div className="border rounded-lg p-8 text-center mt-2">
           <p className="text-sm font-medium mb-1">
-            {filter === 'all' ? '영상이 없어요' : '해당하는 영상이 없어요'}
+            {syncing ? '채널 영상을 불러오는 중…' : filter === 'all' ? '영상이 없어요' : '해당하는 영상이 없어요'}
           </p>
           <p className="text-xs text-gray-400">
-            {filter === 'all'
-              ? '채널 영상을 아직 불러오지 않았어요'
-              : '다른 필터를 선택해 보세요'}
+            {syncing
+              ? '잠시만 기다려 주세요'
+              : filter === 'all'
+                ? "위 '새 영상 불러오기'로 채널 영상을 가져오세요"
+                : '다른 필터를 선택해 보세요'}
           </p>
         </div>
       ) : (
