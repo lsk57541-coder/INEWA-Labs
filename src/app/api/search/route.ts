@@ -612,6 +612,31 @@ function extractYoutubeId(url: string): string | null {
   return m ? m[1] : (/^[\w-]{11}$/.test(url.trim()) ? url.trim() : null)
 }
 
+// 전체 테이블 select은 PostgREST 기본 페이지(1000행) 한도로 초과분이 에러·로그 없이 조용히
+// 잘린다(locations 1223행 → 223행 상시 유실 = silent failure). 모든 페이지를 .range()로 순회해
+// 전부 모은다. ★makeQuery에 결정적 .order('id')가 반드시 포함돼야 페이지 경계에서 행이 누락/
+// 중복되지 않는다. 페이지 실패는 console.error로 남기고(silent failure 금지) 그때까지 모은 것을
+// 반환한다(throw 없음: 부분 성공 > 전체 유실, 검색은 절대 안 막음 — 벌크 .in 청크 수정과 동일 철학).
+// 참조 패턴: supabase/functions/refresh-stats/index.ts:30 selectAll.
+async function selectAllPaged<Row>(
+  label: string,
+  makeQuery: (from: number, to: number) => PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
+): Promise<Row[]> {
+  const PAGE = 1000
+  const all: Row[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await makeQuery(from, from + PAGE - 1)
+    if (error) {
+      console.error(`[getRegisteredResults] ${label} 페이지 실패(from=${from}):`, error.message)
+      break
+    }
+    const page = data ?? []
+    all.push(...page)
+    if (page.length < PAGE) break // 마지막 페이지(한 페이지가 PAGE 미만이면 끝)
+  }
+  return all
+}
+
 // 관리자 등록(locations+videos) + 파트너 승인 장소(places, status=active)를
 // 반경 내에서 VideoResult로 변환. RLS 우회 위해 서비스롤 사용(서버 전용).
 async function getRegisteredResults(lat: number, lng: number, radius: number): Promise<VideoResult[]> {
@@ -623,8 +648,10 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   const out: VideoResult[] = []
 
   // 1) locations + videos
-  const { data: locations } = await db.from('locations').select('id, name, lat, lng, category, phone, kakao_place_id')
-  const nearby = (locations ?? []).filter(
+  const locations = await selectAllPaged('locations', (from, to) =>
+    db.from('locations').select('id, name, lat, lng, category, phone, kakao_place_id').order('id', { ascending: true }).range(from, to)
+  )
+  const nearby = locations.filter(
     (l) => l.lat != null && l.lng != null && haversineKm(lat, lng, l.lat, l.lng) <= radius
   )
   if (nearby.length > 0) {
@@ -670,13 +697,17 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   }
 
   // 2) places (status=active) — 파트너 셀프 등록 장소
-  const { data: places } = await db
-    .from('places')
-    .select('id, name, video_url, latitude, longitude, category, address, status, view_count, subscriber_count, published_at, partner_id, verification_status, phone, kakao_place_id')
-    .eq('status', 'active')
+  const places = await selectAllPaged('places', (from, to) =>
+    db
+      .from('places')
+      .select('id, name, video_url, latitude, longitude, category, address, status, view_count, subscriber_count, published_at, partner_id, verification_status, phone, kakao_place_id')
+      .eq('status', 'active')
+      .order('id', { ascending: true })
+      .range(from, to)
+  )
 
   // 파트너 정보(채널명·아바타·구독자수) 일괄 조회 → 금색 마커/PARTNER 배지/상위노출용.
-  const partnerIds = [...new Set((places ?? []).map((p) => (p as { partner_id?: string | null }).partner_id).filter(Boolean) as string[])]
+  const partnerIds = [...new Set(places.map((p) => (p as { partner_id?: string | null }).partner_id).filter(Boolean) as string[])]
   const partnerMap = new Map<string, { channel_name: string; avatar_url: string | null; subscriber_count: number | null }>()
   if (partnerIds.length > 0) {
     // 위 videos 조회와 동일 — partnerIds도 밀집 시 커질 수 있어 청크 분할 + error 로깅(실패분만 skip).
