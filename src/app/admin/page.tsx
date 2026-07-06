@@ -6,6 +6,7 @@ import {
   getMinConfidenceSetting,
   setMinConfidenceSetting,
 } from '@/app/actions'
+import { selectAllPaged } from '@/lib/supabasePaging'
 import { PLACENAME_SOURCES } from '@/lib/placeNameSources'
 import DeleteButton from '@/components/admin/DeleteButton'
 import AdminTabNav from '@/components/admin/AdminTabNav'
@@ -29,10 +30,17 @@ export default async function AdminPage() {
     .from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/')
 
-  const { data: locations } = await supabase
-    .from('locations')
-    .select('*, videos(count)')
-    .order('created_at', { ascending: false })
+  // 전체조회 — .range() 없이는 PostgREST 기본 1000행 캡에 걸려 오래된 장소가 목록에서 조용히
+  // 빠진다(locations 1223행 → 223개 유실). 화면 표시순서(최신순)를 유지하면서 페이지 경계를
+  // 안정시키려면 표시컬럼(created_at desc) + id 복합 order가 필요.
+  const locations = await selectAllPaged('AdminPage.locations', (from, to) =>
+    supabase
+      .from('locations')
+      .select('*, videos(count)')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to)
+  )
 
   const accuracyStats = await getAccuracyStats()
   const minConfidence = await getMinConfidenceSetting()

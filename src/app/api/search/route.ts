@@ -9,6 +9,7 @@ import { buildHeuristicPlaceQueries, extractPlaceByAI, extractStatedBusinessName
 import { isCompilationVideo, resolveCompilationPlaces } from '@/lib/extractPlaces'
 import { extractPlaceFromComments } from '@/lib/extractFromComments'
 import { getMinConfidenceSetting } from '@/app/actions'
+import { selectAllPaged } from '@/lib/supabasePaging'
 
 const REPORT_THRESHOLD = 3
 
@@ -23,8 +24,11 @@ async function getBlockedVideoIds(): Promise<Set<string>> {
   if (!url || !key) return new Set()
 
   const supabase = createClient(url, key)
-  const { data } = await supabase.from('location_reports').select('video_id, reason, is_admin_report')
-  if (!data) return new Set()
+  // 전체조회 — .range() 없이는 PostgREST 기본 1000행 캡에 걸려 신고가 일부 누락될 수 있다
+  // (모더레이션 로직이라 누락 시 차단돼야 할 영상이 재노출되는 방향의 실패라 영향이 큼).
+  const data = await selectAllPaged('getBlockedVideoIds.location_reports', (from, to) =>
+    supabase.from('location_reports').select('video_id, reason, is_admin_report').order('id', { ascending: true }).range(from, to)
+  )
 
   const counts = new Map<string, number>()
   const blocked = new Set<string>()
@@ -72,8 +76,11 @@ async function getLocationCorrections(): Promise<Map<string, LocationCorrection>
   if (!url || !key) return new Map()
 
   const supabase = createClient(url, key)
-  const { data } = await supabase.from('location_corrections').select('video_id, lat, lng, address, place_name')
-  if (!data) return new Map()
+  // 전체조회 — .range() 없이는 PostgREST 기본 1000행 캡에 걸려 일부 video_id의 사용자 보정이
+  // Map에서 빠져 옛 주소/상호명이 그대로 노출될 수 있다.
+  const data = await selectAllPaged('getLocationCorrections.location_corrections', (from, to) =>
+    supabase.from('location_corrections').select('video_id, lat, lng, address, place_name').order('id', { ascending: true }).range(from, to)
+  )
 
   return new Map(data.map((row) => [row.video_id, { lat: row.lat, lng: row.lng, address: row.address, placeName: row.place_name }]))
 }
@@ -612,31 +619,6 @@ function extractYoutubeId(url: string): string | null {
   return m ? m[1] : (/^[\w-]{11}$/.test(url.trim()) ? url.trim() : null)
 }
 
-// 전체 테이블 select은 PostgREST 기본 페이지(1000행) 한도로 초과분이 에러·로그 없이 조용히
-// 잘린다(locations 1223행 → 223행 상시 유실 = silent failure). 모든 페이지를 .range()로 순회해
-// 전부 모은다. ★makeQuery에 결정적 .order('id')가 반드시 포함돼야 페이지 경계에서 행이 누락/
-// 중복되지 않는다. 페이지 실패는 console.error로 남기고(silent failure 금지) 그때까지 모은 것을
-// 반환한다(throw 없음: 부분 성공 > 전체 유실, 검색은 절대 안 막음 — 벌크 .in 청크 수정과 동일 철학).
-// 참조 패턴: supabase/functions/refresh-stats/index.ts:30 selectAll.
-async function selectAllPaged<Row>(
-  label: string,
-  makeQuery: (from: number, to: number) => PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
-): Promise<Row[]> {
-  const PAGE = 1000
-  const all: Row[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await makeQuery(from, from + PAGE - 1)
-    if (error) {
-      console.error(`[getRegisteredResults] ${label} 페이지 실패(from=${from}):`, error.message)
-      break
-    }
-    const page = data ?? []
-    all.push(...page)
-    if (page.length < PAGE) break // 마지막 페이지(한 페이지가 PAGE 미만이면 끝)
-  }
-  return all
-}
-
 // 관리자 등록(locations+videos) + 파트너 승인 장소(places, status=active)를
 // 반경 내에서 VideoResult로 변환. RLS 우회 위해 서비스롤 사용(서버 전용).
 async function getRegisteredResults(lat: number, lng: number, radius: number): Promise<VideoResult[]> {
@@ -648,7 +630,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   const out: VideoResult[] = []
 
   // 1) locations + videos
-  const locations = await selectAllPaged('locations', (from, to) =>
+  const locations = await selectAllPaged('getRegisteredResults.locations', (from, to) =>
     db.from('locations').select('id, name, lat, lng, category, phone, kakao_place_id').order('id', { ascending: true }).range(from, to)
   )
   const nearby = locations.filter(
@@ -697,7 +679,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   }
 
   // 2) places (status=active) — 파트너 셀프 등록 장소
-  const places = await selectAllPaged('places', (from, to) =>
+  const places = await selectAllPaged('getRegisteredResults.places', (from, to) =>
     db
       .from('places')
       .select('id, name, video_url, latitude, longitude, category, address, status, view_count, subscriber_count, published_at, partner_id, verification_status, phone, kakao_place_id')
