@@ -628,12 +628,28 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
     (l) => l.lat != null && l.lng != null && haversineKm(lat, lng, l.lat, l.lng) <= radius
   )
   if (nearby.length > 0) {
-    const { data: vids } = await db
-      .from('videos')
-      .select('youtube_id, title, thumbnail, channel, location_id, published_at, view_count, subscriber_count')
-      .in('location_id', nearby.map((l) => l.id))
     const locById = new Map(nearby.map((l) => [l.id, l]))
-    for (const v of vids ?? []) {
+    // Supabase .in() 필터는 ID가 수백 개면 URL/헤더 길이 한도를 넘어 요청이 실패한다(밀집 지역에서
+    // 등록장소가 통째로 0건 되던 silent failure). fetchVideoDetails(521-542)의 50개 청크 관례를 그대로
+    // 미러링 — 나눠 병렬 조회하고, 청크별 error를 로깅한 뒤 실패분만 건너뛴다(throw 없음: 부분 성공 >
+    // 전체 0건, 검색은 절대 안 막음). 청크는 서로 다른 location_id 부분집합이라 청크 간 중복 없음.
+    const CHUNK = 50
+    const locChunks: string[][] = []
+    for (let i = 0; i < nearby.length; i += CHUNK) locChunks.push(nearby.slice(i, i + CHUNK).map((l) => l.id))
+    const vidGroups = await Promise.all(
+      locChunks.map(async (chunk, ci) => {
+        const { data, error } = await db
+          .from('videos')
+          .select('youtube_id, title, thumbnail, channel, location_id, published_at, view_count, subscriber_count')
+          .in('location_id', chunk)
+        if (error) {
+          console.error(`[getRegisteredResults] videos.in() 청크 실패(offset=${ci * CHUNK}, size=${chunk.length}):`, error.message)
+          return []
+        }
+        return data ?? []
+      })
+    )
+    for (const v of vidGroups.flat()) {
       const loc = locById.get(v.location_id)
       if (!loc || !v.youtube_id) continue
       const row = v as { published_at?: string; view_count?: number | null; subscriber_count?: number | null }
@@ -663,11 +679,24 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   const partnerIds = [...new Set((places ?? []).map((p) => (p as { partner_id?: string | null }).partner_id).filter(Boolean) as string[])]
   const partnerMap = new Map<string, { channel_name: string; avatar_url: string | null; subscriber_count: number | null }>()
   if (partnerIds.length > 0) {
-    const { data: partners } = await db
-      .from('partners')
-      .select('id, channel_name, avatar_url, subscriber_count')
-      .in('id', partnerIds)
-    for (const pt of partners ?? []) partnerMap.set(pt.id, pt)
+    // 위 videos 조회와 동일 — partnerIds도 밀집 시 커질 수 있어 청크 분할 + error 로깅(실패분만 skip).
+    const CHUNK = 50
+    const pChunks: string[][] = []
+    for (let i = 0; i < partnerIds.length; i += CHUNK) pChunks.push(partnerIds.slice(i, i + CHUNK))
+    const partnerGroups = await Promise.all(
+      pChunks.map(async (chunk, ci) => {
+        const { data, error } = await db
+          .from('partners')
+          .select('id, channel_name, avatar_url, subscriber_count')
+          .in('id', chunk)
+        if (error) {
+          console.error(`[getRegisteredResults] partners.in() 청크 실패(offset=${ci * CHUNK}, size=${chunk.length}):`, error.message)
+          return []
+        }
+        return data ?? []
+      })
+    )
+    for (const pt of partnerGroups.flat()) partnerMap.set(pt.id, pt)
   }
 
   for (const p of places ?? []) {
