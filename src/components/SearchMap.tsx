@@ -619,7 +619,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const searchBarRef = useRef<HTMLDivElement>(null)
   const hamburgerRef = useRef<HTMLButtonElement>(null)
   const hamburgerInlineRef = useRef<HTMLButtonElement>(null) // 데스크톱 검색패널 내부 ☰ (온보딩 타겟)
-  const channelTabRef = useRef<HTMLButtonElement>(null)      // "🎙 채널 검색" 탭 (온보딩 Step2 타겟)
+  const channelTabRef = useRef<HTMLButtonElement>(null)      // "🎙 유튜버 검색" 탭 (온보딩 Step2 타겟)
   const [onboardingKey, setOnboardingKey] = useState(0)
 
   const handleRestartOnboarding = useCallback(() => {
@@ -1198,7 +1198,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   // 버튼/Enter로만 채널 검색 → 결과 모달. (타이핑 자동검색 제거: search.list 100유닛 낭비 방지)
   const runChannelSearch = async () => {
     const q = channelQuery.trim()
-    if (!q) { setError('채널명을 입력해주세요.'); return }
+    if (!q) { setError('유튜버 채널명을 입력해주세요.'); return }
     setPicker('channel')
     setChannelSearching(true)
     setChannelSuggestions([])
@@ -1759,11 +1759,11 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               className="flex items-center gap-1.5 text-xs font-medium text-coral border border-line rounded-lg px-3 py-2 bg-white min-w-0 cursor-pointer"
               onClick={() => setOptionsOpen(true)}
             >
-              <span className="flex-1 truncate">{selectedChannel.title} 채널만 검색</span>
+              <span className="flex-1 truncate">{selectedChannel.title} 유튜버만 검색</span>
               <button
                 onClick={(e) => { e.stopPropagation(); setSelectedChannel(null); setChannelQuery('') }}
                 className="shrink-0 text-ink-muted hover:text-coral"
-                title="채널 선택 해제"
+                title="유튜버 선택 해제"
               >
                 ✕
               </button>
@@ -1813,7 +1813,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   searchMode === 'channel' ? 'bg-coral text-white' : 'bg-surface text-ink-muted hover:bg-line-strong'
                 }`}
               >
-                🎙 채널 검색
+                🎙 유튜버 검색
               </button>
             </div>
 
@@ -1836,6 +1836,52 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </div>
             )}
 
+            {/* 검색위치 — 키워드 모드만 (채널은 위치무관, 전국 표시). "다른 지역 검색"은
+                고급기능이 아니라 핵심 시나리오라 고급설정 밖(탭/반경과 같은 레벨)에 항상 노출. */}
+            {searchMode === 'keyword' && (
+            <div className="px-3 pt-2">
+              <p className="text-xs text-gray-400 font-medium mb-1.5">📍 검색위치 직접입력</p>
+              <input
+                ref={addressInputRef}
+                type="text"
+                value={addressInput}
+                onChange={(e) => handleAddressInputChange(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && runLocationSearch()}
+                placeholder="비워두면 현재 위치로 검색돼요"
+                className="w-full text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-coral/40 bg-white text-gray-900 placeholder-gray-400"
+              />
+              {addressInput.trim() && (
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={runLocationSearch}
+                    disabled={addressLoading}
+                    className="flex-1 text-sm bg-coral text-white rounded-lg py-2 font-medium hover:brightness-95 disabled:opacity-40 transition"
+                  >
+                    {addressLoading ? '검색 중…' : '🔍 검색'}
+                  </button>
+                  <button
+                    onClick={getLocation}
+                    className="shrink-0 text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-2 hover:bg-gray-50 transition"
+                  >
+                    🎯 현재 위치로
+                  </button>
+                </div>
+              )}
+              {posLabel !== '위치 미설정' && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <p className="text-xs text-coral truncate font-medium flex-1 min-w-0">{posLabel}</p>
+                  {isManualLocation && (
+                    <button
+                      onClick={getLocation}
+                      title="지정 위치 해제하고 현재 위치로"
+                      className="shrink-0 text-xs text-gray-500 hover:text-gray-700 border border-border rounded-full px-2 py-0.5 transition"
+                    >✕ 현재 위치로</button>
+                  )}
+                </div>
+              )}
+            </div>
+            )}
+
             {/* 고급 설정 토글 + 검색하기 버튼 */}
             <div className="flex items-center gap-2 px-3 pt-2 pb-3">
               <button
@@ -1854,54 +1900,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </button>
             </div>
 
-            {/* 고급 설정 — advancedOpen일 때만 */}
+            {/* 고급 설정 — advancedOpen일 때만 (위치입력은 위로 승격돼 여긴 투명도만 남음) */}
             <div className={`overflow-hidden transition-all duration-200 ${advancedOpen ? 'max-h-[420px]' : 'max-h-0'}`}>
               <div className="px-3 pb-3 border-t border-line pt-3 space-y-3">
-                {/* 위치 직접입력 — 키워드 모드만 (채널은 위치무관, 전국 표시) */}
-                {searchMode === 'keyword' && (
-                <div>
-                  <p className="text-xs text-gray-400 font-medium mb-1.5">📍 검색위치 직접입력</p>
-                  <input
-                    ref={addressInputRef}
-                    type="text"
-                    value={addressInput}
-                    onChange={(e) => handleAddressInputChange(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && runLocationSearch()}
-                    placeholder="지역명 또는 주소 입력"
-                    className="w-full text-sm border border-line rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-coral/40 bg-white text-gray-900 placeholder-gray-400"
-                  />
-                  {addressInput.trim() && (
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        onClick={runLocationSearch}
-                        disabled={addressLoading}
-                        className="flex-1 text-sm bg-coral text-white rounded-lg py-2 font-medium hover:brightness-95 disabled:opacity-40 transition"
-                      >
-                        {addressLoading ? '검색 중…' : '🔍 검색'}
-                      </button>
-                      <button
-                        onClick={getLocation}
-                        className="shrink-0 text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-2 hover:bg-gray-50 transition"
-                      >
-                        🎯 현재 위치로
-                      </button>
-                    </div>
-                  )}
-                  {posLabel !== '위치 미설정' && (
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <p className="text-xs text-coral truncate font-medium flex-1 min-w-0">{posLabel}</p>
-                      {isManualLocation && (
-                        <button
-                          onClick={getLocation}
-                          title="지정 위치 해제하고 현재 위치로"
-                          className="shrink-0 text-xs text-gray-500 hover:text-gray-700 border border-border rounded-full px-2 py-0.5 transition"
-                        >✕ 현재 위치로</button>
-                      )}
-                    </div>
-                  )}
-                </div>
-                )}
-
                 {/* 검색창 투명도 슬라이더 */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400 shrink-0">투명도</span>
@@ -1979,7 +1980,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         items={channelSuggestions}
         keyOf={(c) => c.channelId}
         onSelect={(c) => { setSelectedChannel(c); handleSearch({ channelOverride: c }) }}
-        emptyText="채널을 찾을 수 없습니다."
+        emptyText="유튜버를 찾을 수 없습니다."
         renderItem={(c) => (
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}

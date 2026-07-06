@@ -9,7 +9,7 @@ interface OnboardingOverlayProps {
   searchBarRef: RefObject<HTMLDivElement | null>
   hamburgerRef: RefObject<HTMLButtonElement | null>        // 모바일 플로팅 ☰ (md:hidden)
   hamburgerInlineRef: RefObject<HTMLButtonElement | null>  // 데스크톱 검색패널 내부 인라인 ☰ (hidden md:flex)
-  channelTabRef: RefObject<HTMLButtonElement | null>       // "🎙 채널 검색" 탭(검색패널 확장 시 노출)
+  channelTabRef: RefObject<HTMLButtonElement | null>       // "🎙 유튜버 검색" 탭(검색패널 확장 시 노출)
   onChannelStep?: () => void                               // 채널 Step 진입 시 검색패널 펼침 요청
 }
 
@@ -44,7 +44,7 @@ const STEPS = [
   {
     targetKey: 'channelTab' as const,
     title: '유튜브 채널명으로도 검색돼요',
-    description: '채널명으로 검색하면, 그 채널이 소개한 장소가\n전국 지도에 한눈에 떠요 — 네이버·카카오엔 없는 기능!',
+    description: '채널명으로 검색하면, 그 유튜버가 소개한 장소가\n전국 지도에 한눈에 떠요 — 네이버·카카오엔 없는 기능!',
     tooltipDir: 'below' as const,
   },
   {
@@ -93,7 +93,7 @@ export default function OnboardingOverlay({
     }
   }, [])
 
-  // 채널 Step에선 검색패널이 펼쳐져 있어야 "🎙 채널 검색" 탭이 보이므로 부모에 펼침 요청.
+  // 채널 Step에선 검색패널이 펼쳐져 있어야 "🎙 유튜버 검색" 탭이 보이므로 부모에 펼침 요청.
   // (접혀 있으면 아래 updateRect가 rect=null로 떨어져 중앙 폴백되니 안전엔 문제 없음.)
   useEffect(() => {
     if (visible && STEPS[step]?.targetKey === 'channelTab') onChannelStep?.()

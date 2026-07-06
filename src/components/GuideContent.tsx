@@ -13,16 +13,16 @@ function NaviGlyph() {
   )
 }
 
-// 채널 검색 흐름 도식(실제 스크린샷 아님). ①탭 → ②채널명 입력 → ③전국에 핀.
+// 유튜버 검색 흐름 도식(실제 스크린샷 아님). ①탭 → ②채널명 입력 → ③전국에 핀.
 // AGENTS.md: 그라데이션 X, 웜 미니멀 코랄 포인트, 반응형 viewBox.
 function ChannelFlowDiagram() {
   const BLUE = '#D85A30'
   return (
-    <svg viewBox="0 0 320 104" className="w-full h-auto mt-2" role="img" aria-label="채널 검색 흐름: 채널 검색 탭 선택 → 채널명 입력 → 전국 지도에 핀 표시">
+    <svg viewBox="0 0 320 104" className="w-full h-auto mt-2" role="img" aria-label="유튜버 검색 흐름: 유튜버 검색 탭 선택 → 채널명 입력 → 전국 지도에 핀 표시">
       {/* ① 탭 */}
       <g>
         <rect x="8" y="20" width="80" height="26" rx="13" fill="#FAECE7" stroke={BLUE} strokeWidth="1.5" />
-        <text x="48" y="37" textAnchor="middle" fontSize="11" fill={BLUE} fontWeight="600">🎙 채널 검색</text>
+        <text x="48" y="37" textAnchor="middle" fontSize="10" fill={BLUE} fontWeight="600">🎙 유튜버 검색</text>
         <circle cx="14" cy="16" r="8" fill={BLUE} />
         <text x="14" y="20" textAnchor="middle" fontSize="10" fill="#fff" fontWeight="700">1</text>
         <text x="48" y="64" textAnchor="middle" fontSize="9" fill="#9ca3af">탭 선택</text>
@@ -67,12 +67,12 @@ interface GuideItem {
 const ITEMS: GuideItem[] = [
   {
     icon: <span className="text-lg">🎙</span>,
-    title: '유튜브 채널로 전국 검색',
+    title: '유튜버 채널로 전국 검색',
     body: (
       <>
-        채널명으로 검색하면 <strong>그 채널이 소개한 장소가 전국 지도에 한눈에</strong> 떠요.
+        채널명으로 검색하면 <strong>그 유튜버가 소개한 장소가 전국 지도에 한눈에</strong> 떠요.
         <br />
-        검색창을 펼치면 나오는 상단 <strong>“🎙 채널 검색”</strong> 탭에서 채널명을 입력하세요.
+        검색창을 펼치면 나오는 상단 <strong>“🎙 유튜버 검색”</strong> 탭에서 채널명을 입력하세요.
         <ChannelFlowDiagram />
       </>
     ),
@@ -84,7 +84,7 @@ const ITEMS: GuideItem[] = [
       <>
         <strong>“강남 맛집”, “제주 카페”</strong>처럼 지역과 키워드를 함께 검색하세요.
         <br />
-        고급 설정에서 <strong>검색 위치를 직접 지정</strong>할 수도 있어요.
+        검색창을 펼치면 나오는 <strong>검색위치 직접입력</strong>란에서 다른 지역도 지정할 수 있어요.
         <span className="block mt-2 text-xs text-ink-muted bg-coral-soft rounded-lg px-3 py-2 leading-relaxed">
           💡 유튜버가 영상에서 직접 소개한 장소를 모아 보여줘요. <strong>인기 장소가 강점</strong>이고,
           영상에 안 나온 곳은 결과가 적을 수 있어요.
@@ -99,7 +99,7 @@ const ITEMS: GuideItem[] = [
       <>
         검색 범위를 <strong>km 단위로 늘리거나 줄여</strong> 가까운 곳만, 또는 넓은 범위를 탐색하세요.
         <br />
-        검색창을 펼치면 나오는 km 버튼에서 조절합니다. (채널 검색은 전국 표시라 반경이 없어요.)
+        검색창을 펼치면 나오는 km 버튼에서 조절합니다. (유튜버 검색은 전국 표시라 반경이 없어요.)
       </>
     ),
   },
@@ -237,7 +237,7 @@ function Accordion({ items, defaultOpen = -1, qa = false }: { items: GuideItem[]
 export default function GuideContent() {
   return (
     <div>
-      {/* 기능 안내 — 1번(채널 검색) 기본 펼침 */}
+      {/* 기능 안내 — 1번(유튜버 검색) 기본 펼침 */}
       <Accordion items={ITEMS} defaultOpen={0} />
 
       <p className="mt-6 text-sm text-ink-muted bg-white border border-line rounded-lg px-4 py-3 leading-relaxed">
