@@ -240,6 +240,7 @@ export interface VideoResult {
   category?: string // places.category(장소 카테고리). channel 폴백과 별개로 독립 노출용. admin locations 경로엔 없음.
   phone?: string // places.phone. 카드 '전화하기'용. 값 있을 때만 버튼 노출. locations 경로엔 없음(undefined).
   kakaoPlaceId?: string // places.kakao_place_id. 카드 카카오 상세 딥링크용. 없으면 좌표 딥링크 폴백.
+  isCompilation?: boolean // 모음영상(장소 여럿)에서 온 결과 → 카드에 "이 영상 장소 전체 보기" 진입점 노출용(표시 전용, 반경/정렬/dedup 무영향).
 }
 
 // Fire-and-forget log of how each video's place name was resolved. Upserts by
@@ -1169,6 +1170,7 @@ export async function GET(req: NextRequest) {
               subscriberCount: subscriberCounts.get(v.snippet.channelId) ?? 0,
               startSec: r.startSec,
               publishedAt: v.snippet.publishedAt,
+              isCompilation: true, // 모음영상 → 카드 "장소 전체 보기" 진입점 노출용(표시 전용)
               phone: r.phone,
               kakaoPlaceId: r.kakaoPlaceId,
             })

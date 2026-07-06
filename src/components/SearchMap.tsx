@@ -589,6 +589,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null)
   const [selectedGroup, setSelectedGroup] = useState<MarkerGroup | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<VideoResult | null>(null)
+  // "영상 단위 장소 전체 보기" — 특정 영상의 모든 장소를 반경 무시하고 지도에 표시하는 일시 뷰.
+  // null이면 일반 반경 검색 뷰. (/api/video-places 응답, 채널 모드처럼 fitBounds+칩복귀 재사용.)
+  const [focusedVideoPlaces, setFocusedVideoPlaces] = useState<VideoResult[] | null>(null)
+  const [focusedLoading, setFocusedLoading] = useState(false)
   const [mapReady, setMapReady] = useState(false)
   const [restoreDone, setRestoreDone] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -863,7 +867,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       visitedIdSet: Set<string>,
       sheetFraction = 0,
       // 채널 모드: 반경 개념이 없으므로 Circle 생략 + 전국 마커가 다 보이게 fitBounds 줌.
-      fitAll = false
+      fitAll = false,
+      // "영상 단위 장소 전체 보기": 각 마커에 챕터 순번(1,2,3…) 배지를 얹는다.
+      numbered = false
     ) => {
       if (!mapInstanceRef.current) return
       lastCenterRef.current = center
@@ -887,8 +893,15 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         circleRef.current.setMap(mapInstanceRef.current)
       }
 
-      groups.forEach((group) => {
+      groups.forEach((group, gi) => {
         const pos = new kakao.maps.LatLng(group.lat, group.lng)
+        // 챕터 순번 배지(영상 단위 뷰). 마커 머리 위에 코랄 원형 번호.
+        if (numbered) {
+          const numEl = `<div style="pointer-events:none;background:#D85A30;color:#fff;border-radius:9999px;min-width:18px;height:18px;padding:0 4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:-58px;box-shadow:0 1px 3px rgba(0,0,0,.35)">${gi + 1}</div>`
+          const numOverlay = new kakao.maps.CustomOverlay({ position: pos, content: numEl, yAnchor: 0, zIndex: 6 })
+          numOverlay.setMap(mapInstanceRef.current!)
+          overlaysRef.current.push(numOverlay)
+        }
         const isFavorite = group.videos.some((v) => favIds.has(placeKey(v.videoId, v.lat, v.lng)))
         const isVisited = group.videos.some((v) => visitedIdSet.has(placeKey(v.videoId, v.lat, v.lng)))
         // 데모 파트너 채널이 그룹에 있는지. 단 우선순위는 찜>가본곳>파트너>일반 —
@@ -997,6 +1010,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     setLoading(true)
     setError(null)
     setLastSearchQuery(null)
+    setFocusedVideoPlaces(null) // 새 반경 검색 시작 → 영상 단위 뷰 해제
 
     // No location set yet — grab GPS automatically instead of bouncing the
     // user out to find a "현재 위치로" button first.
@@ -1316,23 +1330,53 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     setFilterPanelOpen(false)
   }
 
+  // "이 영상 장소 전체 보기" — 반경 무시하고 그 영상의 모든 장소를 별도 엔드포인트로 조회해
+  // 포커스 뷰로 전환. 반경 검색 결과(allResults)는 그대로 두고 focusedVideoPlaces만 세팅 →
+  // 마커 effect가 fitBounds+번호마커로 다시 그림. userPos는 지역 앵커+거리표시용.
+  const handleShowVideoPlaces = async (v: VideoResult) => {
+    if (!userPos) return
+    setFocusedLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({ videoId: v.videoId, lat: String(userPos.lat), lng: String(userPos.lng) })
+      const res = await fetch(`/api/video-places?${params}`)
+      const data = (await res.json()) as { results?: VideoResult[] }
+      const places = data.results ?? []
+      if (places.length === 0) { setError('이 영상의 장소를 찾지 못했어요.'); return }
+      setSelectedVideo(null)
+      setSelectedGroup(null)
+      setFocusedVideoPlaces(places)
+      setListOpen(true)
+    } catch {
+      setError('장소를 불러오지 못했어요.')
+    } finally {
+      setFocusedLoading(false)
+    }
+  }
+  const exitFocusedVideo = () => setFocusedVideoPlaces(null)
+
   // ── 마커 단일 렌더 소스 ──
   // 검색/조회수·구독자·날짜/롱폼·쇼츠/찜·가본곳/신고삭제 등 무엇이 바뀌든, 마커는 항상
   // filteredResults(= 리스트 sortedResults와 동일 집합)를 반영해 다시 그린다. (흩어진 명령형
   // 호출을 없애 마커-리스트 불일치를 제거.) center 미설정(검색 전)이면 건너뜀.
   useEffect(() => {
     if (!lastCenterRef.current) return
-    renderMarkers(
-      groupByLocation(filteredResults, clusterThresholdKm(radius)),
-      lastCenterRef.current,
-      favoriteIds,
-      visitedIds,
-      currentSheetFraction,
-      searchMode === 'channel'
-    )
+    if (focusedVideoPlaces) {
+      // 영상 단위 뷰: 반경 무시 → 채널 모드처럼 fitBounds(전체 보이게) + 챕터 순번 마커.
+      // 근접 병합은 최소(0.05km)로만 — 서로 다른 장소가 번호를 각자 갖게.
+      renderMarkers(
+        groupByLocation(focusedVideoPlaces, 0.05),
+        lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction, true, true
+      )
+    } else {
+      renderMarkers(
+        groupByLocation(filteredResults, clusterThresholdKm(radius)),
+        lastCenterRef.current, favoriteIds, visitedIds, currentSheetFraction, searchMode === 'channel'
+      )
+    }
     // filteredResults는 아래 입력들로 파생되므로 그 입력들을 의존성으로 둔다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allResults, videoFilter, minViews, minSubs, dateRange, categoryFilter, favoriteIds, visitedIds])
+  }, [allResults, videoFilter, minViews, minSubs, dateRange, categoryFilter, favoriteIds, visitedIds, focusedVideoPlaces])
 
   // Keep the locate-me button clear of whichever bottom sheet is currently
   // showing (results list or a marker group's video list), instead of
@@ -1656,7 +1700,20 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           ☰
         </button>
         <div className="md:flex-1 md:min-w-0">
-        {searchChip ? (
+        {focusedVideoPlaces ? (
+          /* 영상 단위 뷰(반경 무시 표시 중) — ✕로 반경 검색 복귀. */
+          <div className="flex items-center gap-1 bg-white shadow-lg rounded-full pl-3 pr-2 py-2 max-w-[calc(100vw-24px)] md:w-full md:max-w-none">
+            <span className="text-sm shrink-0">📍</span>
+            <span className="text-sm font-semibold truncate">이 영상 장소 {focusedVideoPlaces.length}곳</span>
+            <button
+              onClick={exitFocusedVideo}
+              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition text-xs ml-0.5"
+              aria-label="영상 장소 보기 닫기"
+            >
+              ✕
+            </button>
+          </div>
+        ) : searchChip ? (
           /* 검색 완료 후 칩 모드 */
           <div className="flex items-center gap-1 bg-white shadow-lg rounded-full pl-3 pr-2 py-2 max-w-[calc(100vw-24px)] md:w-full md:max-w-none">
             <span className="text-sm shrink-0">🔍</span>
@@ -2035,7 +2092,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               <span className="shrink-0 ml-2 md:hidden">{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
             </button>
           </div>
-          <div className="flex gap-1.5 px-3 py-2 border-b border-line shrink-0">
+          <div className={`flex gap-1.5 px-3 py-2 border-b border-line shrink-0 ${focusedVideoPlaces ? 'hidden' : ''}`}>
             {([['all', '전체'] as const, ['long', null] as const, ['short', null] as const]).map(([key, label]) => (
               <button
                 key={key}
@@ -2057,7 +2114,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               </button>
             ))}
           </div>
-          <div className="flex gap-1.5 px-3 py-2 border-b border-line shrink-0">
+          <div className={`flex gap-1.5 px-3 py-2 border-b border-line shrink-0 ${focusedVideoPlaces ? 'hidden' : ''}`}>
             {([['views', '조회수'], ['duration', '영상길이'], ['distance', '거리(가까운)']] as const).map(([key, label]) => (
               <button
                 key={key}
@@ -2073,7 +2130,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             ))}
           </div>
           <div className="overflow-y-auto flex-1">
-            {filteredResults.length === 0 && (
+            {!focusedVideoPlaces && filteredResults.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-2 py-10 text-center px-6">
                 <p className="text-sm text-gray-400">
                   {videoFilter === 'all' && categoryFilter === 'all' ? '조건에 맞는 영상이 없어요' : '이 필터에 맞는 영상이 없어요'}
@@ -2090,7 +2147,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 )}
               </div>
             )}
-            {sortedResults.map((v) => (
+            {(focusedVideoPlaces ?? sortedResults).map((v, vi) => (
               <div
                 // 모음영상은 같은 videoId가 여러 좌표로 중복 → videoId만으론 React key 충돌이 나서
                 // 필터로 줄 때 옛 DOM이 안 지워졌음. videoId+좌표로 고유화.
@@ -2098,6 +2155,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 className="flex items-start gap-2 px-3 py-2 hover:bg-surface transition border-b border-line last:border-0"
               >
                 <div className="relative shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
+                  {/* 영상 단위 뷰: 챕터 순번(지도 번호마커와 일치). */}
+                  {focusedVideoPlaces && (
+                    <div className="absolute top-0.5 left-0.5 z-10 min-w-[18px] h-[18px] px-1 rounded-full bg-coral text-white text-[11px] font-bold flex items-center justify-center shadow">{vi + 1}</div>
+                  )}
                   <img src={v.thumbnail} alt="" className="w-[120px] h-[70px] md:w-40 md:h-[90px] object-cover rounded" />
                   {/* ▶ 오버레이 — 탭 시 즉시 재생(YouTube 정책 C: 재생 트리거 썸네일 표시) */}
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -2123,6 +2184,16 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       {v.distanceKm}km
                     </span>
                   </div>
+                  {/* 모음영상 → 이 영상의 모든 장소를 반경 무시하고 지도에 표시(별도 엔드포인트). */}
+                  {v.isCompilation && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleShowVideoPlaces(v) }}
+                      disabled={focusedLoading}
+                      className="mt-1 text-xs font-semibold text-coral hover:text-coral-ink disabled:opacity-50"
+                    >
+                      이 영상 장소 전체 보기 →
+                    </button>
+                  )}
                   <div className="flex items-center gap-2 mt-0.5">
                     {/* 모바일: 한 줄 truncate(기존). 데스크톱(md+): flex로 채널명만 truncate하고
                         PARTNER 배지·조회수는 항상 노출(채널명이 길어도 배지 안 잘리게). */}
