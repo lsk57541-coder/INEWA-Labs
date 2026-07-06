@@ -256,6 +256,49 @@ async function logPlaceNameResolution(videoId: string, source: PlaceNameSource, 
     .then(() => {}, () => {})
 }
 
+// L7 단계별 퍼널 계측 — 실시간 검색이 수집→추출→지오코딩→반경→표시 단계에서
+// 어디서 새는지 카운트만 남긴다(임시 진단, 7일 자동삭제). track/consent 패턴 재사용:
+// ★service_role 전용(RLS로 anon 차단), throw 없음(실패해도 검색 안 막음), YouTube/Kakao 호출 0.
+// ★user_id/ip 미저장, 정밀좌표 대신 region(시/군/구)만 — 감사 자산과 완전 별도 테이블.
+async function logSearchFunnel(row: {
+  query: string | null
+  searchType: 'keyword' | 'channel'
+  region: string | null
+  category: string
+  radius: number | null
+  collected: number
+  extractTargets: number
+  extractedOk: number
+  radiusPass: number
+  displayed: number
+  registeredMerged: number
+}) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) return
+  try {
+    const db = createClient(url, serviceKey)
+    await db
+      .from('search_funnel_logs')
+      .insert({
+        query: row.query,
+        search_type: row.searchType,
+        region: row.region,
+        category: row.category,
+        radius: row.radius,
+        collected: row.collected,
+        extract_targets: row.extractTargets,
+        extracted_ok: row.extractedOk,
+        radius_pass: row.radiusPass,
+        displayed: row.displayed,
+        registered_merged: row.registeredMerged,
+      })
+      .then(() => {}, () => {})
+  } catch {
+    // 진단 로그 실패는 검색에 영향 없음 — 조용히 삼킴.
+  }
+}
+
 // YouTube's "duration" format is ISO 8601, e.g. "PT1M30S" or "PT45S"
 function parseDurationSec(iso: string): number {
   const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
@@ -844,6 +887,11 @@ export async function GET(req: NextRequest) {
     getMinConfidenceSetting(),
   ])
 
+  // L7 퍼널 계측 카운터 — 각 단계 통과 수만 누적한다(검색/추출/dedup 로직은 무수정, 카운트만 읽음).
+  // collected/extractTargets는 영상 단위, extractedOk/radiusPass/displayed는 해석(장소) 단위
+  // (모음영상 1개가 여러 장소를 냄) — before 스냅샷은 비율로 해석한다.
+  const funnel = { collected: unique.length, extractTargets: 0, extractedOk: 0, radiusPass: 0, displayed: 0 }
+
   const results: VideoResult[] = []
 
   // 영상 3분할:
@@ -856,17 +904,21 @@ export async function GET(req: NextRequest) {
   const geoValid = details.filter((v) => hasGeo(v) && !isAdminGeo(v))
   const adminGeo = details.filter(isAdminGeo)
   const noGeo = details.filter((v) => !hasGeo(v))
+  // ② 추출 대상 영상 수: geoValid + adminGeo 전량 + noGeo(캡 slice 적용분).
+  funnel.extractTargets = geoValid.length + adminGeo.length + Math.min(noGeo.length, channelId ? MAX_CHANNEL_VIDEOS : 40)
 
   await Promise.all([
     // Geo-tagged: fast path
     ...geoValid
       .map(async (v) => {
+        funnel.extractedOk++ // geotag 영상은 좌표 내장 → 지오코딩 성공에 준함
         const correction = corrections.get(v.id)
         const original = v.recordingDetails!.location!
         const pointLat = correction?.lat ?? original.latitude
         const pointLng = correction?.lng ?? original.longitude
         const dist = haversineKm(lat, lng, pointLat, pointLng)
         if (dist <= distanceLimit) {
+          funnel.radiusPass++
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
           const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
           // 창작자가 geotag에 단 위치 라벨 — 비-행정구역이면 그대로 상호명("창억떡집 중흥본점")
@@ -945,8 +997,10 @@ export async function GET(req: NextRequest) {
     ].map(async ({ v, adminDesc }) => {
       const correction = corrections.get(v.id)
       if (correction) {
+        funnel.extractedOk++ // 관리자 보정 좌표 보유 → 지오코딩 성공에 준함
         const dist = haversineKm(lat, lng, correction.lat, correction.lng)
         if (dist <= distanceLimit) {
+          funnel.radiusPass++
           const snippet = unique.find((i) => i.id.videoId === v.id)?.snippet ?? v.snippet
           const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
           let placeName: string | undefined
@@ -1013,8 +1067,10 @@ export async function GET(req: NextRequest) {
         // AI 쿼리(=true)는 이미 자체 지역명을 포함하므로 prefix 안 함(중복 방지).
         const geo2 = await geocodeKorean(requireCorroboration ? place : `${effGeoRegionPrefix}${place}`.trim())
         if (!geo2) return false
+        funnel.extractedOk++ // 상호명 지오코딩 성공(휴리스틱/AI 후보 단위 — 재시도 시 중복 가능)
         const dist = haversineKm(lat, lng, geo2.lat, geo2.lng)
         if (dist > distanceLimit) return false
+        funnel.radiusPass++
 
         if (requireCorroboration) {
           const videoText = `${v.snippet.title} ${v.snippet.description ?? ''}`
@@ -1100,6 +1156,7 @@ export async function GET(req: NextRequest) {
           allowedGroups,
           withinAdminArea,      // 기존 route 내 함수/헬퍼 그대로 전달
           addressCorroborated,  // 기존 route 내 함수/헬퍼 그대로 전달
+          funnel,               // L7 계측 — 장소 단위 extractedOk/radiusPass 누적(로직 무영향)
         })
         const durationSec = parseDurationSec(v.contentDetails?.duration ?? '')
         if (!(durationSec > 0 && durationSec < MIN_VIDEO_SEC)) {
@@ -1156,6 +1213,7 @@ export async function GET(req: NextRequest) {
   const [blocked, myHidden] = await Promise.all([getBlockedVideoIds(), getMyHiddenVideoIds()])
   const filtered = deduped.filter((r) => !blocked.has(r.videoId) && !myHidden.has(r.videoId))
   filtered.sort((a, b) => b.viewCount - a.viewCount)
+  funnel.displayed = filtered.length // ⑤ 파이프라인 최종 표시 행(등록 병합 전)
 
   // 등록 장소(관리자/파트너)는 큐레이션된 데이터이므로 상단에 배치.
   // YouTube 결과와 videoId 중복 시 등록본 우선.
@@ -1163,6 +1221,22 @@ export async function GET(req: NextRequest) {
   const registered = channelId ? [] : await getRegisteredResults(lat, lng, radius)
   const regSeen = new Set(registered.map((r) => r.videoId))
   const finalResults = [...registered, ...filtered.filter((r) => !regSeen.has(r.videoId))]
+
+  // L7 퍼널 기록 — 응답 직전 1회. await하되 내부에서 실패를 삼켜 검색을 막지 않는다
+  // (서버리스에서 미await 시 insert가 유실될 수 있어 await로 기록 보장). 검색어 원문 + region(시/군/구)만.
+  await logSearchFunnel({
+    query: q ?? null,
+    searchType: channelId ? 'channel' : 'keyword',
+    region: regionName ?? null,
+    category,
+    radius: channelId ? null : radius,
+    collected: funnel.collected,
+    extractTargets: funnel.extractTargets,
+    extractedOk: funnel.extractedOk,
+    radiusPass: funnel.radiusPass,
+    displayed: funnel.displayed,
+    registeredMerged: registered.length,
+  })
 
   return NextResponse.json({ results: finalResults })
 }

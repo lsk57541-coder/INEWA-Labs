@@ -295,6 +295,7 @@ export async function resolveCompilationPlaces(opts: {
   adminDesc: string | null; allowedGroups: string[]
   withinAdminArea: (desc: string, address: string) => boolean
   addressCorroborated: (address: string, text: string) => boolean
+  funnel?: { extractedOk: number; radiusPass: number } // L7 계측(선택) — 좌표확보/반경통과 장소 수 누적
 }): Promise<ResolvedPlace[]> {
   const { videoId, title, description, regionName, lat, lng, radius, adminDesc, allowedGroups } = opts
   const videoText = `${title} ${description}`
@@ -306,10 +307,12 @@ export async function resolveCompilationPlaces(opts: {
     let pKakaoId: string | undefined
     if (place.lat != null && place.lng != null) {
       pLat = place.lat; pLng = place.lng        // 0순위 좌표내장 → (a)반경만. TODO: (c)카테고리 미적용(0.4%)
+      if (opts.funnel) opts.funnel.extractedOk++ // 좌표내장 = 좌표 확보 성공
     } else {
       if (place.source === 'ai' && !nameInText(place.name, videoText)) continue   // (d) geocode 전 환각 차단
       const geo2 = await geocodeKorean(`${regionName ?? ''} ${place.name}`.trim())
       if (!geo2) continue
+      if (opts.funnel) opts.funnel.extractedOk++ // 지오코딩 성공(가드 이전 — route tryResolveAndPush와 동일 기준)
       pLat = geo2.lat; pLng = geo2.lng
       if (adminDesc) { if (!opts.withinAdminArea(adminDesc, geo2.address)) continue }   // (b)
       else if (!opts.addressCorroborated(geo2.address, videoText)) continue            // (b)
@@ -318,6 +321,7 @@ export async function resolveCompilationPlaces(opts: {
     }
     const dist = haversineKm(lat, lng, pLat, pLng)
     if (dist > radius) continue                                                        // (a)
+    if (opts.funnel) opts.funnel.radiusPass++ // 반경 통과 장소
     out.push({ name: place.name, lat: pLat, lng: pLng, distanceKm: Math.round(dist * 10) / 10, startSec: place.timestamp_seconds ?? undefined, phone: pPhone, kakaoPlaceId: pKakaoId })
   }
   return out
