@@ -351,31 +351,26 @@ function classifyCategory(q: string): SearchCategory {
 
 function buildCategoryParams(q: string, category: SearchCategory): {
   enrichedQ: string
-  publishedAfter: string
   order: 'relevance' | 'viewCount' | 'date'
 } {
-  const now = new Date()
-  const monthsAgo = (n: number) => {
-    const d = new Date(now)
-    d.setMonth(d.getMonth() - n)
-    return d.toISOString()
-  }
-
-  const MAP: Record<SearchCategory, { suffix: string; months: number; order: 'relevance' | 'viewCount' | 'date' }> = {
-    food:    { suffix: ' 추천 리뷰',      months: 12, order: 'relevance' },
-    cafe:    { suffix: ' 투어 추천',      months: 6,  order: 'relevance' },
-    date:    { suffix: ' 코스 추천 장소', months: 12, order: 'viewCount' },
-    travel:  { suffix: ' 브이로그 코스',  months: 24, order: 'viewCount' },
-    bar:     { suffix: ' 추천 분위기',    months: 12, order: 'date'      },
-    hotspot: { suffix: ' 추천 명소',      months: 6,  order: 'viewCount' },
-    stay:    { suffix: ' 후기 리뷰',      months: 12, order: 'relevance' },
-    default: { suffix: '',                months: 12, order: 'relevance' },
+  // ★publishedAfter(게시일 필터) 제거(본부 확정, 2026-07-06). evergreen 모음/"N년간 가봤던"
+  // 영상이 수집 단계에서 체계적으로 배제되던 문제(예: 서울맛집 베스트11 qFnWlbC7kHA).
+  // stale 콘텐츠는 (1) 사용자 최신순 정렬 선택권 (2) 파트너 검증·카카오 원스톱(폐업 필터)로
+  // 대체됨. 12/24개월 자의적 선 자체를 제거해 일관성 확보. quota 무관(파라미터일 뿐, 호출 수 불변).
+  const MAP: Record<SearchCategory, { suffix: string; order: 'relevance' | 'viewCount' | 'date' }> = {
+    food:    { suffix: ' 추천 리뷰',      order: 'relevance' },
+    cafe:    { suffix: ' 투어 추천',      order: 'relevance' },
+    date:    { suffix: ' 코스 추천 장소', order: 'viewCount' },
+    travel:  { suffix: ' 브이로그 코스',  order: 'viewCount' },
+    bar:     { suffix: ' 추천 분위기',    order: 'date'      },
+    hotspot: { suffix: ' 추천 명소',      order: 'viewCount' },
+    stay:    { suffix: ' 후기 리뷰',      order: 'relevance' },
+    default: { suffix: '',                order: 'relevance' },
   }
 
   const cfg = MAP[category]
   return {
     enrichedQ: q + cfg.suffix,
-    publishedAfter: monthsAgo(cfg.months),
     order: cfg.order,
   }
 }
@@ -820,12 +815,11 @@ export async function GET(req: NextRequest) {
         )
       }
 
-      const { enrichedQ, publishedAfter, order: catOrder } = buildCategoryParams(q!, category)
+      const { enrichedQ, order: catOrder } = buildCategoryParams(q!, category)
 
       const geoItems = await ytSearch(enrichedQ, {
         location: `${lat},${lng}`,
         locationRadius: `${radius}km`,
-        publishedAfter,
       })
       unique = dedupe(geoItems)
 
@@ -840,7 +834,6 @@ export async function GET(req: NextRequest) {
           relevanceLanguage: 'ko',
           regionCode: 'KR',
           order: 'relevance',
-          publishedAfter,
         })
         unique = [...unique, ...dedupe(regionItems)]
 
@@ -852,7 +845,6 @@ export async function GET(req: NextRequest) {
             relevanceLanguage: 'ko',
             regionCode: 'KR',
             order: 'relevance',
-            publishedAfter,
           })
           unique = [...unique, ...dedupe(modItems)]
         }
@@ -863,7 +855,6 @@ export async function GET(req: NextRequest) {
           relevanceLanguage: 'ko',
           regionCode: 'KR',
           order: catOrder,
-          publishedAfter,
         })
         unique = [...unique, ...dedupe(broadItems)]
       }
