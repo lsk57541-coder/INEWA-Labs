@@ -708,7 +708,19 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
     const prev = byKey.get(key)
     byKey.set(key, prev ? mergeRegistered(prev, r) : r)
   }
-  return [...byKey.values()]
+  const finalOut = [...byKey.values()]
+
+  // 등록장소(locations/places)엔 description이 없어 순수검색의 챕터/타임스탬프 기반
+  // isCompilationVideo 판정을 못 쓴다 — 대신 같은 videoId가 2곳 이상(dedup 후)이면
+  // "이 영상은 장소 여럿을 다룬다"는 개수 기반 판정으로 isCompilation을 부여한다.
+  // ("영상 장소 전체 보기" 버튼 노출용, 표시 전용 — 반경/정렬/dedup 로직엔 영향 없음.)
+  const countByVideo = new Map<string, number>()
+  for (const r of finalOut) countByVideo.set(r.videoId, (countByVideo.get(r.videoId) ?? 0) + 1)
+  for (const r of finalOut) {
+    if ((countByVideo.get(r.videoId) ?? 0) >= 2) r.isCompilation = true
+  }
+
+  return finalOut
 }
 
 // admin locations 결과와 partner places 결과가 "같은 장소"(videoId+정규화명 일치)로 겹칠 때 하나로 합친다.
