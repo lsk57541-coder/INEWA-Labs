@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import GooglePartnerLoginButton from '@/components/auth/GooglePartnerLoginButton'
 
 const ERROR_MESSAGE: Record<string, string> = {
   youtube_denied: 'YouTube 채널 연동이 취소되었습니다.',
@@ -95,14 +94,9 @@ const QA: { q: string; a: string }[] = [
 ]
 
 function CtaButton() {
-  return (
-    <a
-      href="/api/auth/youtube/start"
-      className="block text-center bg-red-600 text-white rounded-lg py-3.5 text-base font-semibold hover:bg-red-700 transition"
-    >
-      ▶ YouTube 채널 연동하기
-    </a>
-  )
+  // 파트너 진입점 = 구글 로그인 1회(A모델). 소비자 카카오 버튼과는 완전히 별개.
+  // 구글 로그인 → /partner/apply/callback → 채널증명 → completePartnerSignup 로 이어진다.
+  return <GooglePartnerLoginButton />
 }
 
 export default async function PartnerApplyPage({
@@ -111,9 +105,8 @@ export default async function PartnerApplyPage({
   searchParams: Promise<{ error?: string }>
 }) {
   const { error } = await searchParams
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login?next=/partner/apply')  // 로그인 후 파트너 신청으로 복귀(콜백이 쿠키로 처리)
+  // 파트너 진입점이 구글 로그인 버튼(GooglePartnerLoginButton)으로 바뀌어, 로그인 게이트 없이
+  // 페이지를 보여준다. 버튼을 누르면 구글 OAuth가 시작된다. 소비자 카카오 로그인/게이트는 무관하게 그대로.
 
   return (
     <div className="min-h-screen bg-warm">
