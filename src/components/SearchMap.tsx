@@ -1550,7 +1550,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                     categoryFilter === 'all' ? 'bg-coral text-white border-coral' : 'bg-white text-ink border-line hover:bg-surface'
                   }`}
                 >
-                  🍽️ 전체
+                  <CategoryIcon k="all" className="w-4 h-4" /> 전체
                 </button>
                 <div className="grid grid-cols-2 gap-2">
                   {MAJOR_CATEGORIES.map((c) => (
@@ -1561,7 +1561,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                         categoryFilter === c.key ? 'bg-coral text-white border-coral' : 'bg-white text-ink border-line hover:bg-surface'
                       }`}
                     >
-                      <span className="text-lg leading-none">{c.emoji}</span>
+                      <CategoryIcon k={c.key} className="w-5 h-5" />
                       <span className="text-xs font-medium">{c.label}</span>
                     </button>
                   ))}
