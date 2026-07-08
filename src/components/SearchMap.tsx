@@ -1444,10 +1444,12 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     </div>
   )
 
-  // 지도 위 카테고리 버튼 라벨(기본 '카테고리' = 용도 표기, 진입점 혼란 방지). 선택 시 그 이모지+라벨로 바뀜.
-  const currentCat = categoryFilter === 'all'
-    ? { emoji: '🍽️', label: '카테고리' }
-    : (MAJOR_CATEGORIES.find((c) => c.key === categoryFilter) ?? { emoji: '🍽️', label: '카테고리' })
+  // 지도 위 카테고리 버튼 라벨(기본 '카테고리' = 용도 표기, 진입점 혼란 방지). 선택 시 "카테고리 · {대분류명}".
+  const currentCatLabel = (() => {
+    if (categoryFilter === 'all') return '카테고리'
+    const found = MAJOR_CATEGORIES.find((c) => c.key === categoryFilter)
+    return found ? `카테고리 · ${found.label}` : '카테고리'
+  })()
 
   const locateButtonBottomClass = (selectedGroup && selectedVideo)
     ? 'bottom-[calc(45dvh+56.25vw+60px)]'
@@ -1506,22 +1508,17 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         ☰
       </button>
 
-      {/* 결과 필터 버튼 (우측 상단) — 결과가 있을 때만. 활성 시 "전체→남은" 개수 표시. */}
+      {/* 결과 필터 버튼 (우측 상단) — 결과가 있을 때만. "필터" 텍스트 항상 노출(카테고리 진입점과
+          구분). 활성 시 "전체→남은" 개수 표시. */}
       {allResults.length > 0 && (
         <button
           onClick={openFilterPanel}
           title="검색결과 필터"
           aria-label="검색결과 필터"
-          className={`absolute top-3 right-3 z-20 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition ${filterActive ? 'gap-1.5 px-3' : 'w-10'}`}
+          className="absolute top-3 right-3 z-20 h-10 px-3 bg-white rounded-full shadow-lg flex items-center gap-1.5 hover:bg-gray-50 transition"
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={filterActive ? 'text-coral' : 'text-gray-700'}>
-            <line x1="4" y1="7" x2="20" y2="7" />
-            <circle cx="9" cy="7" r="2.4" fill="white" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <circle cx="15" cy="12" r="2.4" fill="white" />
-            <line x1="4" y1="17" x2="20" y2="17" />
-            <circle cx="11" cy="17" r="2.4" fill="white" />
-          </svg>
+          <SlidersIcon className={`w-5 h-5 ${filterActive ? 'text-coral' : 'text-gray-700'}`} />
+          <span className={`text-sm font-semibold whitespace-nowrap ${filterActive ? 'text-coral' : 'text-ink'}`}>필터</span>
           {filterActive && (
             <span className="text-xs font-bold text-coral tabular-nums">{allResults.length}→{filteredResults.length}</span>
           )}
@@ -1534,12 +1531,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           <button
             onClick={() => setCategoryPanelOpen((o) => !o)}
             aria-label="카테고리 필터"
-            className={`absolute top-16 right-3 z-20 h-10 px-3 rounded-full shadow-lg flex items-center gap-1 text-sm font-semibold transition ${
+            className={`absolute top-16 right-3 z-20 h-10 px-3 rounded-full shadow-lg flex items-center gap-1.5 text-sm font-semibold transition ${
               categoryFilter !== 'all' ? 'bg-coral text-white' : 'bg-white text-ink hover:bg-gray-50'
             }`}
           >
-            <span className="leading-none">{currentCat.emoji}</span>
-            <span className="whitespace-nowrap">{currentCat.label}</span>
+            <GridIcon className="w-4 h-4" />
+            <span className="whitespace-nowrap">{currentCatLabel}</span>
+            <ChevronDown className="w-3.5 h-3.5" />
           </button>
           {categoryPanelOpen && (
             <>
