@@ -490,33 +490,36 @@ function VideoActionRow({
   onHide,
 }: VideoActionRowProps) {
   const [moreOpen, setMoreOpen] = useState(false)
+  // 접근성 탭영역: 각 버튼 수직 44px(h-11) 확보. 리스트 카드 액션행은 가용폭이 좁아
+  // (overflow-hidden 컬럼) 수평 확대 시 클리핑 → 수평 footprint는 현행 이내(w-[26px]×4≈104px)로
+  // 유지하고, -my-2.5 음수마진으로 큰 탭영역을 주되 행 높이 bloat은 최소화. 아이콘/동작/배치 불변.
   return (
-    <div className="flex items-center gap-3 shrink-0 relative">
+    <div className="flex items-center shrink-0 relative">
       <button
         onClick={onToggleFavorite}
         title={favorited ? '찜 취소' : '찜하기'}
-        className="text-gray-300 hover:text-amber-400 transition-colors duration-150"
+        className="flex items-center justify-center w-[26px] h-11 -my-2.5 text-gray-300 hover:text-amber-400 transition-colors duration-150"
       >
         <HeartIcon filled={favorited} />
       </button>
       <button
         onClick={onToggleVisited}
         title={visited ? '방문 취소' : '가봤어요'}
-        className="text-gray-300 hover:text-green-500 transition-colors duration-150"
+        className="flex items-center justify-center w-[26px] h-11 -my-2.5 text-gray-300 hover:text-green-500 transition-colors duration-150"
       >
         <CheckCircleIcon checked={visited} />
       </button>
       <button
         onClick={onShare}
         title="공유"
-        className="text-gray-400 hover:text-gray-600 transition-colors duration-150"
+        className="flex items-center justify-center w-[26px] h-11 -my-2.5 text-gray-400 hover:text-gray-600 transition-colors duration-150"
       >
         <ShareIcon />
       </button>
       <button
         onClick={() => setMoreOpen((o) => !o)}
         title="더보기"
-        className="text-gray-300 hover:text-gray-500 transition text-base leading-none tracking-widest"
+        className="flex items-center justify-center w-[26px] h-11 -my-2.5 text-gray-300 hover:text-gray-500 transition text-base leading-none"
       >
         ···
       </button>
