@@ -1929,7 +1929,19 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       {/* Quick search chips — shown below search bar in initial empty state */}
       {!searchChip && !optionsOpen && !loading && allResults.length === 0 && !selectedGroup && !selectedVideo && (
         <div className="absolute top-[130px] left-3 z-10" style={{ maxWidth: 'calc(100vw - 24px)' }}>
-          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {/* 첫 방문 힌트 — "뭘 해야 하지" 해소용 가벼운 리드카피. 지도 위라 흰 텍스트섀도로 가독성 확보. */}
+          <p className="text-xs font-semibold text-ink mb-1.5 ml-1 [text-shadow:0_1px_2px_rgba(255,255,255,0.95)]">
+            이런 걸 검색해 보세요
+          </p>
+          {/* 우측 그라데이션 페이드(mask) — 좁은 폰에서 칩이 넘칠 때 "더 있음/스크롤" 신호. 탭 영향 없음. */}
+          <div
+            className="flex gap-2 overflow-x-auto pb-1"
+            style={{
+              scrollbarWidth: 'none',
+              maskImage: 'linear-gradient(to right, #000 90%, transparent)',
+              WebkitMaskImage: 'linear-gradient(to right, #000 90%, transparent)',
+            }}
+          >
             {([
               { emoji: '🍽', label: '맛집' },
               { emoji: '☕', label: '카페' },
