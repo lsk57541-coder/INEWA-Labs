@@ -1440,10 +1440,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     </div>
   )
 
-  // 지도 위 카테고리 버튼에 표시할 현재 선택(기본 '전체'). 선택 시 그 이모지+라벨로 바뀜.
+  // 지도 위 카테고리 버튼 라벨(기본 '카테고리' = 용도 표기, 진입점 혼란 방지). 선택 시 그 이모지+라벨로 바뀜.
   const currentCat = categoryFilter === 'all'
-    ? { emoji: '🍽️', label: '전체' }
-    : (MAJOR_CATEGORIES.find((c) => c.key === categoryFilter) ?? { emoji: '🍽️', label: '전체' })
+    ? { emoji: '🍽️', label: '카테고리' }
+    : (MAJOR_CATEGORIES.find((c) => c.key === categoryFilter) ?? { emoji: '🍽️', label: '카테고리' })
 
   const locateButtonBottomClass = (selectedGroup && selectedVideo)
     ? 'bottom-[calc(45dvh+56.25vw+60px)]'
