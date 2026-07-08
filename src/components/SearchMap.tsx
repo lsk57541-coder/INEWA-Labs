@@ -1503,9 +1503,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       <button
         ref={hamburgerRef}
         onClick={() => setMenuOpen(true)}
-        className="absolute top-3 left-3 z-20 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-lg text-coral hover:bg-gray-50 transition md:hidden"
+        className="absolute top-3 left-3 z-20 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-coral hover:bg-gray-50 transition md:hidden"
       >
-        ☰
+        <MenuIcon className="w-5 h-5" />
       </button>
 
       {/* 결과 필터 버튼 (우측 상단) — 결과가 있을 때만. "필터" 텍스트 항상 노출(카테고리 진입점과
@@ -1697,9 +1697,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           ref={hamburgerInlineRef}
           onClick={() => setMenuOpen(true)}
           aria-label="메뉴"
-          className="hidden md:flex shrink-0 w-10 h-10 bg-white rounded-full shadow-lg items-center justify-center text-lg text-coral hover:bg-gray-50 transition"
+          className="hidden md:flex shrink-0 w-10 h-10 bg-white rounded-full shadow-lg items-center justify-center text-coral hover:bg-gray-50 transition"
         >
-          ☰
+          <MenuIcon className="w-5 h-5" />
         </button>
         <div className="md:flex-1 md:min-w-0">
         {focusedVideoPlaces ? (
@@ -1802,20 +1802,20 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
             <div className="flex gap-1 px-3 pt-3">
               <button
                 onClick={() => setSearchMode('keyword')}
-                className={`flex-1 text-xs py-1.5 rounded-full font-medium transition ${
+                className={`flex-1 inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-full font-medium transition ${
                   searchMode === 'keyword' ? 'bg-coral text-white' : 'bg-surface text-ink-muted hover:bg-line-strong'
                 }`}
               >
-                🔎 키워드 검색
+                <KeywordIcon className="w-3.5 h-3.5" /> 키워드 검색
               </button>
               <button
                 ref={channelTabRef}
                 onClick={() => setSearchMode('channel')}
-                className={`flex-1 text-xs py-1.5 rounded-full font-medium transition ${
+                className={`flex-1 inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-full font-medium transition ${
                   searchMode === 'channel' ? 'bg-coral text-white' : 'bg-surface text-ink-muted hover:bg-line-strong'
                 }`}
               >
-                🎙 유튜버 검색
+                <ChannelIcon className="w-3.5 h-3.5" /> 유튜버 검색
               </button>
             </div>
 
@@ -2107,7 +2107,10 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               className="w-full flex items-center justify-between px-4 pb-3 md:pt-3 text-xs text-ink-muted font-medium border-b border-line"
             >
               <span className="truncate">
-                {searchMode === 'channel' && selectedChannel ? `🎙 ${selectedChannel.title}` : `"${keyword}"`} 검색결과 {filteredResults.length}개
+                {searchMode === 'channel' && selectedChannel && (
+                  <ChannelIcon className="inline-block w-3 h-3 -mt-0.5 mr-1" />
+                )}
+                {searchMode === 'channel' && selectedChannel ? selectedChannel.title : `"${keyword}"`} 검색결과 {filteredResults.length}개
               </span>
               <span className="shrink-0 ml-2 md:hidden">{listOpen ? '닫기 ▼' : '열기 ▲'}</span>
             </button>
