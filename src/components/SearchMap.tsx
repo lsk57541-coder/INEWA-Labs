@@ -30,6 +30,7 @@ import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 import { placeKey } from '@/lib/placeKey'
 import { track } from '@/lib/track'
 import { MAJOR_CATEGORIES, mapToMajorCategory } from '@/lib/categoryMapping'
+import { MenuIcon, ChevronDown, SlidersIcon, GridIcon, KeywordIcon, ChannelIcon, CategoryIcon } from '@/components/mapIcons'
 
 // 검색 로딩 중 순차로 보여주는 단계 라벨(가짜 — /api/search는 단일 JSON 응답이라 실제 단계 진행은
 // 받을 수 없음). 실제 파이프라인 순서(YT 검색 → geocode/추출 → dedupe/정렬)에 맞춰 체감만 개선.
