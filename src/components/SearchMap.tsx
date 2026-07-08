@@ -30,7 +30,7 @@ import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 import { placeKey } from '@/lib/placeKey'
 import { track } from '@/lib/track'
 import { MAJOR_CATEGORIES, mapToMajorCategory } from '@/lib/categoryMapping'
-import { MenuIcon, ChevronDown, SlidersIcon, GridIcon, KeywordIcon, ChannelIcon, CategoryIcon } from '@/components/mapIcons'
+import { MenuIcon, ChevronRight, ChevronDown, SlidersIcon, GridIcon, KeywordIcon, ChannelIcon, CategoryIcon } from '@/components/mapIcons'
 
 // 검색 로딩 중 순차로 보여주는 단계 라벨(가짜 — /api/search는 단일 JSON 응답이라 실제 단계 진행은
 // 받을 수 없음). 실제 파이프라인 순서(YT 검색 → geocode/추출 → dedupe/정렬)에 맞춰 체감만 개선.
@@ -1937,34 +1937,39 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
           <p className="text-xs font-semibold text-ink mb-1.5 ml-1 [text-shadow:0_1px_2px_rgba(255,255,255,0.95)]">
             이런 걸 검색해 보세요
           </p>
-          {/* 우측 그라데이션 페이드(mask) — 좁은 폰에서 칩이 넘칠 때 "더 있음/스크롤" 신호. 탭 영향 없음. */}
-          <div
-            className="flex gap-2 overflow-x-auto pb-1"
-            style={{
-              scrollbarWidth: 'none',
-              maskImage: 'linear-gradient(to right, #000 90%, transparent)',
-              WebkitMaskImage: 'linear-gradient(to right, #000 90%, transparent)',
-            }}
-          >
-            {([
-              { emoji: '🍽', label: '맛집' },
-              { emoji: '☕', label: '카페' },
-              { emoji: '✈️', label: '여행' },
-              { emoji: '💑', label: '데이트' },
-              { emoji: '🏨', label: '숙소' },
-            ] as const).map(({ emoji, label }) => (
-              <button
-                key={label}
-                onClick={() => {
-                  setKeyword(label)
-                  setSearchMode('keyword')
-                  handleSearch({ keywordOverride: label })
-                }}
-                className="shrink-0 bg-white shadow-sm rounded-full px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-50 transition"
-              >
-                {emoji} {label}
-              </button>
-            ))}
+          {/* 스크롤 컨테이너 + 우측 페이드/셰브론 오버레이(relative 래퍼) — 좁은 폰에서 칩이
+              넘칠 때 "더 있음/스크롤" 신호. 오버레이는 pointer-events-none이라 탭 영향 없음. */}
+          <div className="relative">
+            <div
+              className="flex gap-2 overflow-x-auto pb-1 pr-9"
+              style={{ scrollbarWidth: 'none' }}
+            >
+              {([
+                { icon: 'meat', label: '맛집' },
+                { icon: 'cafe', label: '카페' },
+                { icon: 'tour', label: '여행' },
+                { icon: 'world', label: '데이트' },
+                { icon: 'stay', label: '숙소' },
+              ] as const).map(({ icon, label }) => (
+                <button
+                  key={label}
+                  onClick={() => {
+                    setKeyword(label)
+                    setSearchMode('keyword')
+                    handleSearch({ keywordOverride: label })
+                  }}
+                  className="shrink-0 flex items-center gap-1.5 bg-white shadow-sm rounded-full px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-50 transition"
+                >
+                  <CategoryIcon k={icon} className="w-4 h-4 text-ink-muted" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="absolute right-0 top-0 bottom-1 w-9 flex items-center justify-end pointer-events-none bg-gradient-to-r from-transparent via-white/70 to-white">
+              <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-white shadow-sm text-ink-muted">
+                <ChevronRight className="w-3.5 h-3.5" />
+              </span>
+            </div>
           </div>
         </div>
       )}
