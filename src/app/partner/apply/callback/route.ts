@@ -42,14 +42,13 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/partner/apply?error=no_channel`)
   }
 
-  // Supabase 구글 세션의 provider_token/refresh_token 을 기존 PendingChannel 형태로 매핑.
+  // 증명이 끝난 채널 정보만 PendingChannel 로 넘긴다 — providerToken 은 위
+  // fetchOwnChannel 로 용도가 완결됐으므로 여기서 버려진다(저장·전달 안 함).
   const pending: PendingChannel = {
     channelId: channel.channelId,
     channelName: channel.channelName,
     subscriberCount: channel.subscriberCount,
     thumbnail: channel.thumbnail,
-    accessToken: providerToken,
-    refreshToken: data.session.provider_refresh_token ?? null,
   }
 
   // 내부에서 getUser()로 방금 생성된 구글 세션 사용자를 읽어 partners 를 upsert하고

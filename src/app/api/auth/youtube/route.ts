@@ -67,8 +67,8 @@ export async function GET(request: NextRequest) {
           channel_name: channel.channelName,
           subscriber_count: channel.subscriberCount,
           avatar_url: channel.thumbnail,  // NULL이던 기존 파트너도 재연동 시 채워짐
-          youtube_access_token: tokens.access_token,
-          youtube_refresh_token: tokens.refresh_token ?? null,
+          // ★ OAuth 토큰 미저장 — 재연동의 목적은 채널 정보 갱신이고, 그 값은
+          // 위 fetchOwnChannel로 이미 다 받았다. 토큰은 여기서 버려진다.
         })
         .eq('id', ownedPartner.id)
       // 재연동 성사 직후 동의 로그(append-only, 실패해도 재연동은 완료 — logConsent는 throw 안 함).
@@ -89,8 +89,6 @@ export async function GET(request: NextRequest) {
     channelName: channel.channelName,
     subscriberCount: channel.subscriberCount,
     thumbnail: channel.thumbnail,
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token ?? null,
   }
   await completePartnerSignup(pending)
 }

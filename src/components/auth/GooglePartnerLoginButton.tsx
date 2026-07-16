@@ -25,9 +25,11 @@ export default function GooglePartnerLoginButton({
         redirectTo: `${location.origin}/partner/apply/callback`,
         // provider_token 을 youtube.readonly 로 받기 위한 추가 스코프(googleOAuth.ts 단일 출처 상수).
         scopes: YOUTUBE_OAUTH_SCOPE,
-        // refresh_token 까지 받기 위해 offline + 매번 동의창.
+        // ★ access_type: 'offline' 없음 = 구글이 provider_refresh_token을 발급하지 않는다.
+        // 채널 소유권 증명은 provider_token(access) 하나로 끝나므로 요청할 근거가 없다(최소수집).
+        // Supabase 세션 갱신은 구글 토큰이 아니라 Supabase 자체 refresh token으로 도므로 무영향.
+        // prompt: 'consent'는 동의 로그가 실제 동의 시점과 일치하도록 유지.
         queryParams: {
-          access_type: 'offline',
           prompt: 'consent',
         },
       },

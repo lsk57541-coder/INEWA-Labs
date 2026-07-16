@@ -80,8 +80,8 @@ export async function completePartnerSignup(channel: PendingChannel) {
         avatar_url: channel.thumbnail,    // 이번 연동에서 받아온 아바타
         status: 'approved',               // 재활성화(withdrawn→approved)
         grade,                            // 기존 등급 유지
-        youtube_access_token: channel.accessToken,
-        youtube_refresh_token: channel.refreshToken,
+        // ★ OAuth 토큰은 저장하지 않는다 — 소유권 증명(fetchOwnChannel)이 이 write 이전에
+        // 이미 끝나 목적이 완결됐다(개인정보보호법 제3조①·제21조①).
         // created_at·categories·region·is_demo는 건드리지 않음(원래 가입정보 보존)
       })
       .eq('id', existing.id)
@@ -97,8 +97,7 @@ export async function completePartnerSignup(channel: PendingChannel) {
       status: 'approved',
       grade: 'general',
       avatar_url: channel.thumbnail,
-      youtube_access_token: channel.accessToken,
-      youtube_refresh_token: channel.refreshToken,
+      // ★ OAuth 토큰 미저장 (위 update와 동일 근거)
     })
     // unique 경합(드물게 동시요청) 시에도 이미 등록된 채널 안내로
     if (error) redirect(error.code === '23505' ? '/partner/apply?error=already_applied' : '/partner/apply?error=youtube_failed')
@@ -166,8 +165,8 @@ export async function submitPartnerApplication(_prev: SubmitState, formData: For
     subscriber_count: channel.subscriberCount,
     categories,
     region,
-    youtube_access_token: channel.accessToken,
-    youtube_refresh_token: channel.refreshToken,
+    // ★ OAuth 토큰 미저장 — 이 경로는 현재 죽어 있지만, 재개 시 되살아나지 않도록
+    // 지금 같이 제거한다(향후 컬럼 DROP 시 여기서 터지는 것도 방지).
   })
 
   if (error) {
