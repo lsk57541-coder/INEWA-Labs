@@ -7,7 +7,6 @@ import { normName } from '@/lib/normName'
 import { geocodeKorean, reverseGeocode, searchPlaceInfo, getRegionName, getCityName } from '@/lib/geocode'
 import { buildHeuristicPlaceQueries, extractPlaceByAI, extractStatedBusinessName } from '@/lib/extractLocation'
 import { isCompilationVideo, resolveCompilationPlaces } from '@/lib/extractPlaces'
-import { extractPlaceFromComments } from '@/lib/extractFromComments'
 import { getMinConfidenceSetting } from '@/app/actions'
 import { selectAllPaged } from '@/lib/supabasePaging'
 
@@ -991,20 +990,11 @@ export async function GET(req: NextRequest) {
             ])
             // 주소 문자열로 Kakao 검색하면 동일 주소의 무관한 업체(법률사무소 등)가 잡혀
             // 오명을 만들므로 address_match fallback은 사용하지 않음. 제목 매칭 실패 시
-            // 댓글로 상호명을 찾고, 그래도 없으면 맨 주소(address_fallback)를 노출.
-            const commentMatch = !titleMatch?.name
-              ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
-                  candidate ? searchPlaceInfo(candidate, pointLat, pointLng) : null
-                )
-              : null
-            placeName = titleMatch?.name || commentMatch?.name || address || undefined
-            placeNameSource = titleMatch?.name
-              ? 'title_match'
-              : commentMatch?.name
-                ? 'comment_match'
-                : 'address_fallback'
-            placePhone = titleMatch?.phone ?? commentMatch?.phone
-            placeKakaoId = titleMatch?.kakaoPlaceId ?? commentMatch?.kakaoPlaceId
+            // 맨 주소(address_fallback)를 노출한다.
+            placeName = titleMatch?.name || address || undefined
+            placeNameSource = titleMatch?.name ? 'title_match' : 'address_fallback'
+            placePhone = titleMatch?.phone
+            placeKakaoId = titleMatch?.kakaoPlaceId
           }
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (!meetsConfidence(placeNameSource, minConfidence)) return
@@ -1062,19 +1052,10 @@ export async function GET(req: NextRequest) {
           } else {
             const titleMatch = await searchPlaceInfo(snippet.title, correction.lat, correction.lng)
             // address_match fallback 미사용(동일 주소 무관 업체 오매칭 방지).
-            const commentMatch = !titleMatch?.name
-              ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
-                  candidate ? searchPlaceInfo(candidate, correction.lat, correction.lng) : null
-                )
-              : null
-            placeName = titleMatch?.name || commentMatch?.name || correction.address || undefined
-            placeNameSource = titleMatch?.name
-              ? 'title_match'
-              : commentMatch?.name
-                ? 'comment_match'
-                : 'address_fallback'
-            placePhone = titleMatch?.phone ?? commentMatch?.phone
-            placeKakaoId = titleMatch?.kakaoPlaceId ?? commentMatch?.kakaoPlaceId
+            placeName = titleMatch?.name || correction.address || undefined
+            placeNameSource = titleMatch?.name ? 'title_match' : 'address_fallback'
+            placePhone = titleMatch?.phone
+            placeKakaoId = titleMatch?.kakaoPlaceId
           }
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (meetsConfidence(placeNameSource, minConfidence)) {
@@ -1148,19 +1129,10 @@ export async function GET(req: NextRequest) {
         } else {
           const titleMatch = await searchPlaceInfo(snippet.title, geo2.lat, geo2.lng)
           // address_match fallback 미사용(동일 주소 무관 업체 오매칭 방지).
-          const commentMatch = !titleMatch?.name
-            ? await extractPlaceFromComments(v.id, snippet.channelId).then((candidate) =>
-                candidate ? searchPlaceInfo(candidate, geo2.lat, geo2.lng) : null
-              )
-            : null
-          resolvedName = titleMatch?.name || commentMatch?.name || geo2.address
-          placeNameSource = titleMatch?.name
-            ? 'title_match'
-            : commentMatch?.name
-              ? 'comment_match'
-              : 'address_fallback'
-          placePhone = titleMatch?.phone ?? commentMatch?.phone ?? geo2.phone
-          placeKakaoId = titleMatch?.kakaoPlaceId ?? commentMatch?.kakaoPlaceId ?? geo2.kakaoPlaceId
+          resolvedName = titleMatch?.name || geo2.address
+          placeNameSource = titleMatch?.name ? 'title_match' : 'address_fallback'
+          placePhone = titleMatch?.phone ?? geo2.phone
+          placeKakaoId = titleMatch?.kakaoPlaceId ?? geo2.kakaoPlaceId
         }
         logPlaceNameResolution(v.id, placeNameSource, resolvedName)
         if (!meetsConfidence(placeNameSource, minConfidence)) return false
