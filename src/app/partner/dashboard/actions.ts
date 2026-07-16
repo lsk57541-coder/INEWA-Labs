@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { hidePartnerPlaces } from '@/lib/partnerPlaces'
 
 export interface MyPartner {
   id: string
@@ -88,9 +89,9 @@ export async function updateReportOptIn(optIn: boolean) {
   revalidatePath('/partner/dashboard/settings')
 }
 
-// Soft-delete: keeps the row for history, but flips status away from
-// 'approved' so the dashboard middleware locks them out immediately. Also
-// hides their places so nothing of theirs stays publicly visible.
+// 해지 = 개인정보 파기(tombstone). 채널 식별정보·계정연결을 지우고, status를
+// 'approved'에서 떨어뜨려 대시보드 미들웨어가 즉시 차단하게 하며, 장소를 숨겨
+// 공개된 것이 남지 않게 한다. 행은 남지만 개인정보는 남지 않는다.
 export async function withdrawPartner() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -98,20 +99,43 @@ export async function withdrawPartner() {
 
   const { data: partner, error: fetchError } = await supabase
     .from('partners')
-    .select('id')
+    .select('id, is_demo')
     .eq('user_id', user.id)
     .eq('status', 'approved')
     .single()
   if (fetchError || !partner) throw new Error('파트너 정보를 찾을 수 없습니다.')
 
-  const { error: hideError } = await supabase.from('places').update({ status: 'hidden' }).eq('partner_id', partner.id)
-  if (hideError) throw new Error(hideError.message)
+  // 데모 계정은 자기해지를 막는다 — 해지하면 아래 hidePartnerPlaces가 데모 장소를 전부
+  // 숨겨 영업 시연 지도가 꺼진다. 관리자 해제(resetPartnerStatus)에는 이 가드를 두지 않아
+  // 운영자가 필요하면 해제할 수 있다.
+  // ★ is_demo는 저장소에 SQL 정의가 없어(대시보드 수동 추가) nullable 여부가 불명 →
+  // truthy가 아니라 === true 로 엄격 비교한다.
+  if (partner.is_demo === true) throw new Error('데모 계정은 탈퇴할 수 없습니다.')
 
-  // 탈퇴 = soft-delete(행·이력 보존)이되 OAuth 토큰은 즉시 파기(방침 8조 "탈퇴 시 즉시 삭제"
-  // 일치). 재가입 시 재연동(OAuth)에서 토큰이 다시 채워지므로 복귀 무손상.
+  await hidePartnerPlaces(supabase, partner.id)
+
+  // 해지 = 개인정보 파기 + tombstone. 행 자체는 남긴다 —
+  //   • places.partner_id가 FK로 이 행을 가리켜서(on delete cascade) 지우면 POI가 통째로 소멸
+  //   • channel_id가 있어야 재가입 시 completePartnerSignup의 existing 조회가 적중해
+  //     UPDATE 브랜치를 타고, 그 브랜치가 opt_in을 안 건드려 수신거부가 보존된다
+  // 존치(건드리지 않음): id·channel_id·created_at·monthly_report_opt_in·is_demo.
+  // 근거는 supabase/sql/partners_withdraw_purge.sql 참조.
+  // 토큰 2개는 원래 여기서 null 처리하던 것이 파기 목록에 그대로 흡수됐다.
   const { error } = await supabase
     .from('partners')
-    .update({ status: 'withdrawn', youtube_access_token: null, youtube_refresh_token: null })
+    .update({
+      status: 'withdrawn',
+      channel_name: null,
+      avatar_url: null,
+      subscriber_count: null,
+      user_id: null,
+      categories: null,
+      region: null,
+      grade: null,
+      rejection_reason: null,
+      youtube_access_token: null,
+      youtube_refresh_token: null,
+    })
     .eq('id', partner.id)
   if (error) throw new Error(error.message)
 

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { sendPartnerApprovedEmail, sendPartnerRejectedEmail } from '@/lib/email'
+import { hidePartnerPlaces } from '@/lib/partnerPlaces'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -87,8 +88,12 @@ export async function rejectPartner(id: string, reason: string) {
 
 export async function resetPartnerStatus(id: string, status: 'approved' | 'withdrawn' | 'pending') {
   const supabase = await requireAdmin()
-  // 관리자 해제(withdrawn)도 파트너 본인 탈퇴와 동일하게 OAuth 토큰 파기.
+  // 관리자 해제(withdrawn)도 파트너 본인 탈퇴와 동일하게 OAuth 토큰 파기 + 장소 숨김.
+  // 장소 숨김이 그동안 빠져 있어 관리자 해제 시 POI가 공개된 채 남았다(withdrawPartner와 불일치).
   // approved/pending 복원 시엔 토큰을 건드리지 않는다(기존 연동 유지).
+  // ★ 숨긴 장소를 되살리지는 않는다 — hidePartnerPlaces 주석 참조(의도적으로 숨긴 장소까지
+  // 공개돼버리는 문제라 복원은 별건).
+  if (status === 'withdrawn') await hidePartnerPlaces(supabase, id)
   const patch = status === 'withdrawn'
     ? { status, youtube_access_token: null, youtube_refresh_token: null }
     : { status }

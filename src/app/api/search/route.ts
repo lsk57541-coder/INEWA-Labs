@@ -688,6 +688,9 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
   )
 
   // 파트너 정보(채널명·아바타·구독자수) 일괄 조회 → 금색 마커/PARTNER 배지/상위노출용.
+  // ★ status='approved'만 — 아래 isPartner가 "행이 있느냐"로만 판정하므로, 이 필터가 없으면
+  // 해지 tombstone(개인정보 파기됨)이나 rejected/pending 파트너의 장소가 금색 마커·PARTNER
+  // 배지·상위노출을 그대로 달고 나온다. 조회에서 빠지면 partner=undefined → isPartner:false.
   const partnerIds = [...new Set(places.map((p) => (p as { partner_id?: string | null }).partner_id).filter(Boolean) as string[])]
   const partnerMap = new Map<string, { channel_name: string; avatar_url: string | null; subscriber_count: number | null }>()
   if (partnerIds.length > 0) {
@@ -700,6 +703,7 @@ async function getRegisteredResults(lat: number, lng: number, radius: number): P
         const { data, error } = await db
           .from('partners')
           .select('id, channel_name, avatar_url, subscriber_count')
+          .eq('status', 'approved')
           .in('id', chunk)
         if (error) {
           console.error(`[getRegisteredResults] partners.in() 청크 실패(offset=${ci * CHUNK}, size=${chunk.length}):`, error.message)

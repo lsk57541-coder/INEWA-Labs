@@ -78,7 +78,9 @@ async function getVideoRegisteredPlaces(videoId: string, lat: number, lng: numbe
   const partnerIds = [...new Set((places ?? []).map((p) => p.partner_id).filter(Boolean) as string[])]
   const partnerMap = new Map<string, { channel_name: string; avatar_url: string | null; subscriber_count: number | null }>()
   if (partnerIds.length > 0) {
-    const { data: partners } = await db.from('partners').select('id, channel_name, avatar_url, subscriber_count').in('id', partnerIds)
+    // ★ status='approved'만 — isPartner가 "행이 있느냐"로만 판정하므로, 이 필터가 없으면
+    // 해지 tombstone·rejected·pending 파트너의 장소까지 금색 마커/PARTNER 배지를 단다.
+    const { data: partners } = await db.from('partners').select('id, channel_name, avatar_url, subscriber_count').eq('status', 'approved').in('id', partnerIds)
     for (const pt of partners ?? []) partnerMap.set(pt.id, pt)
   }
   for (const p of places ?? []) {
