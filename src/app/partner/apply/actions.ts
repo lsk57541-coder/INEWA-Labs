@@ -147,6 +147,15 @@ export async function completePartnerSignup(
         event: 'explicit_consent_data',
         consentType: 'explicit',
       })
+      // 승계 '고지' 이행 증빙(동의 화면에 4번 안내가 표시됨) — 고지라 느슨(best-effort).
+      // logConsent 가 event 로 분기: succession_notice_shown 은 STRICT_EVENTS 밖 → throw 안 함.
+      // consentType 미지정 → 기본 'implied'(고지 성격). 데모는 위 조건(!isDemoBypass)으로 함께 스킵.
+      await logConsent(supabase, {
+        userId: user.id,
+        partnerId: signedPartner.id,
+        channelId: channel.channelId,
+        event: 'succession_notice_shown',
+      })
     } catch (e) {
       console.error(
         `[completePartnerSignup] 동의검증됨+explicit로그실패 partner_id=${signedPartner.id} channel=${channel.channelId}:`,
@@ -174,7 +183,9 @@ export async function completePartnerSignup(
 export async function submitPartnerConsent(formData: FormData) {
   const agreeTerms = formData.get('agree_terms') === 'on'
   const agreeData = formData.get('agree_data') === 'on'
-  if (!agreeTerms || !agreeData) redirect('/partner/apply/consent?error=consent_incomplete')
+  // agree_age(만19세 자기신고)는 ★화면 게이팅만 — consent_logs 에는 기록하지 않는다(법정 증빙 아님).
+  const agreeAge = formData.get('agree_age') === 'on'
+  if (!agreeTerms || !agreeData || !agreeAge) redirect('/partner/apply/consent?error=consent_incomplete')
 
   const cookieStore = await cookies()
   const raw = cookieStore.get(PENDING_CHANNEL_COOKIE)?.value
