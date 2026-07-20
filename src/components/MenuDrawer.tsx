@@ -247,6 +247,7 @@ export default function MenuDrawer({ open, onClose, user, onShowFavorites, onRes
           <div className="flex gap-3 text-xs text-muted">
             <Link href="/terms" onClick={onClose} className="hover:text-gray-600">이용약관</Link>
             <Link href="/privacy" onClick={onClose} className="hover:text-gray-600">개인정보처리방침</Link>
+            <Link href="/partner/terms" onClick={onClose} className="hover:text-gray-600">파트너십 약관</Link>
           </div>
         </div>
 
