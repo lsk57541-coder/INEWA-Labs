@@ -8,8 +8,20 @@ import {
 } from '@/lib/googleOAuth'
 import { type PendingChannel } from '@/lib/partnerPendingChannel'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { completePartnerSignup } from '@/app/partner/apply/actions'
 import { logConsent } from '@/lib/consent'
+
+// ★ partners 는 UPDATE RLS 정책이 admin 전용 하나뿐이라 파트너 세션(role='user')으로는
+// 자기 행조차 못 고친다(조용한 0행). withdrawPartner/updateReportOptIn(dashboard/actions.ts)이
+// 쓰는 service_role 패턴을 그대로 복제한다. 인가는 약해지지 않는다 — 아래 재연동 블록은 서버
+// getUser() 기반으로 대상 행을 이미 본인 소유(ownedPartner)로 한정한 뒤에만 UPDATE 한다.
+function serviceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) throw new Error('서버 설정 오류로 처리하지 못했습니다.')
+  return createServiceClient(url, serviceKey)
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -61,7 +73,9 @@ export async function GET(request: NextRequest) {
       .eq('status', 'approved')
       .maybeSingle()
     if (ownedPartner) {
-      await supabase
+      // ★ service_role 로 UPDATE — RLS-bound 로는 admin 전용 정책 탓에 0행(거짓 성공)이었다.
+      // 가드는 그대로: 본인 소유(user_id)·approved 행만, .select() 로 실제 갱신 행수를 받는다.
+      const { data: updated, error: updateError } = await serviceClient()
         .from('partners')
         .update({
           channel_name: channel.channelName,
@@ -71,7 +85,16 @@ export async function GET(request: NextRequest) {
           // 위 fetchOwnChannel로 이미 다 받았다. 토큰은 여기서 버려진다.
         })
         .eq('id', ownedPartner.id)
-      // 재연동 성사 직후 동의 로그(append-only, 실패해도 재연동은 완료 — logConsent는 throw 안 함).
+        .eq('user_id', user.id)       // 본인 행 재확인 가드
+        .eq('status', 'approved')     // approved 행만
+        .select('id')
+      // 갱신 실패(에러 또는 0행)면 "거짓 성공(?reconnected=1)"을 절대 내보내지 않는다.
+      // GET 라우트라 throw(→500 깨진 화면) 대신 기존 에러 리다이렉트 패턴을 따른다.
+      if (updateError || updated?.length !== 1) {
+        return NextResponse.redirect(`${origin}${errorTarget}?error=reconnect_failed`)
+      }
+      // UPDATE 확정(0행 아님) 후에만 동의 로그 — 이렇게 해야 "partners 는 그대로인데
+      // 로그만 남는" 불일치가 발생하지 않는다.
       await logConsent(supabase, {
         userId: user.id,
         partnerId: ownedPartner.id,
