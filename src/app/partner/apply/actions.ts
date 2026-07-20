@@ -39,7 +39,11 @@ async function findOutreachMatch(
 // (api/auth/youtube/route.ts)에서 채널을 가져온 직후 바로 호출한다 — 쿠키
 // 삭제/설정은 Server Action이나 Route Handler 안에서만 가능해서, 페이지 렌더링
 // 중에 호출하면 에러가 난다.
-export async function completePartnerSignup(channel: PendingChannel) {
+export async function completePartnerSignup(
+  channel: PendingChannel,
+  // 동의 인터스티셜(submitPartnerConsent)만 consentVerified:true 를 넘긴다. 이 인자가 게이트의 근거.
+  opts?: { consentVerified?: boolean }
+) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -64,11 +68,18 @@ export async function completePartnerSignup(channel: PendingChannel) {
   // 재가입이 막힌다. 같은 채널 행이 있으면 INSERT 대신 UPDATE로 재활성화(탈퇴/다른 계정도 소유증명되면 인수). 없으면 신규 INSERT.
   const { data: existing } = await admin
     .from('partners')
-    .select('id, grade')
+    .select('id, grade, is_demo')
     .eq('channel_id', channel.channelId)
     .maybeSingle()
 
   const grade: string = existing?.grade ?? 'general' // 기존 등급 유지(premium 강등 금지), 없으면 general
+
+  // ★ 데모 예외 — 한 곳에 이름 붙여 명시. 데모는 explicit 게이트/로그 모두 면제(기존 implied 유지).
+  //   is_demo 는 커밋된 SQL 정의가 없어 nullable 불명 → 반드시 === true 비교(withdraw 가드와 동일).
+  const isDemoBypass = existing?.is_demo === true
+  // ★ 서버 게이트(진짜 불변식): 데모가 아니고 동의검증 인자(consentVerified)도 없으면 partners 생성 자체를 차단.
+  //   콜백 2곳은 이제 이 함수를 직접 부르지 않고 인터스티셜을 거치므로, 직접 우회 호출을 여기서 막는다.
+  if (!isDemoBypass && !opts?.consentVerified) redirect('/partner/apply?error=consent_required')
 
   if (existing) {
     const { error } = await admin
@@ -116,13 +127,68 @@ export async function completePartnerSignup(channel: PendingChannel) {
     })
   }
 
+  // ★ explicit 필수동의 2건(strict) — partner_id 가 생기는 유일 지점이라 여기서 쓴다(생성 직후·redirect 전).
+  //   데모(isDemoBypass)는 게이트뿐 아니라 explicit 로그도 스킵 → implied 유지 일관.
+  //   strict 실패 시: partner 행은 이미 생성됨(롤백은 α 범위 초과=β). "동의 없이 활성"이 아니라
+  //   "동의검증됨+증빙로그 실패" 상태 → 식별가능 console.error + consent_failed 리다이렉트로 관측화.
+  if (opts?.consentVerified && !isDemoBypass && signedPartner?.id) {
+    try {
+      await logConsent(supabase, {
+        userId: user.id,
+        partnerId: signedPartner.id,
+        channelId: channel.channelId,
+        event: 'explicit_consent_terms',
+        consentType: 'explicit',
+      })
+      await logConsent(supabase, {
+        userId: user.id,
+        partnerId: signedPartner.id,
+        channelId: channel.channelId,
+        event: 'explicit_consent_data',
+        consentType: 'explicit',
+      })
+    } catch (e) {
+      console.error(
+        `[completePartnerSignup] 동의검증됨+explicit로그실패 partner_id=${signedPartner.id} channel=${channel.channelId}:`,
+        e instanceof Error ? e.message : e
+      )
+      redirect('/partner/apply?error=consent_failed')
+    }
+  }
+
   if (user.email) {
     try {
       await sendPartnerApprovedEmail(user.email, channel.channelName, grade)
     } catch {}
   }
 
+  // 성공(가입/재활성화 완료) — 인터스티셜 핸드오프 쿠키를 정리하고 대시보드로.
+  const cookieStore = await cookies()
+  cookieStore.delete(PENDING_CHANNEL_COOKIE)
   redirect('/partner/dashboard')
+}
+
+// 동의 인터스티셜(/partner/apply/consent) 제출. 필수동의 2개를 ★서버에서★ 재검증한 뒤에만
+// completePartnerSignup 을 consentVerified:true 로 호출한다 — 프론트 체크만으론 우회 가능하므로
+// 서버 검증이 게이트의 실체다. explicit 로그는 partner_id 가 생기는 completePartnerSignup 내부에서 남긴다.
+export async function submitPartnerConsent(formData: FormData) {
+  const agreeTerms = formData.get('agree_terms') === 'on'
+  const agreeData = formData.get('agree_data') === 'on'
+  if (!agreeTerms || !agreeData) redirect('/partner/apply/consent?error=consent_incomplete')
+
+  const cookieStore = await cookies()
+  const raw = cookieStore.get(PENDING_CHANNEL_COOKIE)?.value
+  if (!raw) redirect('/partner/apply?error=youtube_failed') // 쿠키 만료/부재 → 채널 재연동부터
+
+  let channel: PendingChannel
+  try {
+    channel = JSON.parse(raw) as PendingChannel
+  } catch {
+    redirect('/partner/apply?error=youtube_failed')
+  }
+
+  // 게이트 통과 근거 = consentVerified. explicit 로그·쿠키정리·리다이렉트는 completePartnerSignup 내부.
+  await completePartnerSignup(channel, { consentVerified: true })
 }
 
 // --- Inbound(유튜버 자발적 신청) 전용, 현재 /partner/apply에서는 호출하지

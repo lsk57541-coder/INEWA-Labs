@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fetchOwnChannel } from '@/lib/googleOAuth'
-import { type PendingChannel } from '@/lib/partnerPendingChannel'
-import { completePartnerSignup } from '@/app/partner/apply/actions'
+import {
+  PENDING_CHANNEL_COOKIE,
+  PENDING_CHANNEL_MAX_AGE_SEC,
+  type PendingChannel,
+} from '@/lib/partnerPendingChannel'
 
 // ── 파트너 구글 단독인증 전용 콜백 (A모델) ──
 // ★ 소비자 카카오 공유 콜백(src/app/auth/callback/route.ts)을 절대 타지 않는다.
@@ -51,7 +54,15 @@ export async function GET(request: Request) {
     thumbnail: channel.thumbnail,
   }
 
-  // 내부에서 getUser()로 방금 생성된 구글 세션 사용자를 읽어 partners 를 upsert하고
-  // redirect('/partner/dashboard')로 마무리한다(무수정 재사용).
-  await completePartnerSignup(pending)
+  // C-2 C단계 α: 즉시 completePartnerSignup 대신, 증명된 채널을 핸드오프 쿠키에 담아
+  // 동의 인터스티셜(/partner/apply/consent)로 보낸다. 실제 partners 생성/동의검증은 거기서.
+  const res = NextResponse.redirect(`${origin}/partner/apply/consent`)
+  res.cookies.set(PENDING_CHANNEL_COOKIE, JSON.stringify(pending), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: PENDING_CHANNEL_MAX_AGE_SEC,
+  })
+  return res
 }

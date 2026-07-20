@@ -6,10 +6,13 @@ import {
   OAUTH_STATE_COOKIE,
   OAUTH_REDIRECT_PATH,
 } from '@/lib/googleOAuth'
-import { type PendingChannel } from '@/lib/partnerPendingChannel'
+import {
+  PENDING_CHANNEL_COOKIE,
+  PENDING_CHANNEL_MAX_AGE_SEC,
+  type PendingChannel,
+} from '@/lib/partnerPendingChannel'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { completePartnerSignup } from '@/app/partner/apply/actions'
 import { logConsent } from '@/lib/consent'
 
 // ★ partners 는 UPDATE RLS 정책이 admin 전용 하나뿐이라 파트너 세션(role='user')으로는
@@ -105,13 +108,22 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Outbound 채널은 카테고리/지역 입력 폼이 따로 없으므로, 쿠키로 다음 페이지에
-  // 넘기지 않고 이 Route Handler 안에서 곧바로 가입을 완료한다.
+  // 여기까지 왔다 = ownedPartner 미발견(재연동 대상 아님) = 신규 가입 흐름.
+  // C-2 C단계 α: 즉시 가입 완료 대신, 증명된 채널을 핸드오프 쿠키에 담아 동의
+  // 인터스티셜(/partner/apply/consent)로 보낸다. partners 생성/동의검증은 거기서.
   const pending: PendingChannel = {
     channelId: channel.channelId,
     channelName: channel.channelName,
     subscriberCount: channel.subscriberCount,
     thumbnail: channel.thumbnail,
   }
-  await completePartnerSignup(pending)
+  const res = NextResponse.redirect(`${origin}/partner/apply/consent`)
+  res.cookies.set(PENDING_CHANNEL_COOKIE, JSON.stringify(pending), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: PENDING_CHANNEL_MAX_AGE_SEC,
+  })
+  return res
 }
