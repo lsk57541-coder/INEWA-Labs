@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { searchPlaceInfo, reverseGeocode, type PlaceDetails } from '@/lib/geocode'
 import { PLACENAME_SOURCES, type MinConfidenceSource } from '@/lib/placeNameSources'
 import { sendInquiryNotificationEmail } from '@/lib/email'
@@ -40,11 +41,18 @@ export async function setMinConfidenceSetting(formData: FormData) {
   const source = formData.get('source') as string
   if (!(PLACENAME_SOURCES as readonly string[]).includes(source)) throw new Error('Invalid source')
 
-  const { error } = await supabase
+  // .select() 로 실제 반영된 행을 받는다 — app_settings 쓰기는 admin 정책으로 잠겨
+  // 있어, admin 세션이 아니면 upsert 가 조용히 0행이 될 수 있다(에러 없이). 0행이면
+  // "거짓 성공"이므로 실패로 처리한다. (재연동 수정과 같은 취지. service_role 전환은
+  // 하지 않음 — admin 정책으로 이미 저장되고 있으므로 requireAdmin 세션 유지.)
+  const { data, error } = await supabase
     .from('app_settings')
     .upsert({ key: 'min_placename_confidence', value: source, updated_at: new Date().toISOString() })
-  if (error) throw new Error(error.message)
+    .select('key')
+  // redirect() 는 이후 코드를 중단시키므로 revalidatePath 를 먼저 호출한다.
   revalidatePath('/admin')
+  if (error || !data || data.length === 0) redirect('/admin?saved=0')
+  redirect('/admin?saved=1')
 }
 
 export interface AccuracyStat {

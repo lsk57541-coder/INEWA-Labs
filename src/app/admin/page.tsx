@@ -21,7 +21,12 @@ const SOURCE_LABEL: Record<string, string> = {
   correction: '사용자 신고로 보정됨',
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saved?: string }>
+}) {
+  const { saved } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -68,6 +73,12 @@ export default async function AdminPage() {
       {/* 노출 기준 섹션 */}
       <section className="mb-6">
         <h2 className="text-sm font-bold mb-3 pl-3 border-l-4 border-[#0F1C2E]">노출 기준 (정확도 관리)</h2>
+        {saved === '1' && (
+          <p className="text-xs text-[#1D9E75] mb-2">저장되었습니다 ✓</p>
+        )}
+        {saved === '0' && (
+          <p className="text-xs text-red-500 mb-2">저장에 실패했습니다. 다시 시도해주세요.</p>
+        )}
         <div className="border rounded-lg overflow-hidden">
           <form action={setMinConfidenceSetting} className="flex items-center gap-2 px-4 py-3 border-b">
             <label className="text-xs text-gray-500 shrink-0">최소 노출 기준</label>
