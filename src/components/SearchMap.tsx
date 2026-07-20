@@ -2199,6 +2199,8 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                   >
                     {decodeHtmlEntities(v.title)}
                   </p>
+                  {/* YouTube 출처 표시(약관 즉시항목 5): 워드마크/로고 아닌 텍스트 캡션 */}
+                  <p className="text-[11px] text-gray-400 leading-tight mt-0.5">출처: YouTube</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     {v.placeName && (
                       <p className="text-xs font-semibold text-gray-700 truncate">📍 {v.placeName}</p>

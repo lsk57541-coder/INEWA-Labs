@@ -40,11 +40,23 @@ export default function TermsPage() {
       </section>
 
       <section className="mb-7">
-        <h2 className="font-bold text-base mb-2">제4조 (콘텐츠 저작권)</h2>
+        <h2 className="font-bold text-base mb-2">제4조 (콘텐츠 저작권 및 데이터 처리)</h2>
         <p>
-          서비스에서 노출되는 영상은 YouTube에 게시된 콘텐츠이며, 해당 영상의 저작권은 각 영상의
-          원저작자(채널 운영자)에게 있습니다. 회사는 영상을 임의로 복제·저장하지 않으며, YouTube
-          링크 연결 및 공식 API를 통한 정보 표시만을 수행합니다.
+          ① 서비스에 노출되는 영상은 YouTube에 게시된 콘텐츠이며, 저작권은 각 영상의 원저작자(채널
+          운영자)에게 있습니다.
+        </p>
+        <p className="mt-2">
+          ② 회사는 영상 파일 및 자막 원문 등 저작물 자체를 복제·저장하지 않으며, 영상 표시는 YouTube
+          링크 연결 및 YouTube Data API를 통한 공식적 방식으로만 수행합니다.
+        </p>
+        <p className="mt-2">
+          ③ 회사는 YouTube Data API로 가져온 공개 정보를 AI로 분석하여 장소의 명칭·주소·위치좌표 등
+          사실 정보(이하 &apos;POI 정보&apos;)를 추출하며, 추출된 POI 정보는 지도 표시·검색 기능 제공을
+          위해 데이터베이스에 저장·관리됩니다.
+        </p>
+        <p className="mt-2">
+          ④ 회사는 YouTube API 서비스 약관 및 Google 정책을 준수하며, 저작물 자체의 무단 복제·재배포를
+          하지 않습니다.
         </p>
       </section>
 
@@ -75,8 +87,35 @@ export default function TermsPage() {
         </p>
       </section>
 
+      <section className="mb-7">
+        <h2 className="font-bold text-base mb-2">제8조 (권리·의무의 승계)</h2>
+        <p>
+          ① 사업자등록, 법인 전환, 합병·분할, 영업양도 등으로 운영 주체가 변경되는 경우, 본 약관에
+          따른 권리·의무 및 이용자와의 관계는 새로운 운영 주체에게 승계됩니다.
+        </p>
+        <p className="mt-2">
+          ② 회사는 운영 주체 변경으로 이용자의 개인정보가 이전되는 경우, 「개인정보 보호법」 제27조에
+          따라 이전 사실·시점, 이전받는 자의 명칭·연락처, 이전을 원하지 않는 경우의 조치 방법 및 절차를
+          사전에 알립니다.
+        </p>
+        <p className="mt-2">
+          ③ 이용자는 승계를 원하지 않을 경우 동의 철회 및 회원 탈퇴(개인정보 파기)를 요청할 수
+          있습니다.
+        </p>
+      </section>
+
+      <section className="mb-7">
+        <h2 className="font-bold text-base mb-2">제9조 (약관의 변경)</h2>
+        <p>① 회사는 관계 법령을 위반하지 않는 범위에서 본 약관을 변경할 수 있습니다.</p>
+        <p className="mt-2">
+          ② 회사가 약관을 변경하는 경우 시행일 및 변경 사유를 명시하여 시행일로부터 7일 전에 서비스
+          내에 게시합니다. 다만 이용자에게 불리한 변경의 경우 30일 전에 게시합니다.
+        </p>
+        <p className="mt-2">③ 이용자가 변경된 약관에 동의하지 않는 경우 회원 탈퇴를 할 수 있습니다.</p>
+      </section>
+
       <section>
-        <h2 className="font-bold text-base mb-2">제8조 (문의처)</h2>
+        <h2 className="font-bold text-base mb-2">제10조 (문의처)</h2>
         <p>서비스 이용 관련 문의: inewalabs@gmail.com</p>
       </section>
     </div>
