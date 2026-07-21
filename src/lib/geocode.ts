@@ -10,12 +10,20 @@ export interface GeoResult {
 
 // Kakao Local REST 공통 fetch — 4초 타임아웃(AbortController). 초과/네트워크 실패 시 null 반환
 // → 각 호출부의 기존 null 폴백 경로로 흐른다(Kakao 무응답 시 무한 pending 방지).
+//
+// ★ 이 파일의 카카오 호출은 전부 이 래퍼를 거쳐야 한다. 맨 fetch를 쓰면 연결 타임아웃 시
+// undici가 던지는 예외(UND_ERR_CONNECT_TIMEOUT, 기본 10초)가 그대로 호출부 밖으로 전파돼
+// 검색 요청 전체가 500으로 죽는다(실제 장애: dapi.kakao.com ConnectTimeout → /api/search 500).
+// 정상 응답은 실측 13~19ms(최대 147ms)라 4초는 충분히 넉넉하다 — 값을 더 올리면 카카오가
+// 멎었을 때 붙잡히는 시간만 길어져 서버리스 함수 전체 타임아웃 위험이 커진다.
 async function kakaoFetch(url: string, key: string): Promise<Response | null> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 4000)
   try {
     return await fetch(url, { headers: { Authorization: `KakaoAK ${key}` }, signal: controller.signal })
-  } catch {
+  } catch (e) {
+    // 조용히 삼키면 "결과가 왜 비었는지" 추적이 불가능해진다 — 경로만 남긴다(키는 헤더라 URL에 없음).
+    console.error('[kakao] fetch failed', new URL(url).pathname, (e as { cause?: { code?: string } })?.cause?.code ?? e)
     return null
   } finally {
     clearTimeout(timer)
@@ -48,8 +56,8 @@ export async function getRegionName(lat: number, lng: number): Promise<string | 
   if (!key) return null
 
   const url = `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`
-  const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })
-  if (!res.ok) return null
+  const res = await kakaoFetch(url, key)
+  if (!res || !res.ok) return null
 
   const json = await res.json() as {
     documents: { region_1depth_name: string; region_2depth_name: string }[]
@@ -74,8 +82,8 @@ export async function getCityName(lat: number, lng: number): Promise<string> {
   const key = process.env.KAKAO_REST_API_KEY
   if (!key) return ''
   const url = `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`
-  const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })
-  if (!res.ok) return ''
+  const res = await kakaoFetch(url, key)
+  if (!res || !res.ok) return ''
   const json = await res.json() as { documents: { region_1depth_name: string }[] }
   const r1 = json.documents?.[0]?.region_1depth_name ?? ''
   if (!/(특별시|광역시|특별자치시)$/.test(r1)) return ''
@@ -149,8 +157,8 @@ export async function geocodeKorean(place: string): Promise<GeoResult | null> {
   if (!key) return null
 
   const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(place)}&size=1`
-  const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } })
-  if (!res.ok) return null
+  const res = await kakaoFetch(url, key)
+  if (!res || !res.ok) return null
 
   const json = await res.json() as { documents: { id: string; y: string; x: string; address_name: string; place_name: string; category_group_code: string; phone: string }[] }
   const doc = json.documents?.[0]
