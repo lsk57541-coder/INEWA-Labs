@@ -6,7 +6,7 @@ import { haversineKm } from '@/lib/haversine'
 import { normName } from '@/lib/normName'
 import { geocodeKorean, reverseGeocode, searchPlaceInfo, getRegionName, getCityName } from '@/lib/geocode'
 import { buildHeuristicPlaceQueries, extractPlaceByAI, extractStatedBusinessName } from '@/lib/extractLocation'
-import { isCompilationVideo, resolveCompilationPlaces } from '@/lib/extractPlaces'
+import { isCompilationVideo, resolveCompilationPlaces, nameInText } from '@/lib/extractPlaces'
 import { getMinConfidenceSetting } from '@/app/actions'
 import { selectAllPaged } from '@/lib/supabasePaging'
 import { PLACENAME_SOURCES, type MinConfidenceSource } from '@/lib/placeNameSources'
@@ -1096,11 +1096,27 @@ async function handleSearch(req: NextRequest) {
       // 지역 앵커 휴리스틱으로 좌표를 찾고, 반경 내면 결과로 추가. 성공 시 true.
       // requireCorroboration=true(AI 폴백)면 매칭 장소 행정구역이 영상 텍스트에
       // 언급될 때만 통과 — 해외 도시명 동명 오매칭 차단.
-      const tryResolveAndPush = async (place: string, requireCorroboration: boolean): Promise<boolean> => {
+      const tryResolveAndPush = async (place: string, requireCorroboration: boolean, businessHint?: string): Promise<boolean> => {
         // 휴리스틱 쿼리(requireCorroboration=false)에만 도시명 prefix로 대도시 구 모호성 해소.
         // AI 쿼리(=true)는 이미 자체 지역명을 포함하므로 prefix 안 함(중복 방지).
         const geo2 = await geocodeKorean(requireCorroboration ? place : `${effGeoRegionPrefix}${place}`.trim())
         if (!geo2) return false
+
+        // 카카오 결과 교차검증 — 우리가 찾던 상호명이 카카오가 돌려준 place_name에 실제로
+        // 들어 있는지 확인한다. 쿼리가 상호명이 아니라 음식명·업종·행정동명이면
+        // ("대구 뭉티기", "서울시 중구 분식집", "제주도 호근동") 카카오는 그 근처 아무 업체나
+        // 돌려주는데, 이름이 겹치지 않으므로 여기서 걸러진다. 지점명이 붙은 정상 매칭
+        // ("다사랑치킨" → "다사랑치킨피자 원대본점")은 부분포함이라 통과한다
+        // (nameInText가 공백·특수문자를 무시하고 비교). 입력을 사전으로 판별하지 않고
+        // 출력을 검증하는 방식이라 음식명 목록을 유지할 필요가 없다.
+        const bizCandidates = businessHint
+          ? [businessHint]
+          // 휴리스틱 쿼리는 business가 분리돼 있지 않아 뒤쪽 토큰들을 후보로 삼는다.
+          : (() => {
+              const t = place.split(/\s+/).filter(Boolean)
+              return [1, 2, 3].filter((k) => k <= t.length).map((k) => t.slice(-k).join(' '))
+            })()
+        if (!bizCandidates.some((c) => nameInText(c, geo2.name))) return false
         funnel.extractedOk++ // 상호명 지오코딩 성공(휴리스틱/AI 후보 단위 — 재시도 시 중복 가능)
         const dist = haversineKm(lat, lng, geo2.lat, geo2.lng)
         if (dist > distanceLimit) return false
@@ -1222,7 +1238,7 @@ async function handleSearch(req: NextRequest) {
       // AI 결과는 지리 대조(requireCorroboration=true) 통과 시에만 채택.
       if (!resolved) {
         const aiQuery = await extractPlaceByAI(v.id, v.snippet.title, v.snippet.description ?? '')
-        if (aiQuery) await tryResolveAndPush(aiQuery, true)
+        if (aiQuery) await tryResolveAndPush(aiQuery.query, true, aiQuery.business)
       }
     }),
   ])

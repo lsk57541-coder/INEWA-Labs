@@ -85,9 +85,13 @@ export function buildHeuristicPlaceQueries(title: string, description: string, r
 
 // AI 폴백: 휴리스틱이 반경 내 좌표를 못 찾았을 때만 호출. videoId로 캐시해 같은
 // 영상에 대한 반복 호출을 막는다. 키가 없거나 실패하면 null(휴리스틱만으로 동작).
-const aiQueryCache = new Map<string, string | null>()
+// business는 geocode 결과 교차검증(route.ts)에서 카카오 place_name과 대조해야 하므로
+// query와 분리해 함께 돌려준다 — 합쳐진 문자열만으로는 어디까지가 지역명인지 알 수 없다.
+export interface AiPlaceQuery { query: string; business: string }
 
-export async function extractPlaceByAI(videoId: string, title: string, description: string): Promise<string | null> {
+const aiQueryCache = new Map<string, AiPlaceQuery | null>()
+
+export async function extractPlaceByAI(videoId: string, title: string, description: string): Promise<AiPlaceQuery | null> {
   if (aiQueryCache.has(videoId)) return aiQueryCache.get(videoId) ?? null
 
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -102,7 +106,7 @@ export async function extractPlaceByAI(videoId: string, title: string, descripti
       messages: [
         {
           role: 'user',
-          content: `다음 YouTube 영상 제목/설명에서 영상에서 실제 방문한 '국내(한국)' 장소의 '업체명'과 '지역명'을 추출해.\n주의:\n- 도시명/음식종류와 실제 방문 가게를 구분할 것. 예) '이스탄불'은 도시명이지만 '이스탄불그릴'은 가게명일 수 있음.\n- 영상에서 실제 방문한 국내(한국) 장소만 추출.\n- 해외 지명이거나 위치가 불명확하면 반드시 둘 다 null.\n반드시 JSON만 출력하고 다른 말은 하지 마: {"business": string|null, "region": string|null}\n\n${text}`,
+          content: `다음 YouTube 영상 제목/설명에서 영상에서 실제 방문한 '국내(한국)' 장소의 '업체명'과 '지역명'을 추출해.\n\nbusiness에는 간판에 적힌 고유 상호명만 넣어라. 아래는 business가 아니다 — 해당하면 business는 반드시 null:\n- 음식/메뉴 이름: '뭉티기', '짬뽕', '손칼국수', '소곱창', '돔베고기'\n- 업종/카테고리: '분식집', '수육집', '횟집', '수산시장', '맛집'\n- 행정구역명: '호근동', '중구', '군산시' 처럼 동/읍/면/시/군/구로 끝나는 지명\n판단 기준: 그 이름으로 간판을 단 특정 가게가 하나로 특정되면 상호명, 여러 가게가 해당되는 일반 명칭이면 null.\n예) '분식집'→null, '가메골손왕만두'→상호명. '뭉티기'→null, '왕거미식당'→상호명.\n\n주의:\n- 도시명/음식종류와 실제 방문 가게를 구분할 것. 예) '이스탄불'은 도시명이지만 '이스탄불그릴'은 가게명일 수 있음.\n- business에 지역명을 포함하지 마라(지역은 region에만).\n- 영상에서 실제 방문한 국내(한국) 장소만 추출.\n- 해외 지명이거나 위치가 불명확하면 반드시 둘 다 null.\n반드시 JSON만 출력하고 다른 말은 하지 마: {"business": string|null, "region": string|null}\n\n${text}`,
         },
       ],
     })
@@ -113,9 +117,13 @@ export async function extractPlaceByAI(videoId: string, title: string, descripti
     const business = parsed.business?.trim() || null
     const aiRegion = parsed.region?.trim() || null
     // 지역명만 있으면(업체명 null) 정확한 위치 불가 → null. region+business일 때만 쿼리.
-    const query = business ? (aiRegion ? `${aiRegion} ${business}` : business) : null
-    aiQueryCache.set(videoId, query)
-    return query
+    if (!business) { aiQueryCache.set(videoId, null); return null }
+    // business가 이미 지역명으로 시작하면 앞에 또 붙이지 않는다("군산 군산 소곱창" 방지).
+    const needRegion = aiRegion && !business.startsWith(aiRegion)
+    const query = needRegion ? `${aiRegion} ${business}` : business
+    const out = { query, business }
+    aiQueryCache.set(videoId, out)
+    return out
   } catch {
     aiQueryCache.set(videoId, null)
     return null
