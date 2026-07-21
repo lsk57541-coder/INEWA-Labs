@@ -794,7 +794,21 @@ function mergeRegistered(a: VideoResult, b: VideoResult): VideoResult {
   }
 }
 
+// 얇은 최상위 래퍼 — 핸들러 본문에서 어떤 예외가 새도 본문 없는 500(Content-Length 0)
+// 대신 유효한 JSON을 돌려준다. 프론트가 res.json()을 무조건 호출하므로, 빈 응답은
+// "Unexpected end of JSON input"이라는 무의미한 클라이언트 에러로 둔갑해 원인 추적을
+// 막았다. console.error로 스택을 남겨 서버 로그에서 실제 원인이 보이게 한다.
+// 성공 경로는 그대로 통과 — 정상 응답 동작은 바뀌지 않는다.
 export async function GET(req: NextRequest) {
+  try {
+    return await handleSearch(req)
+  } catch (e) {
+    console.error('[api/search] unhandled error', e)
+    return NextResponse.json({ error: 'search_failed' }, { status: 500 })
+  }
+}
+
+async function handleSearch(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const q = searchParams.get('q')?.trim()
   const channelId = searchParams.get('channelId')?.trim() || undefined
