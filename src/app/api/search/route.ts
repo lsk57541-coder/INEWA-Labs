@@ -9,6 +9,7 @@ import { buildHeuristicPlaceQueries, extractPlaceByAI, extractStatedBusinessName
 import { isCompilationVideo, resolveCompilationPlaces } from '@/lib/extractPlaces'
 import { getMinConfidenceSetting } from '@/app/actions'
 import { selectAllPaged } from '@/lib/supabasePaging'
+import { PLACENAME_SOURCES, type MinConfidenceSource } from '@/lib/placeNameSources'
 
 const REPORT_THRESHOLD = 3
 
@@ -195,28 +196,16 @@ export type SubscriberTier = 'silver' | 'gold' | 'diamond' | 'red_diamond'
 // How confident we are in placeName, from most to least reliable. Logged per
 // video so accuracy can be measured later (e.g. cross-referenced against
 // "주소가 정확하지 않아요" reports) instead of just guessing where to improve.
-export type PlaceNameSource =
-  | 'explicit_description'
-  | 'title_match'
-  | 'address_match'
-  | 'comment_match'
-  | 'address_fallback'
-  | 'correction'
+// PLACENAME_SOURCES에서 파생 — 값 목록과 서열의 단일 출처는 lib/placeNameSources.ts다.
+// (예전엔 여기 수동 유니온 + SOURCE_RANK 복제 배열이 따로 있었고, 그쪽에서만 원소가
+// 빠지면 타입은 통과하는데 indexOf가 -1이 되어 런타임에 조용히 깨질 수 있었다.)
+export type PlaceNameSource = MinConfidenceSource
 
-// Most to least reliable. Used to decide which placeName sources are
-// trustworthy enough to display — admin-configurable via app_settings, see
-// getMinConfidenceSetting().
-const SOURCE_RANK: PlaceNameSource[] = [
-  'correction',
-  'explicit_description',
-  'title_match',
-  'address_match',
-  'comment_match',
-  'address_fallback',
-]
-
+// PLACENAME_SOURCES는 most to least reliable 순서 — 배열 순서가 곧 서열이다. 어떤
+// placeName 출처가 노출할 만큼 신뢰할 수 있는지 판정하며, 임계치는 app_settings로
+// admin이 조정한다(getMinConfidenceSetting() 참고).
 function meetsConfidence(source: PlaceNameSource, minSource: PlaceNameSource): boolean {
-  return SOURCE_RANK.indexOf(source) <= SOURCE_RANK.indexOf(minSource)
+  return PLACENAME_SOURCES.indexOf(source) <= PLACENAME_SOURCES.indexOf(minSource)
 }
 
 export interface VideoResult {
