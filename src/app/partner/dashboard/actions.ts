@@ -118,10 +118,13 @@ export async function updateReportOptIn(optIn: boolean) {
 // 해지 = 개인정보 파기(tombstone). 채널 식별정보·계정연결을 지우고, status를
 // 'approved'에서 떨어뜨려 대시보드 미들웨어가 즉시 차단하게 하며, 장소를 숨겨
 // 공개된 것이 남지 않게 한다. 행은 남지만 개인정보는 남지 않는다.
-export async function withdrawPartner() {
+// expected error(로그인만료·파트너없음·데모가드·0행실패)는 throw 대신 {error:'키'}로 반환한다 —
+// Next 프로덕션은 Server Action throw의 message를 generic으로 가려(error.tsx의 message 분기가 무력),
+// 호출부(SettingsControls)가 이 키를 받아 인라인 배너로 안내한다. 진짜 예외(DB error 등)는 throw 유지.
+export async function withdrawPartner(): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('로그인이 필요합니다.')
+  if (!user) return { error: 'login_expired' }
 
   // 조회는 RLS-bound 로 충분하다 — "select own partner application"(auth.uid() = user_id)이 통과시킨다.
   // ★ 여기서 얻은 partner.id 가 아래 파기의 유일한 안전선이다: user.id 로 한정해 조회한 결과이므로
@@ -132,14 +135,14 @@ export async function withdrawPartner() {
     .eq('user_id', user.id)
     .eq('status', 'approved')
     .single()
-  if (fetchError || !partner) throw new Error('파트너 정보를 찾을 수 없습니다.')
+  if (fetchError || !partner) return { error: 'no_partner' }
 
   // 데모 계정은 자기해지를 막는다 — 해지하면 아래 hidePartnerPlaces가 데모 장소를 전부
   // 숨겨 영업 시연 지도가 꺼진다. 관리자 해제(resetPartnerStatus)에는 이 가드를 두지 않아
   // 운영자가 필요하면 해제할 수 있다.
   // ★ is_demo는 저장소에 SQL 정의가 없어(대시보드 수동 추가) nullable 여부가 불명 →
   // truthy가 아니라 === true 로 엄격 비교한다.
-  if (partner.is_demo === true) throw new Error('데모 계정은 탈퇴할 수 없습니다.')
+  if (partner.is_demo === true) return { error: 'is_demo' }
 
   // 해지 = 개인정보 파기 + tombstone. 행 자체는 남긴다 —
   //   • places.partner_id가 FK로 이 행을 가리켜서(on delete cascade) 지우면 POI가 통째로 소멸
@@ -172,8 +175,8 @@ export async function withdrawPartner() {
   if (error) throw new Error(error.message)
   // 0행 방어 — service_role 이라 RLS 로는 안 막히지만, 그 사이 행이 사라지는 등으로 0행이면
   // 조용히 지나가서는 안 된다(파기가 안 됐는데 성공한 척 리다이렉트되는 게 이 버그의 본질).
-  // throw 하면 redirect 가 실행되지 않아 설정 화면에 그대로 남는다.
-  if (purged?.length !== 1) throw new Error('탈퇴 처리에 실패했습니다. 잠시 후 다시 시도해주세요.')
+  // return 하면 아래 redirect 가 실행되지 않아 설정 화면에 그대로 남고, 호출부가 배너로 안내한다.
+  if (purged?.length !== 1) return { error: 'withdraw_failed' }
 
   // ★ 장소 숨김도 service_role — 위 파기가 user_id 를 null 로 만든 순간, places 정책
   // "partner manages own places"(partners.user_id = auth.uid())의 체인이 끊겨 RLS-bound 로는

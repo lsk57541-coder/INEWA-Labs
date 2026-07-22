@@ -73,11 +73,23 @@ export interface PlaceInput {
   category_group_code?: string // 카카오 대분류(FD6/CE7/AD5 등)
 }
 
-export async function addPlace(data: PlaceInput) {
-  if (!data.name.trim()) throw new Error('상호명을 입력해주세요.')
+// expected error(상호명미입력·로그인만료·파트너없음)는 throw 대신 {error:'키'}로 반환한다 —
+// Next 프로덕션은 Server Action throw의 message를 generic으로 가려 클라이언트가 사유를 알 수 없으므로,
+// 호출부(PlacesList)가 이 키를 받아 인라인 배너로 안내한다. requireMyPartnerId는 그룹B 공유라 무수정 —
+// 그 throw는 서버 내부(경계 넘기 전, message 온전)에서 잡아 키로 변환한다. 진짜 예외(DB error)는 throw 유지.
+export async function addPlace(data: PlaceInput): Promise<{ error?: string }> {
+  if (!data.name.trim()) return { error: 'no_name' }
 
   const supabase = await createClient()
-  const partnerId = await requireMyPartnerId()
+  let partnerId: string
+  try {
+    partnerId = await requireMyPartnerId()
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : ''
+    if (msg.includes('로그인이 필요')) return { error: 'login_expired' }
+    if (msg.includes('파트너 정보를 찾을 수 없')) return { error: 'no_partner' }
+    throw e // 알 수 없는 예외는 그대로 → error.tsx generic
+  }
 
   const { error } = await supabase.from('places').insert({
     partner_id: partnerId,
@@ -94,6 +106,7 @@ export async function addPlace(data: PlaceInput) {
   })
   if (error) throw new Error(error.message)
   revalidatePath('/partner/dashboard/places')
+  return {}
 }
 
 // RLS (partner manages own places) is the real backstop, but the explicit

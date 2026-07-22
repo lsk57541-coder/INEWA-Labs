@@ -1,12 +1,18 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import Link from 'next/link'
 import { updateReportOptIn, withdrawPartner } from '../actions'
+
+const CONTACT_HREF = 'mailto:inewalabs@gmail.com'
 
 export default function SettingsControls({ initialOptIn }: { initialOptIn: boolean }) {
   const [optIn, setOptIn] = useState(initialOptIn)
   const [pending, startTransition] = useTransition()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // withdrawPartner는 성공 시 서버에서 redirect → 여기로 돌아오지 않는다. 반환된 {error}만 처리한다.
+  // (Server Action throw message가 프로덕션서 가려지는 문제로, expected error를 키로 받아 배너 안내.)
+  const [withdrawError, setWithdrawError] = useState<string | null>(null)
 
   const toggleOptIn = () => {
     const next = !optIn
@@ -16,6 +22,17 @@ export default function SettingsControls({ initialOptIn }: { initialOptIn: boole
         await updateReportOptIn(next)
       } catch {
         setOptIn(!next)
+      }
+    })
+  }
+
+  const doWithdraw = () => {
+    setWithdrawError(null)
+    startTransition(async () => {
+      const result = await withdrawPartner()
+      if (result?.error) {
+        setConfirmOpen(false)
+        setWithdrawError(result.error)
       }
     })
   }
@@ -49,6 +66,7 @@ export default function SettingsControls({ initialOptIn }: { initialOptIn: boole
         >
           파트너 탈퇴하기
         </button>
+        {withdrawError && <WithdrawErrorBanner errorKey={withdrawError} onRetry={doWithdraw} />}
       </div>
 
       {confirmOpen && (
@@ -65,7 +83,7 @@ export default function SettingsControls({ initialOptIn }: { initialOptIn: boole
               </button>
               <button
                 disabled={pending}
-                onClick={() => startTransition(() => withdrawPartner())}
+                onClick={doWithdraw}
                 className="flex-1 text-sm bg-red-600 text-white rounded-lg py-2 font-medium hover:bg-red-700 disabled:opacity-40 transition"
               >
                 {pending ? '처리 중…' : '탈퇴하기'}
@@ -74,6 +92,49 @@ export default function SettingsControls({ initialOptIn }: { initialOptIn: boole
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// 그룹B 컨벤션(인라인 빨간 텍스트 배너) + 케이스별 안내 액션. withdrawPartner가 반환한 키를 문구로 매핑.
+function WithdrawErrorBanner({ errorKey, onRetry }: { errorKey: string; onRetry: () => void }) {
+  const reload = () => window.location.reload()
+  const MAP: Record<string, { text: string; actions: React.ReactNode }> = {
+    is_demo: {
+      text: '이 계정은 데모용이라 탈퇴할 수 없어요.',
+      actions: <Link href="/partner/dashboard" className="underline font-medium">대시보드로</Link>,
+    },
+    login_expired: {
+      text: '로그인이 만료됐어요. 다시 로그인해 주세요.',
+      actions: <Link href="/login" className="underline font-medium">로그인</Link>,
+    },
+    no_partner: {
+      text: '파트너 정보를 확인할 수 없어요. 계속되면 문의해 주세요.',
+      actions: (
+        <>
+          <button onClick={reload} className="underline font-medium">새로고침</button>
+          <a href={CONTACT_HREF} className="underline font-medium">문의</a>
+        </>
+      ),
+    },
+    withdraw_failed: {
+      text: '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.',
+      actions: (
+        <>
+          <button onClick={onRetry} className="underline font-medium">다시 시도</button>
+          <a href={CONTACT_HREF} className="underline font-medium">문의</a>
+        </>
+      ),
+    },
+  }
+  const entry = MAP[errorKey] ?? {
+    text: '문제가 발생했어요. 다시 시도해 주세요.',
+    actions: <button onClick={onRetry} className="underline font-medium">다시 시도</button>,
+  }
+  return (
+    <div className="mt-3 text-xs text-red-600">
+      <p>{entry.text}</p>
+      <div className="mt-1 flex gap-3">{entry.actions}</div>
     </div>
   )
 }

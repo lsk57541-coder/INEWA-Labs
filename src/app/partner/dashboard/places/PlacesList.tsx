@@ -79,6 +79,9 @@ export default function PlacesList({ places }: { places: Place[] }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [, startTransition] = useTransition()
+  // addPlace는 성공 시 {} , 실패 시 {error:'키'} 반환(Server Action throw message가 프로덕션서
+  // 가려지는 문제 → expected error를 키로 받아 배너 안내). 에러면 useOptimistic가 temp 행을 자동 롤백.
+  const [addError, setAddError] = useState<string | null>(null)
 
   const groups = useMemo(() => buildGroups(optimisticPlaces), [optimisticPlaces])
   // 삭제/비공개로 그룹이 비면 groups에서 사라짐 → selectedGroup=null → 자동으로 Level1 복귀.
@@ -92,6 +95,7 @@ export default function PlacesList({ places }: { places: Place[] }) {
 
   const handleAdd = (data: PlaceInput) => {
     setModalOpen(false)
+    setAddError(null)
     const tempPlace: Place = {
       id: `temp-${Date.now()}`,
       name: data.name,
@@ -103,7 +107,8 @@ export default function PlacesList({ places }: { places: Place[] }) {
     }
     startTransition(async () => {
       applyOptimistic({ type: 'add', place: tempPlace })
-      await addPlace(data)
+      const result = await addPlace(data)
+      if (result?.error) setAddError(result.error)
     })
   }
 
@@ -113,11 +118,24 @@ export default function PlacesList({ places }: { places: Place[] }) {
     </p>
   )
 
+  // 그룹B 컨벤션(빨간 배너) — verifyBanner와 같은 박스 스타일의 빨강 버전으로 통일.
+  const ADD_ERROR_TEXT: Record<string, string> = {
+    no_name: '상호명을 입력해 주세요.',
+    login_expired: '로그인이 만료됐어요. 다시 로그인해 주세요.',
+    no_partner: '파트너 정보를 확인할 수 없어요. 계속되면 문의해 주세요.',
+  }
+  const addErrorBanner = addError ? (
+    <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3">
+      {ADD_ERROR_TEXT[addError] ?? '문제가 발생했어요. 다시 시도해 주세요.'}
+    </p>
+  ) : null
+
   // ── 빈 상태(장소 0개) — 기존 안내 그대로 ──
   if (optimisticPlaces.length === 0) {
     return (
       <div>
         {modalOpen && <AddPlaceModal onSubmit={handleAdd} onClose={() => setModalOpen(false)} />}
+        {addErrorBanner}
         <div className="border rounded-lg p-8 text-center mt-2">
           <p className="text-sm font-medium mb-1">등록된 장소가 없어요</p>
           <p className="text-xs text-gray-400 mb-6">영상에서 방문 장소를 자동으로 추출해 등록할 수 있어요</p>
@@ -146,6 +164,7 @@ export default function PlacesList({ places }: { places: Place[] }) {
     return (
       <div>
         {modalOpen && <AddPlaceModal onSubmit={handleAdd} onClose={() => setModalOpen(false)} />}
+        {addErrorBanner}
         <button
           type="button"
           onClick={() => setSelectedKey(null)}
@@ -190,6 +209,7 @@ export default function PlacesList({ places }: { places: Place[] }) {
   return (
     <div>
       {modalOpen && <AddPlaceModal onSubmit={handleAdd} onClose={() => setModalOpen(false)} />}
+      {addErrorBanner}
       <div className="flex items-center justify-between mb-3">
         <Link
           href="/partner/dashboard/places/extract"
