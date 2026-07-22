@@ -27,6 +27,13 @@ export default async function PartnerSettingsPage({
           {error === 'youtube_denied' && 'YouTube 채널 연동이 취소되었습니다.'}
           {error === 'no_channel' && '연동한 Google 계정에 연결된 YouTube 채널을 찾을 수 없습니다.'}
           {error === 'youtube_failed' && 'YouTube 채널 연동에 실패했습니다. 다시 시도해주세요.'}
+          {error === 'reconnect_failed' && (
+            <>
+              채널 재연동에 실패했어요.{' '}
+              <a href="/api/auth/youtube/start" className="underline font-medium">다시 연동</a>하거나{' '}
+              <a href="mailto:inewalabs@gmail.com" className="underline font-medium">문의</a>해 주세요.
+            </>
+          )}
         </div>
       )}
 

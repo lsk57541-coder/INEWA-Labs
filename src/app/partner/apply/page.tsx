@@ -1,11 +1,18 @@
 import Link from 'next/link'
 import GooglePartnerLoginButton from '@/components/auth/GooglePartnerLoginButton'
 
-const ERROR_MESSAGE: Record<string, string> = {
+const ERROR_MESSAGE: Record<string, React.ReactNode> = {
   youtube_denied: 'YouTube 채널 연동이 취소되었습니다.',
   no_channel: '연동한 Google 계정에 연결된 YouTube 채널을 찾을 수 없습니다.',
   youtube_failed: 'YouTube 채널 연동에 실패했습니다. 다시 시도해주세요.',
   already_applied: '이미 등록된 채널입니다.',
+  consent_required: '가입을 완료하려면 필수 동의가 필요해요. 아래에서 다시 시도해 주세요.',
+  consent_failed: (
+    <>
+      가입 처리 중 문제가 생겼어요. 아래에서 다시 시도하거나{' '}
+      <a href="mailto:inewalabs@gmail.com" className="underline font-medium">문의</a>해 주세요.
+    </>
+  ),
 }
 
 function MapPinIcon() {
