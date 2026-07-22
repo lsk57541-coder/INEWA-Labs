@@ -35,16 +35,28 @@ export default function CoverageList({ videos }: { videos: VideoCoverage[] }) {
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
   const autoTried = useRef(false)
 
+  // syncMyChannel은 성공 시 SyncResult, expected error 시 {error:'키'} 반환(Server Action throw
+  // message가 프로덕션서 가려지는 문제 → 키를 문구로 매핑). 진짜 예외(서버설정·DB)는 throw → catch 폴백.
+  const SYNC_ERROR_TEXT: Record<string, string> = {
+    login_expired: '로그인이 만료됐어요. 다시 로그인해 주세요.',
+    no_partner: '파트너 정보를 확인할 수 없어요. 계속되면 문의해 주세요.',
+    channel_not_linked: '연동된 채널이 없어요. 설정에서 채널을 연동해 주세요.',
+  }
+
   const runSync = async () => {
     if (syncing) return
     setSyncing(true)
     setSyncMsg(null)
     try {
       const r = await syncMyChannel()
-      setSyncMsg(r.synced > 0 ? `${r.synced}개 영상을 불러왔어요` : '새로 불러올 영상이 없어요')
-      router.refresh()
-    } catch (e) {
-      setSyncMsg(e instanceof Error ? e.message : '불러오기에 실패했어요')
+      if ('error' in r) {
+        setSyncMsg(SYNC_ERROR_TEXT[r.error] ?? '불러오기에 실패했어요')
+      } else {
+        setSyncMsg(r.synced > 0 ? `${r.synced}개 영상을 불러왔어요` : '새로 불러올 영상이 없어요')
+        router.refresh()
+      }
+    } catch {
+      setSyncMsg('불러오기에 실패했어요')
     } finally {
       setSyncing(false)
     }

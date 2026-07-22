@@ -109,10 +109,13 @@ export interface SyncResult {
 //   extract_status/extracted_at은 절대 안 덮는다(S4 기록 보존 — 재추출 방지 유지).
 // 증분: 이미 content-동기화된(title 있는) 영상을 최신순으로 만나면 중단(신규만 ~2유닛).
 //   추출 스텁(title null)·sim 행(id가 실 업로드에 없음)은 stopAt에 안 걸려 정상 처리.
-export async function syncMyChannel(): Promise<SyncResult> {
+// expected error(로그인만료·파트너없음·채널미연동)는 throw 대신 {error:'키'} 반환 — Next 프로덕션은
+// Server Action throw message를 generic으로 가려 호출부가 사유를 못 받으므로. 진짜 예외(서버 설정
+// 오류·DB error)는 throw 유지(error.tsx generic). 성공 시 기존 SyncResult 반환.
+export async function syncMyChannel(): Promise<SyncResult | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('로그인이 필요합니다.')
+  if (!user) return { error: 'login_expired' }
 
   const { data: partner } = await supabase
     .from('partners')
@@ -120,8 +123,8 @@ export async function syncMyChannel(): Promise<SyncResult> {
     .eq('user_id', user.id)
     .eq('status', 'approved')
     .single()
-  if (!partner) throw new Error('파트너 정보를 찾을 수 없습니다.')
-  if (!partner.channel_id) throw new Error('채널이 연동되지 않았어요. 설정에서 채널을 연동해 주세요.')
+  if (!partner) return { error: 'no_partner' }
+  if (!partner.channel_id) return { error: 'channel_not_linked' }
 
   const { data: syncedRows } = await supabase
     .from('partner_videos')

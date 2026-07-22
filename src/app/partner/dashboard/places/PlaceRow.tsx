@@ -34,6 +34,16 @@ const STATUS_LABEL: Record<string, string> = {
   rejected: '반려됨',
 }
 
+// 장소 액션이 반환하는 expected error 키 → 안내 문구(본부 확정). 진짜 예외(throw)는 각 핸들러
+// catch의 기존 per-action 폴백('저장 실패' 등)이 담당한다. Server Action throw message가 프로덕션서
+// 가려지는 문제로, 예상된 실패는 액션이 {error:'키'}로 반환하고 여기서 문구로 매핑한다.
+const PLACE_ERROR_TEXT: Record<string, string> = {
+  login_expired: '로그인이 만료됐어요. 다시 로그인해 주세요.',
+  no_partner: '파트너 정보를 확인할 수 없어요. 계속되면 문의해 주세요.',
+  place_not_found: '장소를 찾을 수 없어요. 화면을 새로고침해 주세요.',
+}
+const placeErrorText = (key: string) => PLACE_ERROR_TEXT[key] ?? '처리 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.'
+
 export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: (id: string) => void }) {
   const [fields, setFields] = useState<PlaceInput>({
     name: place.name,
@@ -55,9 +65,10 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     setError(null)
     startTransition(async () => {
       try {
-        await updatePlace(place.id, patch)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : '저장 실패')
+        const result = await updatePlace(place.id, patch)
+        if (result?.error) setError(placeErrorText(result.error))
+      } catch {
+        setError('저장 실패')
       }
     })
   }
@@ -82,9 +93,10 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     setCoords({ lat: r.lat, lng: r.lng })
     startTransition(async () => {
       try {
-        await updatePlace(place.id, patch)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : '저장 실패')
+        const result = await updatePlace(place.id, patch)
+        if (result?.error) { setError(placeErrorText(result.error)); setCoords(null) } // 저장 안 됨 → 뱃지 원복
+      } catch {
+        setError('저장 실패')
         setCoords(null) // 실패 시 뱃지 원복(실제 저장 안 됐으므로)
       }
     })
@@ -95,9 +107,10 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     onHidden(place.id)
     startTransition(async () => {
       try {
-        await hidePlace(place.id)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : '처리 실패')
+        const result = await hidePlace(place.id)
+        if (result?.error) setError(placeErrorText(result.error))
+      } catch {
+        setError('처리 실패')
       }
     })
   }
@@ -107,9 +120,10 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     onHidden(place.id) // 복원되면 비공개 탭 목록에서 빠짐(hide/reject와 동일 패턴)
     startTransition(async () => {
       try {
-        await unhidePlace(place.id)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : '처리 실패')
+        const result = await unhidePlace(place.id)
+        if (result?.error) setError(placeErrorText(result.error))
+      } catch {
+        setError('처리 실패')
       }
     })
   }
@@ -119,9 +133,10 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     onHidden(place.id) // 삭제되므로 목록에서 낙관적 제거(hide/reject와 동일 패턴)
     startTransition(async () => {
       try {
-        await deletePlace(place.id)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : '삭제 실패')
+        const result = await deletePlace(place.id)
+        if (result?.error) setError(placeErrorText(result.error))
+      } catch {
+        setError('삭제 실패')
       }
     })
   }
@@ -130,9 +145,10 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     setError(null)
     startTransition(async () => {
       try {
-        await confirmPlace(place.id)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : '확인 처리 실패')
+        const result = await confirmPlace(place.id)
+        if (result?.error) setError(placeErrorText(result.error))
+      } catch {
+        setError('확인 처리 실패')
       }
     })
   }
@@ -142,9 +158,10 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     onHidden(place.id) // 숨김되므로 목록에서 낙관적 제거(비공개 처리와 동일)
     startTransition(async () => {
       try {
-        await rejectPlace(place.id)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : '처리 실패')
+        const result = await rejectPlace(place.id)
+        if (result?.error) setError(placeErrorText(result.error))
+      } catch {
+        setError('처리 실패')
       }
     })
   }

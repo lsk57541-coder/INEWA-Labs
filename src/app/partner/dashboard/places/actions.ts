@@ -34,6 +34,21 @@ async function requireMyPartnerId(): Promise<string> {
   return partner.id
 }
 
+// requireMyPartnerId(그룹B 공유 헬퍼, 무수정)의 throw를 서버 내부에서 키로 변환한다 — Next 프로덕션은
+// Server Action throw message를 generic으로 가려 클라이언트가 사유를 못 받으므로, expected error는
+// {error:'키'} 반환으로 흘려보낸다(1단계 addPlace가 인라인으로 하던 것을 6개 함수가 공유). 성공 시 id.
+// 진짜 예외(예상 못한 것)는 그대로 throw → error.tsx generic.
+async function resolvePartnerId(): Promise<{ partnerId: string } | { error: string }> {
+  try {
+    return { partnerId: await requireMyPartnerId() }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : ''
+    if (msg.includes('로그인이 필요')) return { error: 'login_expired' }
+    if (msg.includes('파트너 정보를 찾을 수 없')) return { error: 'no_partner' }
+    throw e
+  }
+}
+
 // 검증 이벤트를 verification_logs에 append(시계열 누적 — 실사 대비 검증 활성도 근거).
 // ★베스트에포트: consent_logs 패턴과 동일하게 throw하지 않는다 — 로그 실패가 검증 자체를
 // 막으면 안 됨. 검증의 본 동작(verification_status/verified_at 덮어쓰기 update)은 호출부에서
@@ -112,9 +127,11 @@ export async function addPlace(data: PlaceInput): Promise<{ error?: string }> {
 // RLS (partner manages own places) is the real backstop, but the explicit
 // .eq('partner_id', ...) here means a typo'd id just silently affects zero
 // rows instead of relying solely on the DB to reject it.
-export async function updatePlace(id: string, data: Partial<PlaceInput>) {
+export async function updatePlace(id: string, data: Partial<PlaceInput>): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const partnerId = await requireMyPartnerId()
+  const pid = await resolvePartnerId()
+  if ('error' in pid) return pid
+  const { partnerId } = pid
 
   const update: Record<string, unknown> = {}
   if (data.name !== undefined) update.name = data.name.trim()
@@ -131,11 +148,14 @@ export async function updatePlace(id: string, data: Partial<PlaceInput>) {
   const { error } = await supabase.from('places').update(update).eq('id', id).eq('partner_id', partnerId)
   if (error) throw new Error(error.message)
   revalidatePath('/partner/dashboard/places')
+  return {}
 }
 
-export async function hidePlace(id: string) {
+export async function hidePlace(id: string): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const partnerId = await requireMyPartnerId()
+  const pid = await resolvePartnerId()
+  if ('error' in pid) return pid
+  const { partnerId } = pid
 
   // 복원 목적지 기억: 숨기기 직전 status를 prev_status에 저장(unhidePlace가 되돌릴 때 사용).
   // ★이미 'hidden'인 행 재호출 시 prev_status가 'hidden'으로 오염되는 것 방지 — hidden이 아닐 때만 캡처.
@@ -148,23 +168,26 @@ export async function hidePlace(id: string) {
   const { error } = await supabase.from('places').update(patch).eq('id', id).eq('partner_id', partnerId)
   if (error) throw new Error(error.message)
   revalidatePath('/partner/dashboard/places')
+  return {}
 }
 
 // 공개로 전환(일반 비공개 복원) — prev_status로 되돌린다(null이면 'active' 폴백). 복원 후 prev_status 비움.
 // ★검증-reject로 숨긴 것(verification_status==='rejected')은 confirmPlace("맞아요로 변경")가 담당 →
 //   여기선 no-op(두 복원 경로가 겹치지 않게). verification_status는 절대 건드리지 않음(검증 이력 보존).
-export async function unhidePlace(id: string) {
+export async function unhidePlace(id: string): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const partnerId = await requireMyPartnerId()
+  const pid = await resolvePartnerId()
+  if ('error' in pid) return pid
+  const { partnerId } = pid
 
   const { data: place } = await supabase
     .from('places').select('prev_status, verification_status').eq('id', id).eq('partner_id', partnerId).maybeSingle()
-  if (!place) throw new Error('장소를 찾을 수 없습니다.')
+  if (!place) return { error: 'place_not_found' }
 
   // reject-hidden은 검증 경로 전용 — 방어적으로 no-op(UI가 이미 버튼을 안 띄우지만 이중처리 방지).
   if (place.verification_status === 'rejected') {
     revalidatePath('/partner/dashboard/places')
-    return
+    return {}
   }
 
   const target = place.prev_status ?? 'active'  // 옛 hidden 행 등 prev_status 없으면 active 폴백
@@ -174,25 +197,31 @@ export async function unhidePlace(id: string) {
     .eq('id', id).eq('partner_id', partnerId)
   if (error) throw new Error(error.message)
   revalidatePath('/partner/dashboard/places')
+  return {}
 }
 
 // 소프트 삭제 — status='deleted'로만 표시(행 유지). hidePlace(일시 비공개)와 의미 분리한 신규 함수.
 // ★소프트라 verification_status·verified_at·id·click_count·created_at 무수정 → place_id 살아있어
 //   verification_logs·video_referrals·place_clicks 귀속 보존(delete/cascade 아님). 복구는 관리자만.
-export async function deletePlace(id: string) {
+export async function deletePlace(id: string): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const partnerId = await requireMyPartnerId()
+  const pid = await resolvePartnerId()
+  if ('error' in pid) return pid
+  const { partnerId } = pid
 
   const { error } = await supabase.from('places').update({ status: 'deleted', updated_at: new Date().toISOString() }).eq('id', id).eq('partner_id', partnerId)
   if (error) throw new Error(error.message)
   revalidatePath('/partner/dashboard/places')
+  return {}
 }
 
 // 파트너 장소 검증 — 본인 장소만(.eq('partner_id') 명시 + RLS "partner manages own places" 이중).
 // confirm: 맞다고 확인(공개 유지). reject: 잘못된 추출 → 검색/지도에서 숨김(status='hidden').
-export async function confirmPlace(id: string) {
+export async function confirmPlace(id: string): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const partnerId = await requireMyPartnerId()
+  const pid = await resolvePartnerId()
+  if ('error' in pid) return pid
+  const { partnerId } = pid
 
   // 로그용 사전 캡처(정확성): 검증 직전 상태 + 파트너 데모 여부. 읽기 전용이라 본 동작에 영향 없음.
   const { data: place } = await supabase
@@ -222,11 +251,14 @@ export async function confirmPlace(id: string) {
   })
 
   revalidatePath('/partner/dashboard/places')
+  return {}
 }
 
-export async function rejectPlace(id: string) {
+export async function rejectPlace(id: string): Promise<{ error?: string }> {
   const supabase = await createClient()
-  const partnerId = await requireMyPartnerId()
+  const pid = await resolvePartnerId()
+  if ('error' in pid) return pid
+  const { partnerId } = pid
 
   // 로그용 사전 캡처(정확성): 검증 직전 상태 + 파트너 데모 여부. 읽기 전용이라 본 동작에 영향 없음.
   const { data: place } = await supabase
@@ -249,6 +281,7 @@ export async function rejectPlace(id: string) {
   })
 
   revalidatePath('/partner/dashboard/places')
+  return {}
 }
 
 export interface BulkPlaceInput {
