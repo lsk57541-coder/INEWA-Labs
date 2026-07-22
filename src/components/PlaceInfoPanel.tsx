@@ -116,9 +116,10 @@ export default function PlaceInfoPanel({
       {/* 3. 정보 3줄 */}
       <div className="mt-3 space-y-2" style={{ color: C.body }}>
         {video.channel && (
-          <div className="flex items-center gap-2 text-sm">
-            <YoutubeIcon size={16} color={C.coral} />
+          <div className="text-sm">
             <span className="truncate">{video.channel}</span>
+            {/* YouTube 출처 표시(약관 즉시항목 5): 워드마크/로고 아닌 텍스트 캡션 — 검색카드와 문구 통일 */}
+            <p className="text-[11px] text-gray-400 leading-tight mt-0.5">출처: YouTube</p>
           </div>
         )}
         {video.address && (
@@ -230,9 +231,6 @@ function SubButton({ label, active, onClick, children }: { label: string; active
 /* ── 인라인 아이콘 (이모지 미사용) ── */
 function CheckIcon({ size, color }: { size: number; color: string }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-}
-function YoutubeIcon({ size, color }: { size: number; color: string }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M23 12s0-3.8-.48-5.6a2.92 2.92 0 0 0-2.06-2.06C18.66 3.86 12 3.86 12 3.86s-6.66 0-8.46.48A2.92 2.92 0 0 0 1.48 6.4C1 8.2 1 12 1 12s0 3.8.48 5.6a2.92 2.92 0 0 0 2.06 2.06c1.8.48 8.46.48 8.46.48s6.66 0 8.46-.48a2.92 2.92 0 0 0 2.06-2.06C23 15.8 23 12 23 12zM9.75 15.5v-7l6.5 3.5-6.5 3.5z" /></svg>
 }
 function PinIcon({ size, color }: { size: number; color: string }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
