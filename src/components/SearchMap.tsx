@@ -264,22 +264,23 @@ function NaviIcon({ className = 'w-7 h-7' }: { className?: string }) {
 }
 
 // Original icon shapes (not the official trademarked logos) standing in for
-// "long-form video" and "Shorts" in the filter tabs.
-function LongformIcon({ className = 'w-5 h-5' }: { className?: string }) {
+// "long-form video" and "Shorts" in the filter tabs. 형태(가로/세로)로만 구분 —
+// 비선택 회색, 선택 시 다른 필터 칩과 같은 코랄(선택 배경색과 통일, 신규색 안 만듦).
+function LongformIcon({ className = 'w-5 h-5', active = false }: { className?: string; active?: boolean }) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
-      <title>롱폼</title>
-      <rect x="1" y="4" width="22" height="16" rx="4" fill="#FF0000" />
+      <title>영상</title>
+      <rect x="1" y="4" width="22" height="16" rx="4" fill={active ? '#D85A30' : '#9CA3AF'} />
       <polygon points="10,8.5 10,15.5 16,12" fill="#fff" />
     </svg>
   )
 }
 
-function ShortsIcon({ className = 'w-5 h-5' }: { className?: string }) {
+function ShortsIcon({ className = 'w-5 h-5', active = false }: { className?: string; active?: boolean }) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
       <title>쇼츠</title>
-      <rect x="7" y="2" width="10" height="20" rx="4" fill="#FF0000" />
+      <rect x="7" y="2" width="10" height="20" rx="4" fill={active ? '#D85A30' : '#9CA3AF'} />
       <polygon points="10.5,9 10.5,15 15,12" fill="#fff" />
     </svg>
   )
@@ -418,7 +419,7 @@ function DurationBadge({ duration, isShort, className }: { duration: string; isS
         className={`flex items-center justify-center w-4 h-4 rounded text-[9px] leading-none ${
           isShort ? 'bg-pink-600' : 'bg-blue-600'
         } text-white`}
-        title={isShort ? '쇼츠' : '롱폼'}
+        title={isShort ? '쇼츠' : '영상'}
       >
         {isShort ? '📱' : '🎬'}
       </span>
@@ -2120,7 +2121,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
               <button
                 key={key}
                 onClick={() => setVideoFilter(key)}
-                title={key === 'long' ? '롱폼' : key === 'short' ? '쇼츠' : '전체'}
+                title={key === 'long' ? '영상' : key === 'short' ? '쇼츠' : '전체'}
                 className={`flex-1 flex items-center justify-center gap-1 text-xs rounded-lg py-1.5 border transition font-medium ${
                   videoFilter === key
                     ? 'bg-coral text-white border-coral'
@@ -2128,9 +2129,9 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 }`}
               >
                 {key === 'long' ? (
-                  <><LongformIcon className="w-4 h-4" /> 롱폼</>
+                  <><LongformIcon className="w-4 h-4" active={videoFilter === 'long'} /> 영상</>
                 ) : key === 'short' ? (
-                  <><ShortsIcon className="w-4 h-4" /> 쇼츠</>
+                  <><ShortsIcon className="w-4 h-4" active={videoFilter === 'short'} /> 쇼츠</>
                 ) : (
                   label
                 )}
