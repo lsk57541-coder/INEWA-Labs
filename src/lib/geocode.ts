@@ -16,17 +16,65 @@ export interface GeoResult {
 // 검색 요청 전체가 500으로 죽는다(실제 장애: dapi.kakao.com ConnectTimeout → /api/search 500).
 // 정상 응답은 실측 13~19ms(최대 147ms)라 4초는 충분히 넉넉하다 — 값을 더 올리면 카카오가
 // 멎었을 때 붙잡히는 시간만 길어져 서버리스 함수 전체 타임아웃 위험이 커진다.
-async function kakaoFetch(url: string, key: string): Promise<Response | null> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 4000)
+// ── 카카오 발사 동시성 상한 + rate-limit 백오프 ──────────────────────────────
+// 무제한 병렬(Promise.all)이 카카오 rate limit을 유발한다: 한 검색이 ~900콜을 거의 동시에 쏘면
+// 카카오가 그 절반 이상을 거부한다 — 대부분 HTTP 400 + {code:-10 "API limit has been exceeded"},
+// 최고 부하에선 429도. 어느 콜이 통과하는지가 비결정이라 결과수가 회차마다 40%씩 요동쳤다.
+// 계단 실측(2026-07-22): 동시성 8에서 거부율이 0%로 수렴(N=10=13.8%, N=20/50은 무제한과 동일한
+// 50%+), 카카오 유효 동시 천장 ≈ 8~9. recall 173→331 회복(+1.3초). 이 상한은 kakaoFetch를 지나는
+// 모든 카카오 호출에 전역 적용된다(검색 경로 5함수 전부 이 관문 경유).
+const KAKAO_CONCURRENCY = 8
+let kakaoActive = 0
+const kakaoWaiters: (() => void)[] = []
+function acquireKakaoSlot(): Promise<void> {
+  if (kakaoActive < KAKAO_CONCURRENCY) { kakaoActive++; return Promise.resolve() }
+  return new Promise<void>((resolve) => kakaoWaiters.push(resolve)) // 슬롯은 release에서 승계(active 유지)
+}
+function releaseKakaoSlot(): void {
+  const next = kakaoWaiters.shift()
+  if (next) next(); else kakaoActive--
+}
+
+const kakaoSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+const KAKAO_RETRY_BACKOFF_MS = [300, 900] // rate-limit 시 지수 백오프, 최대 2회 재시도
+
+// rate-limit 신호에만 재시도한다: 429, 또는 400 + code:-10(카카오는 할당량 초과를 400으로도 표현).
+// 타 4xx/5xx는 재시도하지 않는다 — 진짜 오류를 반복 호출로 가리면 안 되므로.
+async function kakaoRateLimited(res: Response): Promise<boolean> {
+  if (res.status === 429) return true
+  if (res.status !== 400) return false
   try {
-    return await fetch(url, { headers: { Authorization: `KakaoAK ${key}` }, signal: controller.signal })
-  } catch (e) {
-    // 조용히 삼키면 "결과가 왜 비었는지" 추적이 불가능해진다 — 경로만 남긴다(키는 헤더라 URL에 없음).
-    console.error('[kakao] fetch failed', new URL(url).pathname, (e as { cause?: { code?: string } })?.cause?.code ?? e)
-    return null
-  } finally {
-    clearTimeout(timer)
+    const body = await res.clone().json() as { code?: number } // clone: 원본 res는 호출부가 그대로 소비
+    return body?.code === -10
+  } catch {
+    return false
+  }
+}
+
+async function kakaoFetch(url: string, key: string): Promise<Response | null> {
+  for (let attempt = 0; ; attempt++) {
+    await acquireKakaoSlot()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 4000)
+    let res: Response | null = null
+    try {
+      res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` }, signal: controller.signal })
+    } catch (e) {
+      // 조용히 삼키면 "결과가 왜 비었는지" 추적이 불가능해진다 — 경로만 남긴다(키는 헤더라 URL에 없음).
+      console.error('[kakao] fetch failed', new URL(url).pathname, (e as { cause?: { code?: string } })?.cause?.code ?? e)
+      return null
+    } finally {
+      // 슬롯은 fetch 완료 즉시 반납 — 백오프 대기 중 슬롯을 쥐면 전체 파이프라인이 직렬화된다.
+      clearTimeout(timer)
+      releaseKakaoSlot()
+    }
+    if (!res) return null // 도달 불가(위 catch가 실패 시 return) — TS 방어
+    // rate-limit이면 슬롯 없는 상태로 백오프 후 재시도. 재시도 소진 시 그대로 반환(호출부가 !res.ok로 폴백).
+    if (attempt < KAKAO_RETRY_BACKOFF_MS.length && await kakaoRateLimited(res)) {
+      await kakaoSleep(KAKAO_RETRY_BACKOFF_MS[attempt])
+      continue
+    }
+    return res
   }
 }
 
