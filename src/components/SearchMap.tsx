@@ -218,10 +218,24 @@ function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
 //   height+aspect-ratio로 너비가 결정됨. maxWidth:100%로 초소형 화면 가드(무크롭).
 // - aspectRatio 없음(등록장소·구캐시) → 16:9 폴백(현행과 동일 렌더).
 // dvh 폴백은 globals.css .player-portrait(vh 기본 + @supports dvh 향상)로 처리.
+// iOS(아이패드OS 포함) 판별 — iOS 사파리는 사용자 제스처 없는 unmuted 자동재생을 차단하므로
+// mute=1을 iOS에서만 부여(PC/안드로이드는 unmuted 유지 = 소리 콘텐츠 퇴행 방지). PlayerFrame은
+// 탭 이후에만 클라이언트에서 마운트돼 SSR 트리에 없으므로, typeof navigator 가드로 렌더 시 동기
+// 계산해도 하이드레이션 불일치가 없다(초기 서버 렌더에 PlayerFrame 자체가 존재하지 않음).
+function isIOSDevice(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  return /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) // iPadOS 13+ (데스크톱 UA로 위장)
+}
+
 function PlayerFrame({ video, portraitMaxVh }: { video: VideoResult; portraitMaxVh: number }) {
   const ratio = video.aspectRatio && video.aspectRatio > 0 ? video.aspectRatio : 16 / 9
   const portrait = ratio < 1
-  const src = `https://www.youtube.com/embed/${video.videoId}?autoplay=1${video.startSec ? `&start=${video.startSec}` : ''}`
+  // autoplay=1·start(챕터) 기존 파라미터 보존 + playsinline=1 전역(iOS 인라인화, 타 환경 무해)
+  // + mute=1은 iOS만(제스처 없는 자동재생 허용). allow="autoplay; encrypted-media"(아래)는 무수정.
+  const iosMute = isIOSDevice() ? '&mute=1' : ''
+  const src = `https://www.youtube.com/embed/${video.videoId}?autoplay=1&playsinline=1${video.startSec ? `&start=${video.startSec}` : ''}${iosMute}`
   return (
     <div className="relative w-full bg-black flex justify-center items-center">
       <div
