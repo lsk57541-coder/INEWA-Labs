@@ -29,7 +29,7 @@ import PlaceInfoPanel from '@/components/PlaceInfoPanel'
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities'
 import { placeKey } from '@/lib/placeKey'
 import { track } from '@/lib/track'
-import { MAJOR_CATEGORIES, mapToMajorCategory } from '@/lib/categoryMapping'
+import { MAJOR_CATEGORIES, mapToMajorCategory, ETC_KEY } from '@/lib/categoryMapping'
 import { MenuIcon, ChevronRight, ChevronDown, SlidersIcon, GridIcon, KeywordIcon, ChannelIcon, CategoryIcon } from '@/components/mapIcons'
 
 // 검색 로딩 중 순차로 보여주는 단계 라벨(가짜 — /api/search는 단일 JSON 응답이라 실제 단계 진행은
@@ -1307,6 +1307,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
     passesFilters(v, { videoFilter, minViews, minSubs, dateMin: dateCutoff(dateRange), category: categoryFilter })
   )
 
+  // '기타'(미분류) 안전망 칩 노출 판정: 카테고리 필터만 빼고(category:'all') 나머지 필터 적용 후
+  // '기타'로 매핑되는 결과 수 = "기타 칩 누르면 나올 개수". 1건 이상일 때만 칩 렌더(0건이면 숨김).
+  const etcResultCount = allResults.filter((v) =>
+    passesFilters(v, { videoFilter, minViews, minSubs, dateMin: dateCutoff(dateRange), category: 'all' })
+    && mapToMajorCategory(v.category) === ETC_KEY
+  ).length
+
   // 리스트 표시는 정렬 적용본. (마커는 filteredResults를 써서 정렬 변경 시 불필요 재렌더 방지.)
   // 정렬 로직은 sortVideos로 단일화 — 그룹 마커 자동재생/나머지 리스트도 동일 comparator 사용.
   const sortedResults = sortVideos(filteredResults, sortBy)
@@ -1448,6 +1455,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
   // 지도 위 카테고리 버튼 라벨(기본 '카테고리' = 용도 표기, 진입점 혼란 방지). 선택 시 "카테고리 · {대분류명}".
   const currentCatLabel = (() => {
     if (categoryFilter === 'all') return '카테고리'
+    if (categoryFilter === ETC_KEY) return '카테고리 · 기타'
     const found = MAJOR_CATEGORIES.find((c) => c.key === categoryFilter)
     return found ? `카테고리 · ${found.label}` : '카테고리'
   })()
@@ -1566,6 +1574,19 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                       <span className="text-xs font-medium">{c.label}</span>
                     </button>
                   ))}
+                  {/* '기타'(미분류) 안전망 칩 — 맨 끝, 해당 결과 1건 이상일 때만. category 채우기(②)로도 안 채워진 잔여가 조용히 사라지는 것 방지. */}
+                  {etcResultCount > 0 && (
+                    <button
+                      key={ETC_KEY}
+                      onClick={() => { setCategoryFilter(ETC_KEY); setCategoryPanelOpen(false) }}
+                      className={`h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 border transition ${
+                        categoryFilter === ETC_KEY ? 'bg-coral text-white border-coral' : 'bg-white text-ink border-line hover:bg-surface'
+                      }`}
+                    >
+                      <CategoryIcon k={ETC_KEY} className="w-5 h-5" />
+                      <span className="text-xs font-medium">기타</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </>

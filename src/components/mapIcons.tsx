@@ -50,6 +50,7 @@ export const CATEGORY_ICONS: Record<string, (c?: string) => React.ReactNode> = {
   tour:    (c) => catSvg(<><path d="M3 19h18" /><path d="M5 19l5-9 3 5 2-3 4 7" /><circle cx="17" cy="6" r="1.6" /></>, c),
   world:   (c) => catSvg(<><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" /></>, c),
   korean:  (c) => catSvg(<><path d="M3 11h18a9 9 0 0 1-18 0z" /><path d="M9 3.5c-.6 1 .6 2 0 3M13 3c-.6 1 .6 2 0 3" /><path d="M2 20h20" /></>, c),
+  기타:    (c) => catSvg(<><circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none" /></>, c),
 }
 export const CategoryIcon = ({ k, className }: { k: string; className?: string }) =>
   <>{(CATEGORY_ICONS[k] ?? CATEGORY_ICONS.all)(className)}</>
