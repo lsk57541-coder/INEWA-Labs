@@ -41,6 +41,7 @@ const PLACE_ERROR_TEXT: Record<string, string> = {
   login_expired: '로그인이 만료됐어요. 다시 로그인해 주세요.',
   no_partner: '파트너 정보를 확인할 수 없어요. 계속되면 문의해 주세요.',
   place_not_found: '장소를 찾을 수 없어요. 화면을 새로고침해 주세요.',
+  no_name: '상호명을 입력해 주세요.',
 }
 const placeErrorText = (key: string) => PLACE_ERROR_TEXT[key] ?? '처리 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.'
 

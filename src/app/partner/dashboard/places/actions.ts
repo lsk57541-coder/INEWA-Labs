@@ -133,6 +133,10 @@ export async function updatePlace(id: string, data: Partial<PlaceInput>): Promis
   if ('error' in pid) return pid
   const { partnerId } = pid
 
+  // 상호명 빈 값 거부 — addPlace(:96)와 대칭. 인라인 수정에서 이름을 지운 채 blur하면
+  // 여기서 걸러 친절한 배너(no_name)로 안내한다. (실방어는 DB CHECK places_name_not_blank.)
+  if (data.name !== undefined && !data.name.trim()) return { error: 'no_name' }
+
   const update: Record<string, unknown> = {}
   if (data.name !== undefined) update.name = data.name.trim()
   if (data.address !== undefined) update.address = data.address?.trim() || null

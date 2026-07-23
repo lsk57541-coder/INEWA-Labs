@@ -91,8 +91,12 @@ export async function getAccuracyStats(): Promise<AccuracyStat[]> {
 
 export async function addLocation(formData: FormData) {
   const supabase = await requireAdmin()
+  // 상호명 빈 값 거부 — admin은 throw 컨벤션(LocationForm try/catch→setError). required 속성이
+  // 공백만 입력은 못 막으므로 서버에서 재확인. (실방어는 DB CHECK locations_name_not_blank.)
+  const name = ((formData.get('name') as string) ?? '').trim()
+  if (!name) throw new Error('상호명을 입력해 주세요.')
   const { error } = await supabase.from('locations').insert({
-    name: formData.get('name') as string,
+    name,
     address: formData.get('address') as string,
     lat: parseFloat(formData.get('lat') as string),
     lng: parseFloat(formData.get('lng') as string),
@@ -177,6 +181,7 @@ export async function bulkAddLocations(
   let succeeded = 0
 
   for (const place of places) {
+    if (!place.name?.trim()) continue // 빈 상호명 행은 스킵(bulkRequestPlaces:320과 대칭). succeeded에서 제외됨. 실방어는 DB CHECK.
     const { data: loc, error: locErr } = await supabase
       .from('locations')
       .insert({
