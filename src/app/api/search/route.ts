@@ -978,9 +978,10 @@ async function handleSearch(req: NextRequest) {
           const usableLocDesc = locDesc && !isAdministrativeArea(locDesc) ? locDesc : null
           let placeName: string | undefined
           let placeNameSource: PlaceNameSource
-          // 순수검색 원스톱: searchPlaceInfo가 준 phone/kakaoPlaceId를 카드까지 전달(미저장·표시전용).
+          // 순수검색 원스톱: searchPlaceInfo가 준 phone/kakaoPlaceId/category를 카드까지 전달(미저장·표시전용).
           let placePhone: string | undefined
           let placeKakaoId: string | undefined
+          let placeCategory: string | undefined
           if (correction?.placeName) {
             placeName = correction.placeName
             placeNameSource = 'correction'
@@ -1002,6 +1003,7 @@ async function handleSearch(req: NextRequest) {
             placeNameSource = titleMatch?.name ? 'title_match' : 'address_fallback'
             placePhone = titleMatch?.phone
             placeKakaoId = titleMatch?.kakaoPlaceId
+            placeCategory = titleMatch?.category
           }
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (!meetsConfidence(placeNameSource, minConfidence)) return
@@ -1027,6 +1029,7 @@ async function handleSearch(req: NextRequest) {
             publishedAt: v.snippet.publishedAt,
             phone: placePhone,
             kakaoPlaceId: placeKakaoId,
+            category: placeCategory,
           })
         }
 }),
@@ -1050,6 +1053,7 @@ async function handleSearch(req: NextRequest) {
           let placeNameSource: PlaceNameSource
           let placePhone: string | undefined
           let placeKakaoId: string | undefined
+          let placeCategory: string | undefined
           if (correction.placeName) {
             placeName = correction.placeName
             placeNameSource = 'correction'
@@ -1063,6 +1067,7 @@ async function handleSearch(req: NextRequest) {
             placeNameSource = titleMatch?.name ? 'title_match' : 'address_fallback'
             placePhone = titleMatch?.phone
             placeKakaoId = titleMatch?.kakaoPlaceId
+            placeCategory = titleMatch?.category
           }
           logPlaceNameResolution(v.id, placeNameSource, placeName)
           if (meetsConfidence(placeNameSource, minConfidence)) {
@@ -1087,6 +1092,7 @@ async function handleSearch(req: NextRequest) {
               publishedAt: v.snippet.publishedAt,
               phone: placePhone,
               kakaoPlaceId: placeKakaoId,
+              category: placeCategory,
             })
           }
         }
@@ -1138,9 +1144,10 @@ async function handleSearch(req: NextRequest) {
         const statedName = extractStatedBusinessName(v.snippet.title, v.snippet.description ?? '')
         let resolvedName: string
         let placeNameSource: PlaceNameSource
-        // 순수검색 원스톱: 기본은 geo2(geocodeKorean)의 phone/id, else 분기는 searchPlaceInfo 우선(미저장·표시전용).
+        // 순수검색 원스톱: 기본은 geo2(geocodeKorean)의 phone/id/category, else 분기는 searchPlaceInfo 우선(미저장·표시전용).
         let placePhone: string | undefined = geo2.phone
         let placeKakaoId: string | undefined = geo2.kakaoPlaceId
+        let placeCategory: string | undefined = geo2.category
         if (statedName) {
           resolvedName = statedName
           placeNameSource = 'explicit_description'
@@ -1156,6 +1163,7 @@ async function handleSearch(req: NextRequest) {
           placeNameSource = titleMatch?.name ? 'title_match' : 'address_fallback'
           placePhone = titleMatch?.phone ?? geo2.phone
           placeKakaoId = titleMatch?.kakaoPlaceId ?? geo2.kakaoPlaceId
+          placeCategory = titleMatch?.category ?? geo2.category
         }
         logPlaceNameResolution(v.id, placeNameSource, resolvedName)
         if (!meetsConfidence(placeNameSource, minConfidence)) return false
@@ -1181,6 +1189,7 @@ async function handleSearch(req: NextRequest) {
           publishedAt: v.snippet.publishedAt,
           phone: placePhone,
           kakaoPlaceId: placeKakaoId,
+          category: placeCategory,
         })
         return true
       }
@@ -1222,6 +1231,7 @@ async function handleSearch(req: NextRequest) {
               isCompilation: true, // 모음영상 → 카드 "장소 전체 보기" 진입점 노출용(표시 전용)
               phone: r.phone,
               kakaoPlaceId: r.kakaoPlaceId,
+              category: r.category,
             })
           }
         }

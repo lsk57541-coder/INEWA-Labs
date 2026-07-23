@@ -4,6 +4,7 @@ export interface GeoResult {
   address: string
   name: string
   categoryGroup: string
+  category?: string     // 카카오 category_name 전체 문자열(예 "음식점 > 한식 > 육류,고기"). UI 필터 대분류 매칭용. 저장 안 함 — 런타임 전용. 응답에 이미 옴 → 파싱만 추가(호출 0).
   phone?: string        // 카카오 전화(순수 검색 카드 '전화하기'용). 저장 안 함 — 런타임 표시 전용.
   kakaoPlaceId?: string // 카카오 place id(카드 상세 딥링크용). 응답에 이미 옴 → 파싱만 추가(호출 0).
 }
@@ -208,13 +209,14 @@ export async function geocodeKorean(place: string): Promise<GeoResult | null> {
   const res = await kakaoFetch(url, key)
   if (!res || !res.ok) return null
 
-  const json = await res.json() as { documents: { id: string; y: string; x: string; address_name: string; place_name: string; category_group_code: string; phone: string }[] }
+  const json = await res.json() as { documents: { id: string; y: string; x: string; address_name: string; place_name: string; category_group_code: string; category_name: string; phone: string }[] }
   const doc = json.documents?.[0]
   if (!doc) return null
 
   return {
     lat: parseFloat(doc.y), lng: parseFloat(doc.x), address: doc.address_name, name: doc.place_name,
     categoryGroup: doc.category_group_code,
+    category: doc.category_name || undefined,
     phone: doc.phone || undefined,
     kakaoPlaceId: doc.id || undefined,
   }
