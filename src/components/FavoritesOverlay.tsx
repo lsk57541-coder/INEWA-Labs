@@ -129,7 +129,7 @@ export default function FavoritesOverlay({
       className="absolute inset-0 z-30 flex flex-col bg-warm md:bg-black/40 md:items-center md:justify-center md:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-    <div className="flex flex-col flex-1 w-full bg-warm md:flex-none md:w-full md:max-w-2xl md:h-[80dvh] md:rounded-2xl md:shadow-2xl md:overflow-hidden">
+    <div className="flex flex-col flex-1 max-h-[85dvh] w-full bg-warm md:flex-none md:w-full md:max-w-2xl md:h-[80dvh] md:rounded-2xl md:shadow-2xl md:overflow-hidden">
       {/* 헤더 */}
       <div className="flex items-center gap-3 px-4 h-14 border-b border-line shrink-0">
         <button onClick={onClose} className="text-2xl text-ink-muted px-1">‹</button>
@@ -154,7 +154,7 @@ export default function FavoritesOverlay({
       </div>
 
       {/* 리스트 */}
-      <div className="flex-1 overflow-y-auto py-3">
+      <div className="flex-1 min-h-0 overflow-y-auto py-3">
         {loading && <p className="text-center text-sm text-gray-400 py-10">불러오는 중…</p>}
         {!loading && filtered.length === 0 && (
           <p className="text-center text-sm text-gray-400 py-10">목록이 비어있습니다.</p>
