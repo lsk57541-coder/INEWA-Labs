@@ -44,11 +44,12 @@ interface PlaceInfoPanelProps {
   onShare: () => void
   onReport: () => void
   onHide: () => void
+  onShowVideoPlaces?: () => void  // 모음영상(video.isCompilation)일 때만 노출 — 부모의 handleShowVideoPlaces 위임
 }
 
 export default function PlaceInfoPanel({
   video, isPartner, favorited, visited, reported, navUrl,
-  onToggleFavorite, onToggleVisited, onShare, onReport, onHide,
+  onToggleFavorite, onToggleVisited, onShare, onReport, onHide, onShowVideoPlaces,
 }: PlaceInfoPanelProps) {
   const name = video.placeName ?? video.title
   // 카카오맵 딥링크 — 순수 URL 조립(SDK/REST 미사용 = 무비용).
@@ -164,6 +165,18 @@ export default function PlaceInfoPanel({
           <DotsIcon size={20} color={C.subText} />
         </button>
       </div>
+
+      {/* 모음영상 → 이 영상의 모든 장소를 반경 무시하고 지도에 표시(리스트 카드와 동일 진입점).
+          마커 탭 경로에서도 모음영상을 발견 가능하게. 핸들러가 내부에서 selectedVideo=null로 이 패널을 닫음. */}
+      {video.isCompilation && onShowVideoPlaces && (
+        <button
+          onClick={onShowVideoPlaces}
+          className="mt-2 w-full h-11 rounded-[12px] border text-sm font-bold flex items-center justify-center transition active:scale-[0.99]"
+          style={{ backgroundColor: C.subBg, borderColor: C.subBorder, color: C.coral }}
+        >
+          이 영상 장소 전체 보기 →
+        </button>
+      )}
 
       {/* 4-1. 더보기 인라인 메뉴 (overflow-y-auto 안이라 absolute 대신 흐름에 삽입 → 클리핑 방지) */}
       {moreOpen && (

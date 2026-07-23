@@ -2321,6 +2321,7 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
                 onShare={() => handleShare(selectedVideo)}
                 onReport={() => handleReport(selectedVideo)}
                 onHide={() => handleHideVideo(selectedVideo)}
+                onShowVideoPlaces={() => handleShowVideoPlaces(selectedVideo)}
               />
               {/* 그룹 마커: 같은 위치의 다른 영상(정렬 동일, 현재 재생중 제외). 행 클릭 → 재생/카드 전환. */}
               {selectedGroup && selectedGroup.videos.length > 1 && (
