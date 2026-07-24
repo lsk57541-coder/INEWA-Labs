@@ -86,6 +86,8 @@ export interface PlaceInput {
   phone?: string               // 카카오 전화(공식 필드)
   kakao_place_id?: string      // 카카오 place id(상세 딥링크 조립·저장용)
   category_group_code?: string // 카카오 대분류(FD6/CE7/AD5 등)
+  kakao_selected_at?: string   // 파트너가 PlaceSearchModal에서 카카오 결과를 직접 선택한 시각(ISO).
+                                // 백필/AI추출/admin 경로는 세팅 안 함 → null로 자연 구분.
 }
 
 // expected error(상호명미입력·로그인만료·파트너없음)는 throw 대신 {error:'키'}로 반환한다 —
@@ -147,6 +149,7 @@ export async function updatePlace(id: string, data: Partial<PlaceInput>): Promis
   if (data.phone !== undefined) update.phone = data.phone?.trim() || null
   if (data.kakao_place_id !== undefined) update.kakao_place_id = data.kakao_place_id?.trim() || null
   if (data.category_group_code !== undefined) update.category_group_code = data.category_group_code?.trim() || null
+  if (data.kakao_selected_at !== undefined) update.kakao_selected_at = data.kakao_selected_at
   update.updated_at = new Date().toISOString() // 파트너 콘텐츠 수정 시점 기록
 
   const { error } = await supabase.from('places').update(update).eq('id', id).eq('partner_id', partnerId)

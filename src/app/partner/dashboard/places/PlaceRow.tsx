@@ -74,19 +74,26 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
     })
   }
 
-  // 좌표 채우기 — 검색 결과 선택 시 좌표 저장(+주소/카테고리는 비어있을 때만 보정, 상호명은 유지).
-  // status는 그대로 active → 좌표가 채워지는 순간 노출 조건(active+좌표)을 만족해 지도에 뜬다.
+  // 장소 다시 고르기 — 카카오 검색 결과 선택 시 상호명·주소·카테고리·좌표를 한 덩어리로
+  // 덮어쓴다(A안: "확인"이 아니라 "선택"으로 실수 자체를 줄임). status는 그대로 active →
+  // 좌표가 채워지는 순간 노출 조건(active+좌표)을 만족해 지도에 뜬다.
   const handleSelectPlace = (r: PlaceSearchResult) => {
     setSearchOpen(false)
     setError(null)
-    const patch: Partial<PlaceInput> = { latitude: r.lat, longitude: r.lng }
-    // 좌표를 채우는 카카오 장소가 권위 소스 → phone/place id/대분류도 함께 저장(있을 때만).
+    const patch: Partial<PlaceInput> = {
+      latitude: r.lat, longitude: r.lng,
+      kakao_selected_at: new Date().toISOString(), // 파트너가 카카오에서 직접 골랐다는 사실 기록(백필/AI와 구분).
+    }
+    // 카카오 결과가 권위 소스 → phone/place id/대분류도 함께 저장(있을 때만).
     if (r.phone) patch.phone = r.phone
     if (r.kakaoPlaceId) patch.kakao_place_id = r.kakaoPlaceId
     if (r.categoryGroupCode) patch.category_group_code = r.categoryGroupCode
     const next = { ...fields }
-    if (!fields.address?.trim() && r.address) { patch.address = r.address; next.address = r.address }
-    if (!fields.category?.trim() && r.category) {
+    // 상호명·주소·카테고리는 항상 덮어쓰기. r.name이 비어 있으면(방어) name은 건드리지 않음
+    // (DB CHECK places_name_not_blank 위반 방지 — 어차피 카카오 결과에 빈 이름은 없음).
+    if (r.name?.trim()) { patch.name = r.name; next.name = r.name }
+    if (r.address) { patch.address = r.address; next.address = r.address }
+    if (r.category) {
       const cat = r.category.split('>').pop()?.trim()
       if (cat) { patch.category = cat; next.category = cat }
     }
@@ -183,21 +190,21 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
         </span>
       </div>
 
+      {/* 주소·카테고리는 카카오 선택으로만 채워짐(읽기전용) — 직접 타이핑해 서로 어긋나는 것 방지.
+          상호명은 예외로 계속 편집 가능(카카오에 없는 신규·노점용). */}
       <input
         value={fields.address}
-        onChange={(e) => setFields((f) => ({ ...f, address: e.target.value }))}
-        onBlur={() => saveField({ address: fields.address })}
-        placeholder="주소"
-        className="w-full text-sm text-gray-600 border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+        readOnly
+        placeholder="주소 (아래 '장소 다시 고르기'로 채워집니다)"
+        className="w-full text-sm text-gray-500 border border-gray-200 rounded-lg bg-gray-50 px-2.5 py-1.5 outline-none cursor-default"
       />
 
       <div className="flex gap-2">
         <input
           value={fields.category}
-          onChange={(e) => setFields((f) => ({ ...f, category: e.target.value }))}
-          onBlur={() => saveField({ category: fields.category })}
-          placeholder="카테고리"
-          className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+          readOnly
+          placeholder="카테고리 (아래 '장소 다시 고르기'로 채워집니다)"
+          className="flex-1 min-w-0 text-sm text-gray-500 border border-gray-200 rounded-lg bg-gray-50 px-2.5 py-1.5 outline-none cursor-default"
         />
         <input
           value={fields.video_url}
@@ -207,6 +214,19 @@ export default function PlaceRow({ place, onHidden }: { place: Place; onHidden: 
           className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg bg-white px-2.5 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
         />
       </div>
+
+      {/* 장소 다시 고르기 — 좌표 유무와 무관하게 항상 열림(A안: 자유입력 대신 카카오 선택으로
+          상호명·주소·카테고리를 한 덩어리로 재설정). 좌표대기 배너의 "좌표 채우기"와 같은 모달을
+          쓰므로 좌표대기 상태에서도 그대로 동작 — 배너는 그 상태 전용 안내로 별도 유지. */}
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => setSearchOpen(true)}
+        className="text-xs font-medium bg-black text-white px-2.5 py-1 rounded-lg hover:bg-gray-800 disabled:opacity-40 transition"
+      >
+        장소 다시 고르기
+      </button>
+
       {/* 긴 URL을 늘어놓는 대신 실제 영상을 여는 액션(Notion/Airbnb식). URL 편집칸은 위에 그대로 유지. */}
       {/^https?:\/\//.test((fields.video_url ?? '').trim()) && (
         <a
