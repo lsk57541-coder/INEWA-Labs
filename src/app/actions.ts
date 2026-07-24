@@ -479,7 +479,10 @@ export async function cancelReport(videoId: string) {
     .delete()
     .eq('user_id', user.id)
     .eq('video_id', videoId)
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.error('[report] op=cancel 실패', { video_id: videoId, code: error.code, message: error.message })
+    throw new Error(error.message)
+  }
 }
 
 export async function submitReport(
@@ -488,7 +491,7 @@ export async function submitReport(
   lng: number,
   reason: ReportReason,
   fix?: ReportFix
-): Promise<{ corrected: boolean; address?: string; placeName?: string }> {
+): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
@@ -524,29 +527,21 @@ export async function submitReport(
 
   if (existing) {
     const { error } = await supabase.from('location_reports').update(row).eq('id', existing.id)
-    if (error) throw new Error(error.message)
+    if (error) {
+      console.error('[report] op=submit 실패', { video_id: videoId, code: error.code, message: error.message })
+      throw new Error(error.message)
+    }
   } else {
     const { error } = await supabase.from('location_reports').insert(row)
-    if (error) throw new Error(error.message)
+    if (error) {
+      console.error('[report] op=submit 실패', { video_id: videoId, code: error.code, message: error.message })
+      throw new Error(error.message)
+    }
   }
 
-  if (reason === 'wrong_address' && fix && (fix.address || fix.name)) {
-    const { error } = await supabase.from('location_corrections').upsert(
-      {
-        video_id: videoId,
-        lat: fix.suggestion.lat,
-        lng: fix.suggestion.lng,
-        address: fix.suggestion.address,
-        place_name: fix.suggestion.name,
-        created_by: user.id,
-      },
-      { onConflict: 'video_id' }
-    )
-    if (error) throw new Error(error.message)
-    return { corrected: true, address: fix.suggestion.address, placeName: fix.suggestion.name }
-  }
-
-  return { corrected: false }
+  // P0-4B: wrong_address 신고는 여기서 location_corrections를 직접 바꾸지 않는다(사용자 요청으로
+  // 활성 보정을 즉시 덮어쓰던 경로 제거). 실제 지도 보정은 관리자 승인(approve_location_correction
+  // RPC)을 거쳐야만 반영된다 — 신고는 "검토 대기 후보"로 location_reports에 남을 뿐이다.
 }
 
 export async function getMyReports(): Promise<string[]> {

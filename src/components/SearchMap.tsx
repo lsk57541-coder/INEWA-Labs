@@ -1281,27 +1281,19 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
       const fix: ReportFix | undefined = reportSelected
         ? { address: reportFixAddress, name: reportFixName, suggestion: reportSelected }
         : undefined
-      const res = await submitReport(reportTarget.videoId, reportTarget.lat, reportTarget.lng, reportReason, fix)
+      await submitReport(reportTarget.videoId, reportTarget.lat, reportTarget.lng, reportReason, fix)
       setReportedIds((prev) => new Set(prev).add(reportTarget.videoId))
-      // The reported video is wrong info for this viewer — drop it from what
-      // they're currently looking at immediately, in both the list and the
-      // marker-group popup. The corrected address (if any) is only saved as
-      // a reference for resolving other users' future searches, not shown
-      // back to this viewer as if it were a confirmed business name.
+      // 신고 즉시 이 사용자 화면에서만 제거(리스트·그룹 팝업). 실제 지도 보정은 관리자 승인 후
+      // 다음 검색부터 전 사용자에게 반영된다(사용자 요청으로 즉시 위치가 바뀌지 않음, P0-4B).
       setAllResults((prev) => prev.filter((r) => r.videoId !== reportTarget.videoId))
       setSelectedGroup((prev) =>
         prev ? { ...prev, videos: prev.videos.filter((v) => v.videoId !== reportTarget.videoId) } : prev
       )
-      if (reportReason === 'wrong_address') {
-        if (res.corrected) {
-          const fixedLabel = [res.address, res.placeName].filter(Boolean).join(' / ')
-          setReportResult(`반영했습니다: "${fixedLabel}" — 다음 검색부터 정확한 정보로 반영됩니다.`)
-        } else {
-          setReportResult('신고가 접수되었습니다.')
-        }
-      } else {
-        setReportResult('신고가 접수되었습니다.')
-      }
+      setReportResult(
+        reportReason === 'wrong_address'
+          ? '신고가 접수됐어요. 검토 후 지도에 반영됩니다.'
+          : '신고가 접수되었습니다.'
+      )
       setTimeout(() => setReportTarget(null), 1200)
     } catch (e) {
       setReportResult(e instanceof Error ? e.message : '신고 처리 실패')

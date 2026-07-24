@@ -102,13 +102,22 @@ interface LocationCorrection {
 // are corrected independently — e.g. a name-only fix keeps the original
 // point, an address-only fix re-resolves the name normally at the new point.
 async function getLocationCorrections(): Promise<Map<string, LocationCorrection>> {
+  // P0-4B: anon key → service_role(함수 로컬 스코프, 다른 쿼리와 격리). P0-4D에서 corrections의
+  // anon 직접읽기 정책을 잠가도 이 경로가 계속 읽을 수 있게 미리 전환.
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) return new Map()
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    // ★fail-open(P0-3의 getBlockedVideoIds와 정반대): correction은 품질 보완이지 모더레이션
+    // 차단이 아니다. 실패 시 보정만 미적용(원본 geotag/AI 좌표로 검색 계속), 503 아님. 단 조용히
+    // 삼키지 않고 남긴다.
+    console.error('[correction] op=read 중단: SUPABASE_SERVICE_ROLE_KEY 미설정')
+    return new Map()
+  }
 
-  const supabase = createClient(url, key)
+  const supabase = createClient(url, serviceKey)
   // 전체조회 — .range() 없이는 PostgREST 기본 1000행 캡에 걸려 일부 video_id의 사용자 보정이
-  // Map에서 빠져 옛 주소/상호명이 그대로 노출될 수 있다.
+  // Map에서 빠져 옛 주소/상호명이 그대로 노출될 수 있다. (selectAllPaged가 페이지 실패 시
+  // console.error를 남기고 부분결과 반환 = 여기선 fail-open이 안전해 그대로 재사용.)
   const data = await selectAllPaged('getLocationCorrections.location_corrections', (from, to) =>
     supabase.from('location_corrections').select('video_id, lat, lng, address, place_name').order('id', { ascending: true }).range(from, to)
   )
