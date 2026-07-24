@@ -161,13 +161,25 @@ function searchCacheKey(q: string | undefined, channelId: string | undefined, la
   return `q:${(q ?? '').toLowerCase().trim()}:${latR}:${lngR}`
 }
 
+// search_cache는 RLS가 사실상 무방비(anon 포함 전면 개방)라 다음 단계에서 정책을 잠글 예정 —
+// 그때 또 고치지 않도록 읽기·쓰기 둘 다 미리 service_role로 전환한다. anonKey를 안 쓰므로 그 시점에
+// SELECT/INSERT/UPDATE를 다 잠가도 이 두 함수는 영향 없음(P0-2). 클라이언트는 각 함수 로컬에서만
+// 생성해 다른 쿼리(getRegisteredResults 등 세션/anon 클라이언트)와 공유되지 않게 한다 — RLS 우회 범위를
+// search_cache 접근으로만 국한.
 async function getCachedSearchItems(key: string, ttlMs = SEARCH_CACHE_TTL_MS): Promise<YTSearchItem[] | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) return null
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    console.error('[search_cache] read skipped: SUPABASE_SERVICE_ROLE_KEY 미설정', { key })
+    return null
+  }
 
-  const supabase = createClient(url, anonKey)
-  const { data } = await supabase.from('search_cache').select('payload, created_at').eq('key', key).maybeSingle()
+  const supabase = createClient(url, serviceKey)
+  const { data, error } = await supabase.from('search_cache').select('payload, created_at').eq('key', key).maybeSingle()
+  if (error) {
+    console.error('[search_cache] select 실패', { key, code: error.code, message: error.message })
+    return null // fail-open: 캐시 조회 실패는 캐시 미스로 취급 — 검색은 라이브 경로로 계속 진행.
+  }
   if (!data) return null
   if (Date.now() - new Date(data.created_at).getTime() > ttlMs) return null
   return data.payload as YTSearchItem[]
@@ -175,8 +187,11 @@ async function getCachedSearchItems(key: string, ttlMs = SEARCH_CACHE_TTL_MS): P
 
 async function setCachedSearchItems(key: string, items: YTSearchItem[]) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) return
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    console.error('[search_cache] write skipped: SUPABASE_SERVICE_ROLE_KEY 미설정', { key })
+    return
+  }
 
   // 방안 A: 캐시(DB)에 영상 설명란 원문이 남지 않도록 담기 직전 snippet.description만 ''로 비운다.
   // 다른 필드(id.videoId·snippet.channelId·title·thumbnails·publishedAt 등)는 스프레드로 그대로 보존.
@@ -184,11 +199,14 @@ async function setCachedSearchItems(key: string, items: YTSearchItem[]) {
   // 이 strip은 추출 정확도/비용과 무관하다(읽기/TTL/캐시키 로직은 손대지 않음).
   const payload = items.map((it) => ({ ...it, snippet: { ...it.snippet, description: '' } }))
 
-  const supabase = createClient(url, anonKey)
-  await supabase
+  const supabase = createClient(url, serviceKey)
+  const { error } = await supabase
     .from('search_cache')
     .upsert({ key, payload, created_at: new Date().toISOString() })
-    .then(() => {}, () => {})
+  if (error) {
+    // fail-open 유지: 캐시 저장 실패가 검색 응답을 막지 않는다(500 없음) — 단, 더 이상 조용히 삼키지 않고 남긴다.
+    console.error('[search_cache] upsert 실패', { key, code: error.code, message: error.message })
+  }
 }
 
 export type SubscriberTier = 'silver' | 'gold' | 'diamond' | 'red_diamond'
