@@ -1070,6 +1070,13 @@ export default function SearchMap({ user }: { user: MenuUser | null }) {
         return
       }
 
+      // 모더레이션 조회 불가(503) — fail-closed라 검색 자체가 막힘. 429와 동일하게 기존 결과는
+      // 그대로 두고(설정 X) 안내 배너만. 429·500과 구분되는 전용 문구.
+      if (res.status === 503 && json.error === 'moderation_unavailable') {
+        setError('검색을 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.')
+        return
+      }
+
       if (!res.ok) throw new Error(json.error ?? '검색 실패')
 
       const videos = json.results ?? []

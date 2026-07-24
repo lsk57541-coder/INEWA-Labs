@@ -13,6 +13,11 @@ import { PLACENAME_SOURCES, type MinConfidenceSource } from '@/lib/placeNameSour
 
 const REPORT_THRESHOLD = 3
 
+// 전역 차단목록(getBlockedVideoIds) 조회 실패 시 던져 최상위 GET에서 503으로 구분한다.
+// 이 경로만 fail-open(빈 Set)이 위험하다 — 신고로 차단된 영상이 그 순간 전원에게 재노출되기
+// 때문에, 다른 실패(500 search_failed)와 달리 검색 자체를 막는다(P0-3, 본부 확정).
+class ModerationUnavailableError extends Error {}
+
 // Blocked for everyone: either enough independent reports, or a single
 // admin report (admins are trusted to call this correctly, so we don't make
 // them wait for the threshold). wrong_address is excluded from the
@@ -20,19 +25,39 @@ const REPORT_THRESHOLD = 3
 // moderation flag — it goes through location_corrections instead.
 async function getBlockedVideoIds(): Promise<Set<string>> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) return new Set()
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    console.error('[moderation] blocked-video lookup 중단: SUPABASE_SERVICE_ROLE_KEY 미설정')
+    throw new ModerationUnavailableError('service_role_missing')
+  }
 
-  const supabase = createClient(url, key)
-  // 전체조회 — .range() 없이는 PostgREST 기본 1000행 캡에 걸려 신고가 일부 누락될 수 있다
-  // (모더레이션 로직이라 누락 시 차단돼야 할 영상이 재노출되는 방향의 실패라 영향이 큼).
-  const data = await selectAllPaged('getBlockedVideoIds.location_reports', (from, to) =>
-    supabase.from('location_reports').select('video_id, reason, is_admin_report').order('id', { ascending: true }).range(from, to)
-  )
+  // 함수 로컬 스코프에서만 생성 — 이 파일의 다른 쿼리(세션/anon 클라이언트)와 공유되지 않음(P0-2와
+  // 동일 격리 패턴). RLS 우회 범위가 location_reports 조회로만 국한.
+  const supabase = createClient(url, serviceKey)
+
+  // ★selectAllPaged는 페이지 실패 시 로그만 남기고 부분결과를 반환하는 설계(다른 호출부인
+  // getLocationCorrections엔 맞음) — 이 함수는 실패를 그대로 던져야 하므로 공용 유틸을 안 쓰고
+  // 전용 페이지네이션을 둔다(selectAllPaged 자체는 무수정, 다른 호출부 영향 없음).
+  const PAGE = 1000
+  const rows: { video_id: string; reason: string | null; is_admin_report: boolean | null }[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('location_reports')
+      .select('video_id, reason, is_admin_report')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error) {
+      console.error('[moderation] blocked-video lookup 실패', { op: 'select', code: error.code, message: error.message })
+      throw new ModerationUnavailableError(error.message)
+    }
+    const page = data ?? []
+    rows.push(...page)
+    if (page.length < PAGE) break
+  }
 
   const counts = new Map<string, number>()
   const blocked = new Set<string>()
-  for (const row of data) {
+  for (const row of rows) {
     counts.set(row.video_id, (counts.get(row.video_id) ?? 0) + 1)
     if (row.is_admin_report && row.reason !== 'wrong_address') blocked.add(row.video_id)
   }
@@ -51,11 +76,17 @@ async function getMyHiddenVideoIds(): Promise<Set<string>> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Set()
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('location_reports')
     .select('video_id')
     .eq('user_id', user.id)
     .neq('reason', 'wrong_address')
+  if (error) {
+    // 개인화(내가 신고한 것 숨김) 실패는 전역 모더레이션과 다르다 — 검색 전체를 막지 않고
+    // 빈 Set으로 계속 진행(fail-open 유지). user_id 등 식별정보는 로그에 남기지 않는다.
+    console.error('[moderation] my-hidden lookup 실패(개인화, 검색은 계속됨)', { code: error.code, message: error.message })
+    return new Set()
+  }
   return new Set((data ?? []).map((r) => r.video_id))
 }
 
@@ -821,6 +852,12 @@ export async function GET(req: NextRequest) {
   try {
     return await handleSearch(req)
   } catch (e) {
+    // 모더레이션 조회 실패(getBlockedVideoIds)는 원인 로그를 발생 지점에서 이미 남겼으므로
+    // 여기선 중복 로그 없이 503으로만 구분 — 신고로 차단된 영상이 재노출되는 것보다
+    // 검색을 잠시 못 하게 막는 쪽을 택한다(P0-3, 본부 확정 fail-closed).
+    if (e instanceof ModerationUnavailableError) {
+      return NextResponse.json({ error: 'moderation_unavailable' }, { status: 503 })
+    }
     console.error('[api/search] unhandled error', e)
     return NextResponse.json({ error: 'search_failed' }, { status: 500 })
   }
