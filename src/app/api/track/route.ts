@@ -30,6 +30,9 @@ export async function POST(req: NextRequest) {
       .eq('id', placeId)
       .maybeSingle()
     if (!place) return new NextResponse(null, { status: 204 })
+    // ★공개(active) 장소만 계측 — hidden/deleted/reviewing 장소의 클릭·유입은 정산 근거에서 제외.
+    //   응답은 204 유지(계측 여부를 클라에 노출하지 않음).
+    if (place.status !== 'active') return new NextResponse(null, { status: 204 })
 
     if (event === 'place_click') {
       // place_clicks INSERT → AFTER INSERT 트리거가 places.click_count +1.
